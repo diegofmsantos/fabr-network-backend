@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Time {
+  id           Int       @id  
+  nome         String
+  sigla        String
+  cor          String
+  cidade       String
+  fundacao     String
+  logo         String
+  capacete     String
+  instagram    String
+  instagram2   String
+  estadio      String
+  presidente   String
+  head_coach   String
+  coord_ofen   String
+  coord_defen  String
+  titulos      Json
+  brasileirao  Boolean
+  jogadores    Jogador[] @relation("TimeJogadores") 
+}
+
+model Jogador {
+  id            Int      @id 
+  nome          String
+  posicao       String
+  setor         String
+  experiencia   Int
+  numero        Int
+  idade         Int
+  altura        Float
+  peso          Float
+  instagram     String
+  instagram2    String
+  cidade        String
+  nacionalidade String
+  camisa        String
+  estatisticas  Json?
+  timeId        Int
+  time          Time    @relation("TimeJogadores", fields: [timeId], references: [id])
+}

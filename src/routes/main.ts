@@ -1,12 +1,12 @@
-import { PrismaClient } from '@prisma/client';
-import express from 'express';
-import { TimeSchema } from '../schemas/Time';
-import { JogadorSchema } from '../schemas/Jogador';
-import { Time } from '../types/time';
-import { Jogador } from '../types/jogador';
+import { PrismaClient } from '@prisma/client'
+import express from 'express'
+import { TimeSchema } from '../schemas/Time'
+import { JogadorSchema } from '../schemas/Jogador'
+import { Time } from '../types/time'
+import { Jogador } from '../types/jogador'
 
-const prisma = new PrismaClient();
-export const mainRouter = express.Router();
+const prisma = new PrismaClient()
+export const mainRouter = express.Router()
 
 // Rota para obter todos os times com seus jogadores
 mainRouter.get('/times', async (req, res) => {
@@ -15,14 +15,14 @@ mainRouter.get('/times', async (req, res) => {
             include: {
                 jogadores: true,
             },
-        });
+        })
 
-        res.status(200).json(times);
+        res.status(200).json(times)
     } catch (error) {
-        console.error('Erro ao buscar os times:', error);
-        res.status(500).json({ error: 'Erro ao buscar os times' });
+        console.error('Erro ao buscar os times:', error)
+        res.status(500).json({ error: 'Erro ao buscar os times' })
     }
-});
+})
 
 // Rota para obter todos os jogadores
 mainRouter.get('/jogadores', async (req, res) => {
@@ -31,19 +31,19 @@ mainRouter.get('/jogadores', async (req, res) => {
             include: {
                 time: true,
             },
-        });
+        })
 
-        res.status(200).json(jogadores);
+        res.status(200).json(jogadores)
     } catch (error) {
         console.error('Erro ao buscar os jogadores:', error);
         res.status(500).json({ error: 'Erro ao buscar os jogadores' });
     }
-});
+})
 
 // Rota para adicionar um único time e seus jogadores
 mainRouter.post('/time', async (req, res) => {
     try {
-        const teamData = TimeSchema.parse(req.body);
+        const teamData = TimeSchema.parse(req.body)
 
         // Criação do time sem permitir campos `undefined`
         const createdTeam = await prisma.time.create({
@@ -64,14 +64,14 @@ mainRouter.post('/time', async (req, res) => {
                 coord_defen: teamData.coord_defen || '',
                 titulos: teamData.titulos || [],
             },
-        });
+        })
 
         // Criação dos jogadores, sem permitir campos `undefined`
         if (teamData.jogadores && teamData.jogadores.length > 0) {
             await prisma.jogador.createMany({
                 data: teamData.jogadores.map((player) => ({
                     nome: player.nome || '',
-                    timeFormador: player.timeFormador || '', // Novo campo timeFormador
+                    timeFormador: player.timeFormador || '',
                     posicao: player.posicao || '',
                     setor: player.setor || 'Ataque',
                     experiencia: player.experiencia || 0,
@@ -88,25 +88,25 @@ mainRouter.post('/time', async (req, res) => {
                     timeId: createdTeam.id,
                 })),
                 skipDuplicates: true,
-            });
+            })
         }
 
         res.status(201).json({
             team: createdTeam,
             players: teamData.jogadores?.length ? 'Jogadores criados' : 'Nenhum jogador adicionado',
-        });
+        })
     } catch (error) {
-        console.error('Erro ao criar time e jogadores:', error);
+        console.error('Erro ao criar time e jogadores:', error)
         res.status(500).json({
             error: error instanceof Error ? error.message : 'Erro desconhecido',
-        });
+        })
     }
-});
+})
 
 // Rota para adicionar múltiplos times e seus jogadores
 mainRouter.post('/times', async (req, res) => {
     try {
-        const teamsData: Time[] = req.body.map((teamData: any) => TimeSchema.parse(teamData));
+        const teamsData: Time[] = req.body.map((teamData: any) => TimeSchema.parse(teamData))
 
         const createdTeams = await Promise.all(
             teamsData.map(async (teamData: Time) => {
@@ -128,12 +128,12 @@ mainRouter.post('/times', async (req, res) => {
                         coord_defen: teamData.coord_defen || '',
                         titulos: teamData.titulos || [],
                     },
-                });
+                })
 
                 if (teamData.jogadores && teamData.jogadores.length > 0) {
                     const players = teamData.jogadores.map((player: Jogador) => ({
                         nome: player.nome || '',
-                        timeFormador: player.timeFormador || '', // Novo campo timeFormador
+                        timeFormador: player.timeFormador || '',
                         posicao: player.posicao || '',
                         setor: player.setor || 'Ataque',
                         experiencia: player.experiencia || 0,
@@ -148,39 +148,38 @@ mainRouter.post('/times', async (req, res) => {
                         camisa: player.camisa || '',
                         estatisticas: player.estatisticas || {},
                         timeId: createdTeam.id,
-                    }));
+                    }))
 
                     await prisma.jogador.createMany({
                         data: players,
                         skipDuplicates: true,
-                    });
+                    })
                 }
 
                 return createdTeam;
             })
-        );
+        )
 
-        res.status(201).json({ teams: createdTeams });
+        res.status(201).json({ teams: createdTeams })
     } catch (error) {
-        console.error('Erro ao criar múltiplos times e jogadores:', error);
+        console.error('Erro ao criar múltiplos times e jogadores:', error)
         res.status(500).json({
             error: error instanceof Error ? error.message : 'Erro desconhecido',
-        });
+        })
     }
-});
+})
 
 // Rota para adicionar um jogador a um time existente
 mainRouter.post('/jogador', async (req, res) => {
     try {
-        const jogadorData = JogadorSchema.parse(req.body);
+        const jogadorData = JogadorSchema.parse(req.body)
 
         if (typeof jogadorData.timeId !== 'number') {
-            throw new Error('O campo "timeId" é obrigatório e deve ser um número.');
+            throw new Error('O campo "timeId" é obrigatório e deve ser um número.')
         }
 
-        const estatisticas = jogadorData.estatisticas ? jogadorData.estatisticas : {};
+        const estatisticas = jogadorData.estatisticas ? jogadorData.estatisticas : {}
 
-        // Remova o `id` e garanta que os campos obrigatórios estejam definidos
         const { id, time, ...jogadorDataWithoutIdAndTime } = jogadorData;
 
         const jogadorCriado = await prisma.jogador.create({
@@ -203,16 +202,16 @@ mainRouter.post('/jogador', async (req, res) => {
                 timeFormador: jogadorData.timeFormador ?? '',
                 timeId: jogadorData.timeId,
             },
-        });
+        })
 
-        res.status(201).json({ jogador: jogadorCriado });
+        res.status(201).json({ jogador: jogadorCriado })
     } catch (error) {
-        console.error('Erro ao criar o jogador:', error);
+        console.error('Erro ao criar o jogador:', error)
         res.status(500).json({
             error: error instanceof Error ? error.message : 'Erro desconhecido',
-        });
+        })
     }
-});
+})
 
 
 

@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { JogadorSchema, TitulosSchema } from './Jogador';
+import { z } from 'zod'
+import { JogadorSchema, TitulosSchema } from './Jogador'
 
 export const TimeSchema = z.object({
     id: z.number().optional(),
@@ -19,4 +19,4 @@ export const TimeSchema = z.object({
     coord_defen: z.string().optional(),
     titulos: z.array(TitulosSchema).optional(),
     jogadores: z.array(JogadorSchema).optional(),
-});
+})

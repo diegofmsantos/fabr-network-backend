@@ -1,10 +1,10 @@
-import { z } from 'zod';
+import { z } from 'zod'
 
 export const TitulosSchema = z.object({
     nacionais: z.string().optional(),
     conferencias: z.string().optional(),
     estaduais: z.string().optional(),
-});
+})
 
 export const EstatisticasSchema = z.object({
     passe: z.object({
@@ -61,7 +61,7 @@ export const EstatisticasSchema = z.object({
         punts: z.number().optional(),
         jardas_de_punt: z.number().optional(),
     }).optional(),
-});
+})
 
 export const JogadorSchema = z.object({
     id: z.number().optional(),
@@ -82,4 +82,4 @@ export const JogadorSchema = z.object({
     nacionalidade: z.string().optional(),
     camisa: z.string().optional(),
     estatisticas: EstatisticasSchema.optional(),
-});
+})

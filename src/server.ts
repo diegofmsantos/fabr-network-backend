@@ -8,7 +8,7 @@ const server = express()
 
 server.use(helmet())
 server.use(cors())
-server.use(express.json({ limit: '50mb' })) 
+server.use(express.json({ limit: '50mb' }))
 server.use(express.urlencoded({ extended: true, limit: '50mb' }))
 server.use(express.static(path.join(__dirname, '../public')))
 

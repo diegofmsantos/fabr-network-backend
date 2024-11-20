@@ -2,7 +2,7 @@ import { Jogador } from "./jogador";
 
 type Titulos = {
   nacionais?: string;
-  regionais?: string;
+  conferencias?: string;
   estaduais?: string;
 };
 

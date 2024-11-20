@@ -18,6 +18,5 @@ export const TimeSchema = z.object({
     coord_ofen: z.string().optional(),
     coord_defen: z.string().optional(),
     titulos: z.array(TitulosSchema).optional(),
-    brasileirao: z.boolean().optional(),
     jogadores: z.array(JogadorSchema).optional(),
 });

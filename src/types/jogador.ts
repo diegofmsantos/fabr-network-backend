@@ -61,6 +61,7 @@ export type Jogador = {
   nome?: string;
   time?: string;
   timeId?: number;
+  timeFormador?: string
   posicao?: string;
   setor?: "Ataque" | "Defesa" | "Special";
   experiencia?: number;

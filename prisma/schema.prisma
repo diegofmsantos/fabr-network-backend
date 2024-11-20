@@ -8,7 +8,7 @@ datasource db {
 }
 
 model Time {
-  id           Int       @id  
+  id           Int       @id @default(autoincrement())
   nome         String
   sigla        String
   cor          String
@@ -24,26 +24,26 @@ model Time {
   coord_ofen   String
   coord_defen  String
   titulos      Json
-  brasileirao  Boolean
-  jogadores    Jogador[] @relation("TimeJogadores") 
+  jogadores    Jogador[]
 }
 
 model Jogador {
-  id            Int      @id 
-  nome          String
-  posicao       String
-  setor         String
-  experiencia   Int
-  numero        Int
-  idade         Int
-  altura        Float
-  peso          Float
-  instagram     String
-  instagram2    String
-  cidade        String
-  nacionalidade String
-  camisa        String
-  estatisticas  Json?
-  timeId        Int
-  time          Time    @relation("TimeJogadores", fields: [timeId], references: [id])
+  id              Int      @id @default(autoincrement())
+  nome            String
+  posicao         String
+  setor           String
+  experiencia     Int
+  numero          Int
+  idade           Int
+  altura          Float
+  peso            Float
+  instagram       String
+  instagram2      String
+  cidade          String
+  nacionalidade   String
+  camisa          String
+  estatisticas    Json
+  timeId          Int
+  time            Time     @relation(fields: [timeId], references: [id])
+  timeFormador    String
 }

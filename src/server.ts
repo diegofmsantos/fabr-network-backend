@@ -8,11 +8,11 @@ const server = express()
 
 server.use(helmet())
 server.use(cors())
-server.use(express.json({ limit: '50mb' })) // Ajuste o limite aqui
-server.use(express.urlencoded({ extended: true, limit: '50mb' })) // Ajuste o limite aqui também
+server.use(express.json({ limit: '50mb' })) 
+server.use(express.urlencoded({ extended: true, limit: '50mb' }))
 server.use(express.static(path.join(__dirname, '../public')))
 
-server.use(mainRouter)
+server.use('/api', mainRouter)
 
 const port = process.env.PORT || 4000
 

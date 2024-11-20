@@ -4,6 +4,7 @@ import { TimeSchema } from '../schemas/Time'
 import { JogadorSchema } from '../schemas/Jogador'
 import { Time } from '../types/time'
 import { Jogador } from '../types/jogador'
+import { Times } from '../data/times'
 
 const prisma = new PrismaClient()
 export const mainRouter = express.Router()
@@ -212,6 +213,69 @@ mainRouter.post('/jogador', async (req, res) => {
         })
     }
 })
+
+mainRouter.post('/importar-dados', async (req, res) => {
+    try {
+        const teamsData = Times; 
+
+        const createdTeams = await Promise.all(
+            teamsData.map(async (teamData) => {
+                const createdTeam = await prisma.time.create({
+                    data: {
+                        nome: teamData.nome || '',
+                        sigla: teamData.sigla || '',
+                        cor: teamData.cor || '',
+                        cidade: teamData.cidade || '',
+                        fundacao: teamData.fundacao || '',
+                        logo: teamData.logo || '',
+                        capacete: teamData.capacete || '',
+                        instagram: teamData.instagram || '',
+                        instagram2: teamData.instagram2 || '',
+                        estadio: teamData.estadio || '',
+                        presidente: teamData.presidente || '',
+                        head_coach: teamData.head_coach || '',
+                        coord_ofen: teamData.coord_ofen || '',
+                        coord_defen: teamData.coord_defen || '',
+                        titulos: teamData.titulos || [],
+                    },
+                });
+
+                if (teamData.jogadores && teamData.jogadores.length > 0) {
+                    const players = teamData.jogadores.map((player) => ({
+                        nome: player.nome || '',
+                        timeFormador: player.timeFormador || '',
+                        posicao: player.posicao || '',
+                        setor: player.setor || 'Ataque',
+                        experiencia: player.experiencia || 0,
+                        numero: player.numero || 0,
+                        idade: player.idade || 0,
+                        altura: player.altura || 0,
+                        peso: player.peso || 0,
+                        instagram: player.instagram || '',
+                        instagram2: player.instagram2 || '',
+                        cidade: player.cidade || '',
+                        nacionalidade: player.nacionalidade || '',
+                        camisa: player.camisa || '',
+                        estatisticas: player.estatisticas || {},
+                        timeId: createdTeam.id,
+                    }));
+
+                    await prisma.jogador.createMany({
+                        data: players,
+                        skipDuplicates: true,
+                    });
+                }
+
+                return createdTeam;
+            })
+        );
+
+        res.status(201).json({ message: 'Dados importados com sucesso!', teams: createdTeams });
+    } catch (error) {
+        console.error('Erro ao importar os dados:', error);
+        res.status(500).json({ error: 'Erro ao importar os dados' });
+    }
+});
 
 
 

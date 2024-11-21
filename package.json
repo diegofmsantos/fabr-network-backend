@@ -1,7 +1,7 @@
 {
   "name": "fabr-back",
   "version": "1.0.0",
-  "main": "server.ts",
+  "main": "src/server.ts",
   "scripts": {
     "dev": "node --import=tsx --watch --env-file=.env ./src/server.ts"
   },

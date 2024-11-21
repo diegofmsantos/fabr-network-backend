@@ -17,7 +17,7 @@ mainRouter.get('/times', async (req, res) => {
                 jogadores: true,
             },
         })
-
+        
         res.status(200).json(times)
     } catch (error) {
         console.error('Erro ao buscar os times:', error)
@@ -216,7 +216,7 @@ mainRouter.post('/jogador', async (req, res) => {
 
 mainRouter.post('/importar-dados', async (req, res) => {
     try {
-        const teamsData = Times; 
+        const teamsData = Times;
 
         const createdTeams = await Promise.all(
             teamsData.map(async (teamData) => {

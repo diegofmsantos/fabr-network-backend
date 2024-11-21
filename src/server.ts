@@ -8,7 +8,7 @@ const server = express()
 
 server.use(helmet())
 server.use(cors({
-    origin: ['https://fabr-network-neon.vercel.app'],
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
 }));

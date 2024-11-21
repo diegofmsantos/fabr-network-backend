@@ -11,19 +11,18 @@ export const mainRouter = express.Router()
 
 // Rota para obter todos os times com seus jogadores
 mainRouter.get('/times', async (req, res) => {
+    console.log('Rota /api/times chamada');
     try {
         const times = await prisma.time.findMany({
-            include: {
-                jogadores: true,
-            },
-        })
-        
-        res.status(200).json(times)
+            include: { jogadores: true },
+        });
+        res.status(200).json(times);
     } catch (error) {
-        console.error('Erro ao buscar os times:', error)
-        res.status(500).json({ error: 'Erro ao buscar os times' })
+        console.error('Erro ao buscar os times:', error);
+        res.status(500).json({ error: 'Erro ao buscar os times' });
     }
-})
+});
+
 
 // Rota para obter todos os jogadores
 mainRouter.get('/jogadores', async (req, res) => {

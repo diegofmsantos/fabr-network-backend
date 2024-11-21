@@ -1,12 +1,12 @@
 {
   "name": "fabr-back",
   "version": "1.0.0",
-  "main": "src/server.ts",
+  "main": "index.js",
   "engines": {
     "node": "22"
   },
   "scripts": {
-    "dev": "node --import=tsx --watch --env-file=.env ./src/server.ts",
+    "dev": "tsx src/server.ts",
     "build": "tsup src",
     "start": "node dist/server.js"
   },

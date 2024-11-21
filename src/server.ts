@@ -7,7 +7,11 @@ import { mainRouter } from './routes/main'
 const server = express()
 
 server.use(helmet())
-server.use(cors())
+server.use(cors({
+    origin: 'https://fabr-network-neon.vercel.app', 
+    methods: 'GET,POST,PUT,DELETE',
+    allowedHeaders: 'Content-Type,Authorization',
+}))
 server.use(express.json({ limit: '50mb' }))
 server.use(express.urlencoded({ extended: true, limit: '50mb' }))
 server.use(express.static(path.join(__dirname, '../public')))

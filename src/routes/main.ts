@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import express from 'express'
+import express, { Request, Response } from 'express'
 import { TimeSchema } from '../schemas/Time'
 import { JogadorSchema } from '../schemas/Jogador'
 import { Time } from '../types/time'
@@ -275,6 +275,82 @@ mainRouter.post('/importar-dados', async (req, res) => {
         res.status(500).json({ error: 'Erro ao importar os dados' });
     }
 });
+
+// Rota para atualizar informações de um time
+mainRouter.put('/time/:id', async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // Remove o campo 'id' do objeto antes de enviar para o Prisma
+        const timeData = TimeSchema.parse(req.body); // Valida os dados recebidos
+        const { id: _, jogadores, ...updateData } = timeData; // Remove campos indesejados como 'id' ou relações
+
+        const updatedTime = await prisma.time.update({
+            where: { id: parseInt(id) }, // Identifica o time pelo ID
+            data: updateData, // Atualiza apenas os campos válidos
+        });
+
+        res.status(200).json(updatedTime);
+    } catch (error) {
+        console.error('Erro ao atualizar o time:', error);
+        res.status(500).json({ error: 'Erro ao atualizar o time' });
+    }
+});
+
+
+// Rota para atualizar informações de um jogador
+mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {
+    try {
+        // Valida o ID da URL
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            res.status(400).json({ error: "ID inválido" });
+            return; // Garante que a execução pare aqui em caso de erro
+        }
+
+        // Captura e filtra os dados do corpo da requisição
+        const jogadorData = req.body;
+        const { estatisticas, ...restData } = jogadorData;
+
+        // Remove campos indesejados ou vazios das estatísticas
+        const filteredEstatisticas = estatisticas
+            ? Object.fromEntries(
+                  Object.entries(estatisticas).map(([group, stats]) => [
+                      group,
+                      Object.fromEntries(
+                          Object.entries(stats || {}).filter(
+                              ([_, value]) => value !== undefined && value !== ""
+                          )
+                      ),
+                  ])
+              )
+            : {};
+
+        // Dados finais para atualização
+        const filteredData = {
+            ...restData, // Outros campos do jogador
+            estatisticas: filteredEstatisticas, // Estatísticas filtradas
+        };
+
+        // Atualiza o jogador no banco de dados
+        const updatedJogador = await prisma.jogador.update({
+            where: { id },
+            data: filteredData,
+        });
+
+        // Responde com o jogador atualizado
+        res.status(200).json(updatedJogador);
+    } catch (error) {
+        console.error("Erro ao atualizar o jogador:", error);
+        res.status(500).json({ error: "Erro ao atualizar o jogador" });
+    }
+});
+
+
+
+
+
+
 
 
 

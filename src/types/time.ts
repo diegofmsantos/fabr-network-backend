@@ -12,6 +12,7 @@ export type Time = {
   sigla?: string
   cor?: string
   cidade?: string
+  bandeira_estado?: string
   fundacao?: string
   logo?: string
   capacete?: string
@@ -20,9 +21,9 @@ export type Time = {
   estadio?: string
   presidente?: string
   head_coach?: string
+  instagram_coach?: string
   coord_ofen?: string
   coord_defen?: string
   titulos?: Titulos[]
-  brasileirao?: boolean
   jogadores?: Jogador[]
 }

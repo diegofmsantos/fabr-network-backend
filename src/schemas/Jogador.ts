@@ -1,11 +1,5 @@
 import { z } from 'zod'
 
-export const TitulosSchema = z.object({
-    nacionais: z.string().optional(),
-    conferencias: z.string().optional(),
-    estaduais: z.string().optional(),
-})
-
 export const EstatisticasSchema = z.object({
     passe: z.object({
         passes_completos: z.number().optional(),

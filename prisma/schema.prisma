@@ -8,42 +8,59 @@ datasource db {
 }
 
 model Time {
-  id           Int       @id @default(autoincrement())
-  nome         String
-  sigla        String
-  cor          String
-  cidade       String
-  fundacao     String
-  logo         String
-  capacete     String
-  instagram    String
-  instagram2   String
-  estadio      String
-  presidente   String
-  head_coach   String
-  coord_ofen   String
-  coord_defen  String
-  titulos      Json
-  jogadores    Jogador[]
+  id              Int       @id @default(autoincrement())
+  nome            String
+  sigla           String
+  cor             String
+  cidade          String
+  bandeira_estado String
+  fundacao        String
+  logo            String
+  capacete        String
+  instagram       String
+  instagram2      String
+  estadio         String
+  presidente      String
+  head_coach      String
+  instagram_coach String
+  coord_ofen      String
+  coord_defen     String
+  titulos         Json
+  jogadores       Jogador[]
 }
 
 model Jogador {
-  id              Int      @id @default(autoincrement())
-  nome            String
-  posicao         String
-  setor           String
-  experiencia     Int
-  numero          Int
-  idade           Int
-  altura          Float
-  peso            Float
-  instagram       String
-  instagram2      String
-  cidade          String
-  nacionalidade   String
-  camisa          String
-  estatisticas    Json
-  timeId          Int
-  time            Time     @relation(fields: [timeId], references: [id])
-  timeFormador    String
+  id            Int    @id @default(autoincrement())
+  nome          String
+  posicao       String
+  setor         String
+  experiencia   Int
+  numero        Int
+  idade         Int
+  altura        Float
+  peso          Float
+  instagram     String
+  instagram2    String
+  cidade        String
+  nacionalidade String
+  camisa        String
+  estatisticas  Json
+  timeId        Int
+  time          Time   @relation(fields: [timeId], references: [id])
+  timeFormador  String
+}
+
+model Usuario {
+  id       Int      @id @default(autoincrement())
+  nome     String
+  email    String   @unique
+  senha    String
+  plano    Plano    @default(BASICO)
+  criadoEm DateTime @default(now())
+}
+
+enum Plano {
+  BASICO
+  PADRAO
+  PREMIUM
 }

@@ -1,3 +1,4 @@
+import jwt from "jsonwebtoken"
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { TimeSchema } from '../schemas/Time'
@@ -5,8 +6,11 @@ import { JogadorSchema } from '../schemas/Jogador'
 import { Time } from '../types/time'
 import { Jogador } from '../types/jogador'
 import { Times } from '../data/times'
+import { verificarPlano } from '../middlewares/authMiddleware'
+import bcrypt from "bcrypt";
 
 const prisma = new PrismaClient()
+
 export const mainRouter = express.Router()
 
 // Rota para obter todos os times com seus jogadores
@@ -52,6 +56,7 @@ mainRouter.post('/time', async (req, res) => {
                 sigla: teamData.sigla || '',
                 cor: teamData.cor || '',
                 cidade: teamData.cidade || '',
+                bandeira_estado: teamData.bandeira_estado || '',
                 fundacao: teamData.fundacao || '',
                 logo: teamData.logo || '',
                 capacete: teamData.capacete || '',
@@ -60,6 +65,7 @@ mainRouter.post('/time', async (req, res) => {
                 estadio: teamData.estadio || '',
                 presidente: teamData.presidente || '',
                 head_coach: teamData.head_coach || '',
+                instagram_coach: teamData.instagram_coach || '',
                 coord_ofen: teamData.coord_ofen || '',
                 coord_defen: teamData.coord_defen || '',
                 titulos: teamData.titulos || [],
@@ -116,6 +122,7 @@ mainRouter.post('/times', async (req, res) => {
                         sigla: teamData.sigla || '',
                         cor: teamData.cor || '',
                         cidade: teamData.cidade || '',
+                        bandeira_estado: teamData.bandeira_estado || '',
                         fundacao: teamData.fundacao || '',
                         logo: teamData.logo || '',
                         capacete: teamData.capacete || '',
@@ -124,6 +131,7 @@ mainRouter.post('/times', async (req, res) => {
                         estadio: teamData.estadio || '',
                         presidente: teamData.presidente || '',
                         head_coach: teamData.head_coach || '',
+                        instagram_coach: teamData.instagram_coach || '',
                         coord_ofen: teamData.coord_ofen || '',
                         coord_defen: teamData.coord_defen || '',
                         titulos: teamData.titulos || [],
@@ -225,6 +233,7 @@ mainRouter.post('/importar-dados', async (req, res) => {
                         sigla: teamData.sigla || '',
                         cor: teamData.cor || '',
                         cidade: teamData.cidade || '',
+                        bandeira_estado: teamData.bandeira_estado || '',
                         fundacao: teamData.fundacao || '',
                         logo: teamData.logo || '',
                         capacete: teamData.capacete || '',
@@ -233,6 +242,7 @@ mainRouter.post('/importar-dados', async (req, res) => {
                         estadio: teamData.estadio || '',
                         presidente: teamData.presidente || '',
                         head_coach: teamData.head_coach || '',
+                        instagram_coach: teamData.instagram_coach || '',
                         coord_ofen: teamData.coord_ofen || '',
                         coord_defen: teamData.coord_defen || '',
                         titulos: teamData.titulos || [],
@@ -315,15 +325,15 @@ mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Respons
         // Remove campos indesejados ou vazios das estatísticas
         const filteredEstatisticas = estatisticas
             ? Object.fromEntries(
-                  Object.entries(estatisticas).map(([group, stats]) => [
-                      group,
-                      Object.fromEntries(
-                          Object.entries(stats || {}).filter(
-                              ([_, value]) => value !== undefined && value !== ""
-                          )
-                      ),
-                  ])
-              )
+                Object.entries(estatisticas).map(([group, stats]) => [
+                    group,
+                    Object.fromEntries(
+                        Object.entries(stats || {}).filter(
+                            ([_, value]) => value !== undefined && value !== ""
+                        )
+                    ),
+                ])
+            )
             : {};
 
         // Dados finais para atualização
@@ -346,9 +356,103 @@ mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Respons
     }
 });
 
+mainRouter.post("/cadastro", async (req: Request, res: Response) => {
+    const { nome, email, senha, plano } = req.body;
+
+    try {
+        const existeUsuario = await prisma.usuario.findUnique({
+            where: { email },
+        });
+
+        if (existeUsuario) {
+            res.status(400).json({ error: "Email já cadastrado" });
+            return
+        }
+
+        const hashedPassword = await bcrypt.hash(senha, 10);
+        const usuario = await prisma.usuario.create({
+            data: {
+                nome,
+                email,
+                senha: hashedPassword,
+                plano,
+            },
+        });
+
+        res.status(201).json({ message: "Usuário cadastrado com sucesso", usuario });
+    } catch (error) {
+        res.status(400).json({ error: "Erro ao cadastrar usuário" });
+    }
+});
 
 
+mainRouter.post('/login', async (req: Request, res: Response) => {
+    const { email, senha } = req.body;
 
+    try {
+        const usuario = await prisma.usuario.findUnique({
+            where: { email },
+        });
+
+        if (!usuario) {
+            res.status(404).json({ error: 'Usuário não encontrado' });
+            return; // Evita que o código continue
+        }
+
+        const isPasswordValid = await bcrypt.compare(senha, usuario.senha);
+
+        if (!isPasswordValid) {
+            res.status(401).json({ error: 'Senha inválida' });
+            return; // Evita que o código continue
+        }
+
+        const token = jwt.sign(
+            { id: usuario.id, plano: usuario.plano },
+            process.env.JWT_SECRET || 'secret_key',
+            { expiresIn: '1h' }
+        );
+
+        res.status(200).json({ token }); // Envia o token
+    } catch (error) {
+        res.status(500).json({ error: 'Erro ao fazer login' });
+    }
+});
+
+
+mainRouter.get('/times-basico', verificarPlano('BASICO'), async (req: Request, res: Response) => {
+    try {
+        const times = await prisma.time.findMany({ include: { jogadores: true } });
+        res.status(200).json(times);
+    } catch (error) {
+        res.status(500).json({ error: 'Erro ao buscar times básico' });
+    }
+});
+
+mainRouter.get('/times-padrao', verificarPlano('PADRAO'), async (req: Request, res: Response) => {
+    try {
+        const times = await prisma.time.findMany();
+        res.status(200).json(times);
+    } catch (error) {
+        res.status(500).json({ error: 'Erro ao buscar times padrão' });
+    }
+});
+
+mainRouter.get('/times-premium', verificarPlano('PREMIUM'), async (req: Request, res: Response) => {
+    try {
+        const times = await prisma.time.findMany({ include: { jogadores: true } });
+        res.status(200).json(times);
+    } catch (error) {
+        res.status(500).json({ error: 'Erro ao buscar times premium' });
+    }
+});
+
+mainRouter.get("/test", (req, res) => {
+    if (!req.user) {
+        res.status(401).json({ error: "Usuário não autenticado" });
+        return
+    }
+    res.status(200).json({ message: `Bem-vindo, ${req.user.plano}!` });
+});
 
 
 

@@ -3,8 +3,6 @@ import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { TimeSchema } from '../schemas/Time'
 import { JogadorSchema } from '../schemas/Jogador'
-import { Time } from '../types/time'
-import { Jogador } from '../types/jogador'
 import { Times } from '../data/times'
 import { verificarPlano } from '../middlewares/authMiddleware'
 import bcrypt from "bcrypt";
@@ -26,23 +24,6 @@ mainRouter.get('/times', async (req, res) => {
         res.status(500).json({ error: 'Erro ao buscar os times' });
     }
 });
-
-
-// Rota para obter todos os jogadores
-mainRouter.get('/jogadores', async (req, res) => {
-    try {
-        const jogadores = await prisma.jogador.findMany({
-            include: {
-                time: true,
-            },
-        })
-
-        res.status(200).json(jogadores)
-    } catch (error) {
-        console.error('Erro ao buscar os jogadores:', error);
-        res.status(500).json({ error: 'Erro ao buscar os jogadores' });
-    }
-})
 
 // Rota para adicionar um único time e seus jogadores
 mainRouter.post('/time', async (req, res) => {
@@ -109,71 +90,76 @@ mainRouter.post('/time', async (req, res) => {
     }
 })
 
-// Rota para adicionar múltiplos times e seus jogadores
-mainRouter.post('/times', async (req, res) => {
+// Rota para atualizar informações de um time
+mainRouter.put('/time/:id', async (req, res) => {
+    const { id } = req.params;
+
     try {
-        const teamsData: Time[] = req.body.map((teamData: any) => TimeSchema.parse(teamData))
+        // Remove o campo 'id' do objeto antes de enviar para o Prisma
+        const timeData = TimeSchema.parse(req.body); // Valida os dados recebidos
+        const { id: _, jogadores, ...updateData } = timeData; // Remove campos indesejados como 'id' ou relações
 
-        const createdTeams = await Promise.all(
-            teamsData.map(async (teamData: Time) => {
-                const createdTeam = await prisma.time.create({
-                    data: {
-                        nome: teamData.nome || '',
-                        sigla: teamData.sigla || '',
-                        cor: teamData.cor || '',
-                        cidade: teamData.cidade || '',
-                        bandeira_estado: teamData.bandeira_estado || '',
-                        fundacao: teamData.fundacao || '',
-                        logo: teamData.logo || '',
-                        capacete: teamData.capacete || '',
-                        instagram: teamData.instagram || '',
-                        instagram2: teamData.instagram2 || '',
-                        estadio: teamData.estadio || '',
-                        presidente: teamData.presidente || '',
-                        head_coach: teamData.head_coach || '',
-                        instagram_coach: teamData.instagram_coach || '',
-                        coord_ofen: teamData.coord_ofen || '',
-                        coord_defen: teamData.coord_defen || '',
-                        titulos: teamData.titulos || [],
-                    },
-                })
+        const updatedTime = await prisma.time.update({
+            where: { id: parseInt(id) }, // Identifica o time pelo ID
+            data: updateData, // Atualiza apenas os campos válidos
+        });
 
-                if (teamData.jogadores && teamData.jogadores.length > 0) {
-                    const players = teamData.jogadores.map((player: Jogador) => ({
-                        nome: player.nome || '',
-                        timeFormador: player.timeFormador || '',
-                        posicao: player.posicao || '',
-                        setor: player.setor || 'Ataque',
-                        experiencia: player.experiencia || 0,
-                        numero: player.numero || 0,
-                        idade: player.idade || 0,
-                        altura: player.altura || 0,
-                        peso: player.peso || 0,
-                        instagram: player.instagram || '',
-                        instagram2: player.instagram2 || '',
-                        cidade: player.cidade || '',
-                        nacionalidade: player.nacionalidade || '',
-                        camisa: player.camisa || '',
-                        estatisticas: player.estatisticas || {},
-                        timeId: createdTeam.id,
-                    }))
-
-                    await prisma.jogador.createMany({
-                        data: players,
-                        skipDuplicates: true,
-                    })
-                }
-
-                return createdTeam;
-            })
-        )
-
-        res.status(201).json({ teams: createdTeams })
+        res.status(200).json(updatedTime);
     } catch (error) {
-        console.error('Erro ao criar múltiplos times e jogadores:', error)
-        res.status(500).json({
-            error: error instanceof Error ? error.message : 'Erro desconhecido',
+        console.error('Erro ao atualizar o time:', error);
+        res.status(500).json({ error: 'Erro ao atualizar o time' });
+    }
+});
+
+//Rota para deletar um time
+mainRouter.delete('/time/:id', async (req: Request<{ id: string }>, res: Response) => {
+    try {
+        // Extrai o ID do time dos parâmetros da URL
+        const id = parseInt(req.params.id, 10);
+
+        // Verifica se o ID é válido
+        if (isNaN(id)) {
+            res.status(400).json({ error: "ID inválido" });
+            return
+        }
+
+        // Verifica se o time existe no banco de dados
+        const existingTime = await prisma.time.findUnique({
+            where: { id },
+        });
+
+        if (!existingTime) {
+            res.status(404).json({ error: "Time não encontrado" });
+            return
+        }
+
+        // Deleta o time do banco de dados
+        await prisma.time.delete({
+            where: { id },
+        });
+
+        // Retorna uma mensagem de sucesso
+        res.status(200).json({ message: "Time excluído com sucesso!" });
+    } catch (error) {
+        console.error("Erro ao excluir time:", error);
+        res.status(500).json({ error: "Erro ao excluir time" });
+    }
+});
+
+
+// Rota para obter todos os jogadores
+mainRouter.get('/jogadores', async (req, res) => {
+    try {
+        const jogadores = await prisma.jogador.findMany({
+            include: {
+                time: true,
+            },
         })
+
+        res.status(200).json(jogadores)
+    } catch (error) {
+        console.error('Erro ao buscar os jogadores:', error);
+        res.status(500).json({ error: 'Erro ao buscar os jogadores' });
     }
 })
 
@@ -221,6 +207,93 @@ mainRouter.post('/jogador', async (req, res) => {
     }
 })
 
+// Rota para atualizar um jogador
+mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {
+    try {
+        console.log("Iniciando atualização do jogador...");
+
+        // Valida o ID da URL
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) {
+            console.warn("ID inválido recebido:", req.params.id);
+            res.status(400).json({ error: "ID inválido" });
+            return;
+        }
+        console.log("ID validado:", id);
+
+        // Captura e filtra os dados do corpo da requisição
+        const jogadorData = req.body;
+        console.log("Dados recebidos no corpo da requisição:", jogadorData);
+
+        const { estatisticas, ...restData } = jogadorData;
+
+        // Converte campos numéricos para o tipo correto
+        const numericFields = ["experiencia", "idade", "altura", "peso"];
+        for (const field of numericFields) {
+            if (restData[field] !== undefined) {
+                restData[field] = Number(restData[field]);
+            }
+        }
+
+        // Remove campos inválidos das estatísticas
+        const filteredEstatisticas = estatisticas
+            ? Object.fromEntries(
+                Object.entries(estatisticas).map(([group, stats]) => [
+                    group,
+                    Object.fromEntries(
+                        Object.entries(stats || {}).filter(
+                            ([_, value]) => value !== undefined && value !== ""
+                        )
+                    ),
+                ])
+            )
+            : {};
+        console.log("Estatísticas filtradas:", filteredEstatisticas);
+
+        const filteredData = {
+            ...restData,
+            estatisticas: filteredEstatisticas,
+        };
+        console.log("Dados finais para atualização:", filteredData);
+
+        const updatedJogador = await prisma.jogador.update({
+            where: { id },
+            data: filteredData,
+        });
+        console.log("Jogador atualizado com sucesso:", updatedJogador);
+
+        res.status(200).json(updatedJogador);
+    } catch (error) {
+        console.error("Erro ao atualizar o jogador:", error);
+        res.status(500).json({ error: "Erro ao atualizar o jogador" });
+    }
+});
+
+// Rota para deletar um jogador
+mainRouter.delete('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {
+    console.log(`DELETE request received for ID: ${req.params.id}`);
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        if (isNaN(id)) {
+            console.log("Invalid ID provided");
+            res.status(400).json({ error: "ID inválido" });
+            return;
+        }
+
+        await prisma.jogador.delete({
+            where: { id },
+        });
+
+        console.log(`Jogador com ID ${id} excluído com sucesso.`);
+        res.status(200).json({ message: "Jogador excluído com sucesso!" });
+    } catch (error) {
+        console.error("Erro ao excluir jogador:", error);
+        res.status(500).json({ error: "Erro ao excluir jogador" });
+    }
+});
+
+// Rota para adicionar todos os dados de uma só vez
 mainRouter.post('/importar-dados', async (req, res) => {
     try {
         const teamsData = Times;
@@ -286,76 +359,8 @@ mainRouter.post('/importar-dados', async (req, res) => {
     }
 });
 
-// Rota para atualizar informações de um time
-mainRouter.put('/time/:id', async (req, res) => {
-    const { id } = req.params;
 
-    try {
-        // Remove o campo 'id' do objeto antes de enviar para o Prisma
-        const timeData = TimeSchema.parse(req.body); // Valida os dados recebidos
-        const { id: _, jogadores, ...updateData } = timeData; // Remove campos indesejados como 'id' ou relações
-
-        const updatedTime = await prisma.time.update({
-            where: { id: parseInt(id) }, // Identifica o time pelo ID
-            data: updateData, // Atualiza apenas os campos válidos
-        });
-
-        res.status(200).json(updatedTime);
-    } catch (error) {
-        console.error('Erro ao atualizar o time:', error);
-        res.status(500).json({ error: 'Erro ao atualizar o time' });
-    }
-});
-
-
-// Rota para atualizar informações de um jogador
-mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {
-    try {
-        // Valida o ID da URL
-        const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) {
-            res.status(400).json({ error: "ID inválido" });
-            return; // Garante que a execução pare aqui em caso de erro
-        }
-
-        // Captura e filtra os dados do corpo da requisição
-        const jogadorData = req.body;
-        const { estatisticas, ...restData } = jogadorData;
-
-        // Remove campos indesejados ou vazios das estatísticas
-        const filteredEstatisticas = estatisticas
-            ? Object.fromEntries(
-                Object.entries(estatisticas).map(([group, stats]) => [
-                    group,
-                    Object.fromEntries(
-                        Object.entries(stats || {}).filter(
-                            ([_, value]) => value !== undefined && value !== ""
-                        )
-                    ),
-                ])
-            )
-            : {};
-
-        // Dados finais para atualização
-        const filteredData = {
-            ...restData, // Outros campos do jogador
-            estatisticas: filteredEstatisticas, // Estatísticas filtradas
-        };
-
-        // Atualiza o jogador no banco de dados
-        const updatedJogador = await prisma.jogador.update({
-            where: { id },
-            data: filteredData,
-        });
-
-        // Responde com o jogador atualizado
-        res.status(200).json(updatedJogador);
-    } catch (error) {
-        console.error("Erro ao atualizar o jogador:", error);
-        res.status(500).json({ error: "Erro ao atualizar o jogador" });
-    }
-});
-
+// Rota para criar um usuário
 mainRouter.post("/cadastro", async (req: Request, res: Response) => {
     const { nome, email, senha, plano } = req.body;
 
@@ -385,7 +390,7 @@ mainRouter.post("/cadastro", async (req: Request, res: Response) => {
     }
 });
 
-
+// Rota de acesso do usuário
 mainRouter.post('/login', async (req: Request, res: Response) => {
     const { email, senha } = req.body;
 

@@ -146,7 +146,6 @@ mainRouter.delete('/time/:id', async (req: Request<{ id: string }>, res: Respons
     }
 });
 
-
 // Rota para obter todos os jogadores
 mainRouter.get('/jogadores', async (req, res) => {
     try {
@@ -268,6 +267,7 @@ mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Respons
         res.status(500).json({ error: "Erro ao atualizar o jogador" });
     }
 });
+
 
 // Rota para deletar um jogador
 mainRouter.delete('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {

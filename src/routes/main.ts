@@ -153,6 +153,9 @@ mainRouter.get('/jogadores', async (req, res) => {
             include: {
                 time: true,
             },
+            orderBy: {
+                numero: 'asc'
+            }
         })
 
         res.status(200).json(jogadores)

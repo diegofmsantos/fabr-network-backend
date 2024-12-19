@@ -31,7 +31,7 @@ server.use((req, res, next) => {
         res.status(401).json({ error: "Token inválido ou expirado" });
         return; // Retorne aqui para evitar continuar a execução
       }
-    } else {
+    } else { //@ts-ignore
       req.user = null;
     }
     next();

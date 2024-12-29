@@ -13,17 +13,17 @@ export const mainRouter = express.Router()
 
 // Rota para obter todos os times com seus jogadores
 mainRouter.get('/times', async (req, res) => {
-    console.log('Rota /api/times chamada');
+    console.log('Rota /api/times chamada')
     try {
         const times = await prisma.time.findMany({
             include: { jogadores: true },
         });
-        res.status(200).json(times);
+        res.status(200).json(times)
     } catch (error) {
-        console.error('Erro ao buscar os times:', error);
-        res.status(500).json({ error: 'Erro ao buscar os times' });
+        console.error('Erro ao buscar os times:', error)
+        res.status(500).json({ error: 'Erro ao buscar os times' })
     }
-});
+})
 
 // Rota para adicionar um único time e seus jogadores
 mainRouter.post('/time', async (req, res) => {
@@ -92,59 +92,59 @@ mainRouter.post('/time', async (req, res) => {
 
 // Rota para atualizar informações de um time
 mainRouter.put('/time/:id', async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params
 
     try {
         // Remove o campo 'id' do objeto antes de enviar para o Prisma
-        const timeData = TimeSchema.parse(req.body); // Valida os dados recebidos
-        const { id: _, jogadores, ...updateData } = timeData; // Remove campos indesejados como 'id' ou relações
+        const timeData = TimeSchema.parse(req.body) // Valida os dados recebidos
+        const { id: _, jogadores, ...updateData } = timeData // Remove campos indesejados como 'id' ou relações
 
         const updatedTime = await prisma.time.update({
             where: { id: parseInt(id) }, // Identifica o time pelo ID
             data: updateData, // Atualiza apenas os campos válidos
-        });
+        })
 
-        res.status(200).json(updatedTime);
+        res.status(200).json(updatedTime)
     } catch (error) {
-        console.error('Erro ao atualizar o time:', error);
-        res.status(500).json({ error: 'Erro ao atualizar o time' });
+        console.error('Erro ao atualizar o time:', error)
+        res.status(500).json({ error: 'Erro ao atualizar o time' })
     }
-});
+})
 
 //Rota para deletar um time
 mainRouter.delete('/time/:id', async (req: Request<{ id: string }>, res: Response) => {
     try {
         // Extrai o ID do time dos parâmetros da URL
-        const id = parseInt(req.params.id, 10);
+        const id = parseInt(req.params.id, 10)
 
         // Verifica se o ID é válido
         if (isNaN(id)) {
-            res.status(400).json({ error: "ID inválido" });
+            res.status(400).json({ error: "ID inválido" })
             return
         }
 
         // Verifica se o time existe no banco de dados
         const existingTime = await prisma.time.findUnique({
             where: { id },
-        });
+        })
 
         if (!existingTime) {
-            res.status(404).json({ error: "Time não encontrado" });
+            res.status(404).json({ error: "Time não encontrado" })
             return
         }
 
         // Deleta o time do banco de dados
         await prisma.time.delete({
             where: { id },
-        });
+        })
 
         // Retorna uma mensagem de sucesso
-        res.status(200).json({ message: "Time excluído com sucesso!" });
+        res.status(200).json({ message: "Time excluído com sucesso!" })
     } catch (error) {
-        console.error("Erro ao excluir time:", error);
-        res.status(500).json({ error: "Erro ao excluir time" });
+        console.error("Erro ao excluir time:", error)
+        res.status(500).json({ error: "Erro ao excluir time" })
     }
-});
+})
 
 // Rota para obter todos os jogadores
 mainRouter.get('/jogadores', async (req, res) => {
@@ -160,8 +160,8 @@ mainRouter.get('/jogadores', async (req, res) => {
 
         res.status(200).json(jogadores)
     } catch (error) {
-        console.error('Erro ao buscar os jogadores:', error);
-        res.status(500).json({ error: 'Erro ao buscar os jogadores' });
+        console.error('Erro ao buscar os jogadores:', error)
+        res.status(500).json({ error: 'Erro ao buscar os jogadores' })
     }
 })
 
@@ -176,7 +176,7 @@ mainRouter.post('/jogador', async (req, res) => {
 
         const estatisticas = jogadorData.estatisticas ? jogadorData.estatisticas : {}
 
-        const { id, time, ...jogadorDataWithoutIdAndTime } = jogadorData;
+        const { id, time, ...jogadorDataWithoutIdAndTime } = jogadorData
 
         const jogadorCriado = await prisma.jogador.create({
             data: {
@@ -212,28 +212,28 @@ mainRouter.post('/jogador', async (req, res) => {
 // Rota para atualizar um jogador
 mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {
     try {
-        console.log("Iniciando atualização do jogador...");
+        console.log("Iniciando atualização do jogador...")
 
         // Valida o ID da URL
-        const id = parseInt(req.params.id, 10);
+        const id = parseInt(req.params.id, 10)
         if (isNaN(id)) {
-            console.warn("ID inválido recebido:", req.params.id);
-            res.status(400).json({ error: "ID inválido" });
+            console.warn("ID inválido recebido:", req.params.id)
+            res.status(400).json({ error: "ID inválido" })
             return;
         }
-        console.log("ID validado:", id);
+        console.log("ID validado:", id)
 
         // Captura e filtra os dados do corpo da requisição
-        const jogadorData = req.body;
-        console.log("Dados recebidos no corpo da requisição:", jogadorData);
+        const jogadorData = req.body
+        console.log("Dados recebidos no corpo da requisição:", jogadorData)
 
-        const { estatisticas, ...restData } = jogadorData;
+        const { estatisticas, ...restData } = jogadorData
 
         // Converte campos numéricos para o tipo correto
-        const numericFields = ["experiencia", "idade", "altura", "peso"];
+        const numericFields = ["experiencia", "idade", "altura", "peso"]
         for (const field of numericFields) {
             if (restData[field] !== undefined) {
-                restData[field] = Number(restData[field]);
+                restData[field] = Number(restData[field])
             }
         }
 
@@ -250,56 +250,55 @@ mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Respons
                 ])
             )
             : {};
-        console.log("Estatísticas filtradas:", filteredEstatisticas);
+        console.log("Estatísticas filtradas:", filteredEstatisticas)
 
         const filteredData = {
             ...restData,
             estatisticas: filteredEstatisticas,
         };
-        console.log("Dados finais para atualização:", filteredData);
+        console.log("Dados finais para atualização:", filteredData)
 
         const updatedJogador = await prisma.jogador.update({
             where: { id },
             data: filteredData,
-        });
-        console.log("Jogador atualizado com sucesso:", updatedJogador);
+        })
+        console.log("Jogador atualizado com sucesso:", updatedJogador)
 
-        res.status(200).json(updatedJogador);
+        res.status(200).json(updatedJogador)
     } catch (error) {
-        console.error("Erro ao atualizar o jogador:", error);
-        res.status(500).json({ error: "Erro ao atualizar o jogador" });
+        console.error("Erro ao atualizar o jogador:", error)
+        res.status(500).json({ error: "Erro ao atualizar o jogador" })
     }
-});
-
+})
 
 // Rota para deletar um jogador
 mainRouter.delete('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {
-    console.log(`DELETE request received for ID: ${req.params.id}`);
+    console.log(`DELETE request received for ID: ${req.params.id}`)
     try {
-        const id = parseInt(req.params.id, 10);
+        const id = parseInt(req.params.id, 10)
 
         if (isNaN(id)) {
-            console.log("Invalid ID provided");
-            res.status(400).json({ error: "ID inválido" });
-            return;
+            console.log("Invalid ID provided")
+            res.status(400).json({ error: "ID inválido" })
+            return
         }
 
         await prisma.jogador.delete({
             where: { id },
-        });
+        })
 
-        console.log(`Jogador com ID ${id} excluído com sucesso.`);
-        res.status(200).json({ message: "Jogador excluído com sucesso!" });
+        console.log(`Jogador com ID ${id} excluído com sucesso.`)
+        res.status(200).json({ message: "Jogador excluído com sucesso!" })
     } catch (error) {
-        console.error("Erro ao excluir jogador:", error);
-        res.status(500).json({ error: "Erro ao excluir jogador" });
+        console.error("Erro ao excluir jogador:", error)
+        res.status(500).json({ error: "Erro ao excluir jogador" })
     }
-});
+})
 
 // Rota para adicionar todos os dados de uma só vez
 mainRouter.post('/importar-dados', async (req, res) => {
     try {
-        const teamsData = Times;
+        const teamsData = Times
 
         const createdTeams = await Promise.all(
             teamsData.map(async (teamData) => {
@@ -323,7 +322,7 @@ mainRouter.post('/importar-dados', async (req, res) => {
                         coord_defen: teamData.coord_defen || '',
                         titulos: teamData.titulos || [],
                     },
-                });
+                })
 
                 if (teamData.jogadores && teamData.jogadores.length > 0) {
                     const players = teamData.jogadores.map((player) => ({
@@ -343,41 +342,41 @@ mainRouter.post('/importar-dados', async (req, res) => {
                         camisa: player.camisa || '',
                         estatisticas: player.estatisticas || {},
                         timeId: createdTeam.id,
-                    }));
+                    }))
 
                     await prisma.jogador.createMany({
                         data: players,
                         skipDuplicates: true,
-                    });
+                    })
                 }
 
                 return createdTeam;
             })
-        );
+        )
 
-        res.status(201).json({ message: 'Dados importados com sucesso!', teams: createdTeams });
+        res.status(201).json({ message: 'Dados importados com sucesso!', teams: createdTeams })
     } catch (error) {
-        console.error('Erro ao importar os dados:', error);
-        res.status(500).json({ error: 'Erro ao importar os dados' });
+        console.error('Erro ao importar os dados:', error)
+        res.status(500).json({ error: 'Erro ao importar os dados' })
     }
-});
+})
 
 
 // Rota para criar um usuário
 mainRouter.post("/cadastro", async (req: Request, res: Response) => {
-    const { nome, email, senha, plano } = req.body;
+    const { nome, email, senha, plano } = req.body
 
     try {
         const existeUsuario = await prisma.usuario.findUnique({
             where: { email },
-        });
+        })
 
         if (existeUsuario) {
-            res.status(400).json({ error: "Email já cadastrado" });
+            res.status(400).json({ error: "Email já cadastrado" })
             return
         }
 
-        const hashedPassword = await bcrypt.hash(senha, 10);
+        const hashedPassword = await bcrypt.hash(senha, 10)
         const usuario = await prisma.usuario.create({
             data: {
                 nome,
@@ -385,33 +384,33 @@ mainRouter.post("/cadastro", async (req: Request, res: Response) => {
                 senha: hashedPassword,
                 plano,
             },
-        });
+        })
 
-        res.status(201).json({ message: "Usuário cadastrado com sucesso", usuario });
+        res.status(201).json({ message: "Usuário cadastrado com sucesso", usuario })
     } catch (error) {
-        res.status(400).json({ error: "Erro ao cadastrar usuário" });
+        res.status(400).json({ error: "Erro ao cadastrar usuário" })
     }
-});
+})
 
 // Rota de acesso do usuário
 mainRouter.post('/login', async (req: Request, res: Response) => {
-    const { email, senha } = req.body;
+    const { email, senha } = req.body
 
     try {
         const usuario = await prisma.usuario.findUnique({
             where: { email },
-        });
+        })
 
         if (!usuario) {
-            res.status(404).json({ error: 'Usuário não encontrado' });
-            return; // Evita que o código continue
+            res.status(404).json({ error: 'Usuário não encontrado' })
+            return
         }
 
-        const isPasswordValid = await bcrypt.compare(senha, usuario.senha);
+        const isPasswordValid = await bcrypt.compare(senha, usuario.senha)
 
         if (!isPasswordValid) {
-            res.status(401).json({ error: 'Senha inválida' });
-            return; // Evita que o código continue
+            res.status(401).json({ error: 'Senha inválida' })
+            return
         }
 
         const token = jwt.sign(
@@ -420,47 +419,46 @@ mainRouter.post('/login', async (req: Request, res: Response) => {
             { expiresIn: '1h' }
         );
 
-        res.status(200).json({ token }); // Envia o token
+        res.status(200).json({ token })
     } catch (error) {
         res.status(500).json({ error: 'Erro ao fazer login' });
     }
-});
-
+})
 
 mainRouter.get('/times-basico', verificarPlano('BASICO'), async (req: Request, res: Response) => {
     try {
-        const times = await prisma.time.findMany({ include: { jogadores: true } });
+        const times = await prisma.time.findMany({ include: { jogadores: true } })
         res.status(200).json(times);
     } catch (error) {
-        res.status(500).json({ error: 'Erro ao buscar times básico' });
+        res.status(500).json({ error: 'Erro ao buscar times básico' })
     }
-});
+})
 
 mainRouter.get('/times-padrao', verificarPlano('PADRAO'), async (req: Request, res: Response) => {
     try {
-        const times = await prisma.time.findMany();
-        res.status(200).json(times);
+        const times = await prisma.time.findMany()
+        res.status(200).json(times)
     } catch (error) {
-        res.status(500).json({ error: 'Erro ao buscar times padrão' });
+        res.status(500).json({ error: 'Erro ao buscar times padrão' })
     }
-});
+})
 
 mainRouter.get('/times-premium', verificarPlano('PREMIUM'), async (req: Request, res: Response) => {
     try {
-        const times = await prisma.time.findMany({ include: { jogadores: true } });
-        res.status(200).json(times);
+        const times = await prisma.time.findMany({ include: { jogadores: true } })
+        res.status(200).json(times)
     } catch (error) {
-        res.status(500).json({ error: 'Erro ao buscar times premium' });
+        res.status(500).json({ error: 'Erro ao buscar times premium' })
     }
-});
+})
 
 mainRouter.get("/test", (req, res) => {
     if (!req.user) {
-        res.status(401).json({ error: "Usuário não autenticado" });
+        res.status(401).json({ error: "Usuário não autenticado" })
         return
     }
-    res.status(200).json({ message: `Bem-vindo, ${req.user.plano}!` });
-});
+    res.status(200).json({ message: `Bem-vindo, ${req.user.plano}!` })
+})
 
 
 

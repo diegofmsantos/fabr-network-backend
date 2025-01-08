@@ -6,9 +6,10 @@ export const MateriaSchema = z.object({
     titulo: z.string(),
     subtitulo: z.string(),
     imagem: z.string(),
+    legenda: z.string(),
     texto: z.string(),
     autor: z.string(),
-    autorImage: z.string(), // Campo adicionado
+    autorImage: z.string(),
     createdAt: z.date().optional(),
     updatedAt: z.date().optional()
 })

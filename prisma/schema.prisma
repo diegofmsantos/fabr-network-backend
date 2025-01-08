@@ -55,6 +55,7 @@ model Materia {
   titulo     String
   subtitulo  String
   imagem     String
+  legenda    String?
   texto      String   @db.Text
   autor      String
   autorImage String

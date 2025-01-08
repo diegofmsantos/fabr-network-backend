@@ -6,7 +6,6 @@ import { JogadorSchema } from '../schemas/Jogador'
 import { Times } from '../data/times'
 import { verificarPlano } from '../middlewares/authMiddleware'
 import bcrypt from "bcrypt";
-import { MateriaSchema } from "../schemas/Materia"
 
 const prisma = new PrismaClient()
 
@@ -321,6 +320,7 @@ mainRouter.post('/materias', async (req, res) => {
                 titulo: materiaData.titulo,
                 subtitulo: materiaData.subtitulo,
                 imagem: materiaData.imagem,
+                legenda: materiaData.legenda,
                 texto: materiaData.texto,
                 autor: materiaData.autor,
                 autorImage: materiaData.autorImage // Campo adicionado
@@ -348,9 +348,10 @@ mainRouter.put('/materias/:id', async (req, res) => {
                 titulo: materiaData.titulo,
                 subtitulo: materiaData.subtitulo,
                 imagem: materiaData.imagem,
+                legenda: materiaData.legenda,
                 texto: materiaData.texto,
                 autor: materiaData.autor,
-                autorImage: materiaData.autorImage // Campo adicionado
+                autorImage: materiaData.autorImage
             }
         });
 

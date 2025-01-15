@@ -1,4 +1,3 @@
-// schemas/Materia.ts
 import { z } from 'zod'
 
 export const MateriaSchema = z.object({
@@ -10,8 +9,8 @@ export const MateriaSchema = z.object({
     texto: z.string(),
     autor: z.string(),
     autorImage: z.string(),
-    createdAt: z.date().optional(),
-    updatedAt: z.date().optional()
+    createdAt: z.date(),
+    updatedAt: z.date() 
 })
 
 export type Materia = z.infer<typeof MateriaSchema>

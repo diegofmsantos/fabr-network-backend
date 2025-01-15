@@ -323,7 +323,9 @@ mainRouter.post('/materias', async (req, res) => {
                 legenda: materiaData.legenda,
                 texto: materiaData.texto,
                 autor: materiaData.autor,
-                autorImage: materiaData.autorImage // Campo adicionado
+                autorImage: materiaData.autorImage,
+                createdAt: new Date(materiaData.createdAt),
+                updatedAt: new Date(materiaData.updatedAt)
             }
         });
 
@@ -345,13 +347,9 @@ mainRouter.put('/materias/:id', async (req, res) => {
         const updatedMateria = await prisma.materia.update({
             where: { id: parseInt(id) },
             data: {
-                titulo: materiaData.titulo,
-                subtitulo: materiaData.subtitulo,
-                imagem: materiaData.imagem,
-                legenda: materiaData.legenda,
-                texto: materiaData.texto,
-                autor: materiaData.autor,
-                autorImage: materiaData.autorImage
+                ...materiaData,
+                createdAt: new Date(materiaData.createdAt),
+                updatedAt: new Date(materiaData.updatedAt)
             }
         });
 

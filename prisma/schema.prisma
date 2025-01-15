@@ -59,8 +59,8 @@ model Materia {
   texto      String   @db.Text
   autor      String
   autorImage String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime
+  updatedAt  DateTime
 }
 
 model Usuario {

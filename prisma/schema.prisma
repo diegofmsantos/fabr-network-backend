@@ -62,18 +62,3 @@ model Materia {
   createdAt  DateTime
   updatedAt  DateTime
 }
-
-model Usuario {
-  id       Int      @id @default(autoincrement())
-  nome     String
-  email    String   @unique
-  senha    String
-  plano    Plano    @default(BASICO)
-  criadoEm DateTime @default(now())
-}
-
-enum Plano {
-  BASICO
-  PADRAO
-  PREMIUM
-}

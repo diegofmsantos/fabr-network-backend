@@ -9,6 +9,7 @@ type Titulos = {
 export type Time = {
   id?: number
   nome?: string
+  temporada?: string
   sigla?: string
   cor?: string
   cidade?: string

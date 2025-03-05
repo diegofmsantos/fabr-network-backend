@@ -287,6 +287,7 @@ mainRouter.post('/jogador', async (req, res) => {
 
 // Rota para atualizar um jogador
 mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {
+    console.log("req.body recebido:", JSON.stringify(req.body, null, 2));
     try {
         console.log("Iniciando atualização do jogador...")
 
@@ -298,20 +299,38 @@ mainRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Respons
             return;
         }
 
-        const { estatisticas, numero, camisa, timeId, temporada, ...jogadorData } = req.body
+        // Clone o body e remova os campos que não devem ir para o update do jogador
+        const { estatisticas, numero, camisa, timeId, temporada, id: bodyId, ...dadosJogador } = req.body
 
-        // Converte campos numéricos para o tipo correto
-        const numericFields = ["experiencia", "idade", "altura", "peso"]
-        for (const field of numericFields) {
-            if (jogadorData[field] !== undefined) {
-                jogadorData[field] = Number(jogadorData[field])
+        // Garanta que campos numéricos sejam números
+        if (dadosJogador.altura !== undefined) {
+            const alturaConvertida = Number(String(dadosJogador.altura).replace(',', '.'))
+            // Verifique se a conversão resultou em um número válido
+            dadosJogador.altura = !isNaN(alturaConvertida) ? alturaConvertida : undefined
+        }
+        
+        // Se altura for undefined ou NaN, obtenha-a do banco de dados
+        if (dadosJogador.altura === undefined || isNaN(dadosJogador.altura)) {
+            const jogadorAtual = await prisma.jogador.findUnique({
+                where: { id }
+            });
+            
+            if (jogadorAtual) {
+                dadosJogador.altura = jogadorAtual.altura;
+                console.log("Usando valor de altura existente:", jogadorAtual.altura);
             }
         }
+        
+        if (dadosJogador.peso !== undefined) dadosJogador.peso = Number(dadosJogador.peso)
+        if (dadosJogador.idade !== undefined) dadosJogador.idade = Number(dadosJogador.idade)
+        if (dadosJogador.experiencia !== undefined) dadosJogador.experiencia = Number(dadosJogador.experiencia)
+
+        console.log("Dados finais a serem atualizados:", dadosJogador);
 
         // Atualiza os dados básicos do jogador
         const updatedJogador = await prisma.jogador.update({
             where: { id },
-            data: jogadorData,
+            data: dadosJogador,
         })
 
         // Atualiza o vínculo jogador-time se fornecido temporada, timeId e estatísticas

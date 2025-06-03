@@ -30,6 +30,13 @@ model Time {
   jogadores       JogadorTime[]
 
   @@unique([sigla, temporada]) 
+
+  // Relacionamentos com campeonatos
+  grupos           GrupoTime[]
+  jogosCasa        Jogo[] @relation("JogosCasa")
+  jogosVisitante   Jogo[] @relation("JogosVisitante")
+  estatisticasJogo EstatisticaJogo[]
+  classificacoes   ClassificacaoGrupo[]
 }
 
 model Jogador {
@@ -47,6 +54,7 @@ model Jogador {
   nacionalidade String
   timeFormador  String
   times         JogadorTime[]
+  estatisticasJogo EstatisticaJogo[]
 }
 
 model JogadorTime {
@@ -81,4 +89,117 @@ model MetaDados {
   id    Int    @id @default(autoincrement())
   chave String @unique
   valor String @db.Text
+}
+
+model Campeonato {
+  id          Int      @id @default(autoincrement())
+  nome        String   // "Brasileirão 2025"
+  temporada   String   // "2025"
+  tipo        String   // "REGULAR", "PLAYOFFS", "COPA"
+  status      String   // "NAO_INICIADO", "EM_ANDAMENTO", "FINALIZADO"
+  dataInicio  DateTime
+  dataFim     DateTime?
+  descricao   String?
+  formato     Json     // Configurações do formato do campeonato
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  grupos      Grupo[]
+  jogos       Jogo[]
+  
+  @@index([temporada])
+  @@index([status])
+}
+
+model Grupo {
+  id           Int         @id @default(autoincrement())
+  nome         String      // "Grupo A", "Conferência Norte"
+  campeonatoId Int
+  ordem        Int         // Para ordenação dos grupos
+  
+  campeonato   Campeonato  @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  times        GrupoTime[]
+  jogos        Jogo[]
+  classificacoes ClassificacaoGrupo[]
+  
+  @@unique([campeonatoId, nome])
+  @@index([campeonatoId])
+}
+
+model GrupoTime {
+  id      Int   @id @default(autoincrement())
+  grupoId Int
+  timeId  Int
+  
+  grupo   Grupo @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  time    Time  @relation(fields: [timeId], references: [id], onDelete: Cascade)
+  
+  @@unique([grupoId, timeId])
+}
+
+model Jogo {
+  id              Int        @id @default(autoincrement())
+  campeonatoId    Int
+  grupoId         Int?       // Null se não for jogo de grupo
+  timeVisitanteId Int
+  timeCasaId      Int
+  dataJogo        DateTime
+  local           String?
+  rodada          Int
+  fase            String     // "FASE_GRUPOS", "OITAVAS", "QUARTAS", "SEMI", "FINAL"
+  status          String     @default("AGENDADO") // "AGENDADO", "AO_VIVO", "FINALIZADO", "ADIADO"
+  placarCasa      Int?
+  placarVisitante Int?
+  observacoes     String?
+  estatisticasProcessadas Boolean @default(false)
+  
+  campeonato      Campeonato @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  grupo           Grupo?     @relation(fields: [grupoId], references: [id], onDelete: SetNull)
+  timeCasa        Time       @relation("JogosCasa", fields: [timeCasaId], references: [id])
+  timeVisitante   Time       @relation("JogosVisitante", fields: [timeVisitanteId], references: [id])
+  estatisticas    EstatisticaJogo[]
+  
+  @@index([campeonatoId, rodada])
+  @@index([dataJogo])
+  @@index([status])
+  @@index([timeCasaId])
+  @@index([timeVisitanteId])
+}
+
+model EstatisticaJogo {
+  id           Int  @id @default(autoincrement())
+  jogoId       Int
+  jogadorId    Int
+  timeId       Int
+  estatisticas Json // Mesma estrutura das estatísticas existentes
+  
+  jogo         Jogo    @relation(fields: [jogoId], references: [id], onDelete: Cascade)
+  jogador      Jogador @relation(fields: [jogadorId], references: [id], onDelete: Cascade)
+  time         Time    @relation(fields: [timeId], references: [id], onDelete: Cascade)
+  
+  @@unique([jogoId, jogadorId])
+  @@index([jogoId])
+  @@index([jogadorId])
+}
+
+model ClassificacaoGrupo {
+  id           Int @id @default(autoincrement())
+  grupoId      Int
+  timeId       Int
+  posicao      Int
+  jogos        Int @default(0)
+  vitorias     Int @default(0)
+  empates      Int @default(0)
+  derrotas     Int @default(0)
+  pontosPro    Int @default(0)
+  pontosContra Int @default(0)
+  saldoPontos  Int @default(0)
+  pontos       Int @default(0) // Pontos na tabela (vitória = 3, empate = 1)
+  aproveitamento Float @default(0)
+  
+  grupo        Grupo @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  time         Time  @relation(fields: [timeId], references: [id], onDelete: Cascade)
+  
+  @@unique([grupoId, timeId])
+  @@index([grupoId, posicao])
 }

@@ -104363,7 +104363,7 @@ export const Times: Time[] = [
         fundacao: "21/12/2004",
         instagram: 'https://www.instagram.com/tritoes/?hl=pt',
         instagram2: '@tritoes',
-        logo: "tritoes.png",
+        logo: "tritoes-fa.png",
         capacete: 'capacete-tritoes.png',
         titulos: [
             {

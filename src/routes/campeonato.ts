@@ -93,7 +93,7 @@ campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => 
         })
 
         if (!campeonato) {
-            return res.status(404).json({ error: 'Campeonato não encontrado' })
+            res.status(404).json({ error: 'Campeonato não encontrado' })
         }
 
         res.status(200).json(campeonato)
@@ -127,7 +127,7 @@ campeonatoRouter.post('/campeonatos', async (req: Request, res: Response) => {
             if (dadosCampeonato.formato.temGrupos && gruposData && Array.isArray(gruposData)) {
                 for (let i = 0; i < gruposData.length; i++) {
                     const grupoData = gruposData[i]
-                    
+
                     const grupo = await tx.grupo.create({
                         data: {
                             nome: grupoData.nome,
@@ -172,7 +172,7 @@ campeonatoRouter.post('/campeonatos', async (req: Request, res: Response) => {
         res.status(201).json(campeonato)
     } catch (error) {
         console.error('Erro ao criar campeonato:', error)
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Erro ao criar campeonato',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
@@ -331,12 +331,12 @@ campeonatoRouter.post('/grupos', async (req: Request, res: Response) => {
 // GET /jogos - Listar jogos com filtros
 campeonatoRouter.get('/jogos', async (req: Request, res: Response) => {
     try {
-        const { 
-            campeonatoId, 
-            timeId, 
-            grupoId, 
-            rodada, 
-            status, 
+        const {
+            campeonatoId,
+            timeId,
+            grupoId,
+            rodada,
+            status,
             fase,
             dataInicio,
             dataFim,
@@ -345,13 +345,13 @@ campeonatoRouter.get('/jogos', async (req: Request, res: Response) => {
         } = req.query
 
         const whereClause: any = {}
-        
+
         if (campeonatoId) whereClause.campeonatoId = parseInt(String(campeonatoId))
         if (grupoId) whereClause.grupoId = parseInt(String(grupoId))
         if (rodada) whereClause.rodada = parseInt(String(rodada))
         if (status) whereClause.status = String(status)
         if (fase) whereClause.fase = String(fase)
-        
+
         if (timeId) {
             const timeIdNum = parseInt(String(timeId))
             whereClause.OR = [
@@ -452,8 +452,6 @@ campeonatoRouter.get('/jogos/:id', async (req: Request, res: Response) => {
                                 id: true,
                                 nome: true,
                                 posicao: true,
-                                numero: true,
-                                camisa: true
                             }
                         }
                     }
@@ -462,7 +460,7 @@ campeonatoRouter.get('/jogos/:id', async (req: Request, res: Response) => {
         })
 
         if (!jogo) {
-            return res.status(404).json({ error: 'Jogo não encontrado' })
+            res.status(404).json({ error: 'Jogo não encontrado' })
         }
 
         res.status(200).json(jogo)
@@ -484,7 +482,7 @@ campeonatoRouter.post('/jogos', async (req: Request, res: Response) => {
 
         // Verificar se os times são diferentes
         if (dadosJogo.timeCasaId === dadosJogo.timeVisitanteId) {
-            return res.status(400).json({ error: 'Um time não pode jogar contra si mesmo' })
+            res.status(400).json({ error: 'Um time não pode jogar contra si mesmo' })
         }
 
         const jogo = await prisma.jogo.create({
@@ -536,13 +534,13 @@ campeonatoRouter.put('/jogos/:id', async (req: Request, res: Response) => {
 
         // Se o placar foi atualizado e o jogo foi finalizado, recalcular classificação
         if (
-            jogo.status === 'FINALIZADO' && 
+            jogo.status === 'FINALIZADO' &&
             jogo.grupoId &&
-            (jogo.placarCasa !== jogoAnterior?.placarCasa || 
-             jogo.placarVisitante !== jogoAnterior?.placarVisitante)
+            (jogo.placarCasa !== jogoAnterior?.placarCasa ||
+                jogo.placarVisitante !== jogoAnterior?.placarVisitante)
         ) {
             await calcularClassificacaoGrupo(jogo.grupoId)
-            
+
             // Verificar se pode avançar para próxima fase
             await verificarProgressaoCampeonato(jogo.campeonatoId)
         }
@@ -645,9 +643,9 @@ campeonatoRouter.post('/classificacao/recalcular/:grupoId', async (req: Request,
 
         const classificacao = await calcularClassificacaoGrupo(parseInt(grupoId))
 
-        res.status(200).json({ 
+        res.status(200).json({
             message: 'Classificação recalculada com sucesso',
-            classificacao 
+            classificacao
         })
     } catch (error) {
         console.error('Erro ao recalcular classificação:', error)
@@ -666,7 +664,7 @@ campeonatoRouter.post('/jogos/:id/estatisticas', async (req: Request, res: Respo
         const { estatisticas } = req.body
 
         if (!Array.isArray(estatisticas)) {
-            return res.status(400).json({ error: 'Estatísticas devem ser um array' })
+            res.status(400).json({ error: 'Estatísticas devem ser um array' })
         }
 
         const jogo = await prisma.jogo.findUnique({
@@ -674,7 +672,7 @@ campeonatoRouter.post('/jogos/:id/estatisticas', async (req: Request, res: Respo
         })
 
         if (!jogo) {
-            return res.status(404).json({ error: 'Jogo não encontrado' })
+            res.status(404).json({ error: 'Jogo não encontrado' })
         }
 
         const estatisticasProcessadas = await prisma.$transaction(async (tx) => {

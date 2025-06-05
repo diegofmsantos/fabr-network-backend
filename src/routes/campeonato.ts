@@ -94,6 +94,7 @@ campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => 
 
         if (!campeonato) {
             res.status(404).json({ error: 'Campeonato não encontrado' })
+            return
         }
 
         res.status(200).json(campeonato)
@@ -107,7 +108,7 @@ campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => 
 campeonatoRouter.post('/campeonatos', async (req: Request, res: Response) => {
     try {
         const dadosCampeonato = CampeonatoSchema.parse(req.body)
-        const { grupos: gruposData, times: timesIds, ...campeonatoData } = req.body
+        const { grupos: gruposData, times: timesIds, gerarJogos, ...campeonatoData } = req.body
 
         // Converter datas se necessário
         if (typeof campeonatoData.dataInicio === 'string') {
@@ -120,7 +121,10 @@ campeonatoRouter.post('/campeonatos', async (req: Request, res: Response) => {
         const campeonato = await prisma.$transaction(async (tx) => {
             // Criar campeonato
             const novoCampeonato = await tx.campeonato.create({
-                data: campeonatoData
+                data: {
+                    ...campeonatoData,
+                    status: campeonatoData.status || 'NAO_INICIADO'
+                }
             })
 
             // Se tem grupos, criar grupos e associar times
@@ -665,6 +669,7 @@ campeonatoRouter.post('/jogos/:id/estatisticas', async (req: Request, res: Respo
 
         if (!Array.isArray(estatisticas)) {
             res.status(400).json({ error: 'Estatísticas devem ser um array' })
+            return
         }
 
         const jogo = await prisma.jogo.findUnique({
@@ -805,5 +810,385 @@ campeonatoRouter.get('/campeonatos/:id/ultimos-resultados', async (req: Request,
     } catch (error) {
         console.error('Erro ao buscar últimos resultados:', error)
         res.status(500).json({ error: 'Erro ao buscar últimos resultados' })
+    }
+})
+
+campeonatoRouter.put('/grupos/:id', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+        const { nome, ordem, times } = req.body
+
+        const grupo = await prisma.$transaction(async (tx) => {
+            // Atualizar dados básicos do grupo
+            const grupoAtualizado = await tx.grupo.update({
+                where: { id: parseInt(id) },
+                data: {
+                    nome: nome,
+                    ordem: ordem
+                }
+            })
+
+            // Se times foram fornecidos, atualizar associações
+            if (times && Array.isArray(times)) {
+                // Remover associações antigas
+                await tx.grupoTime.deleteMany({
+                    where: { grupoId: parseInt(id) }
+                })
+
+                // Criar novas associações
+                if (times.length > 0) {
+                    const grupoTimes = times.map((timeId: number) => ({
+                        grupoId: parseInt(id),
+                        timeId: timeId
+                    }))
+
+                    await tx.grupoTime.createMany({
+                        data: grupoTimes
+                    })
+
+                    // Recriar classificação
+                    await tx.classificacaoGrupo.deleteMany({
+                        where: { grupoId: parseInt(id) }
+                    })
+
+                    const classificacoes = times.map((timeId: number, index: number) => ({
+                        grupoId: parseInt(id),
+                        timeId: timeId,
+                        posicao: index + 1
+                    }))
+
+                    await tx.classificacaoGrupo.createMany({
+                        data: classificacoes
+                    })
+                }
+            }
+
+            return grupoAtualizado
+        })
+
+        res.status(200).json(grupo)
+    } catch (error) {
+        console.error('Erro ao atualizar grupo:', error)
+        res.status(500).json({ error: 'Erro ao atualizar grupo' })
+    }
+})
+
+// DELETE /grupos/:id - Deletar grupo
+campeonatoRouter.delete('/grupos/:id', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+
+        // Verificar se o grupo existe
+        const grupo = await prisma.grupo.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                jogos: true
+            }
+        })
+
+        if (!grupo) {
+            res.status(404).json({ error: 'Grupo não encontrado' })
+            return
+        }
+
+        // Verificar se há jogos associados
+        if (grupo.jogos.length > 0) {
+            res.status(400).json({ 
+                error: 'Não é possível excluir grupo com jogos associados',
+                details: `O grupo possui ${grupo.jogos.length} jogos`
+            })
+            return
+        }
+
+        // Deletar grupo (cascade deletes irão remover GrupoTime e ClassificacaoGrupo)
+        await prisma.grupo.delete({
+            where: { id: parseInt(id) }
+        })
+
+        res.status(200).json({ message: 'Grupo deletado com sucesso' })
+    } catch (error) {
+        console.error('Erro ao deletar grupo:', error)
+        res.status(500).json({ error: 'Erro ao deletar grupo' })
+    }
+})
+
+campeonatoRouter.delete('/admin/campeonatos/bulk-delete', async (req: Request, res: Response) => {
+    try {
+        const { ids } = req.body
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            res.status(400).json({ error: 'IDs dos campeonatos são obrigatórios' })
+            return
+        }
+
+        // Verificar quais campeonatos existem
+        const campeonatos = await prisma.campeonato.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, nome: true }
+        })
+
+        if (campeonatos.length === 0) {
+            res.status(404).json({ error: 'Nenhum campeonato encontrado' })
+            return
+        }
+
+        // Verificar se algum campeonato tem jogos finalizados
+        const campeonatosComJogosFinalizados = await prisma.campeonato.findMany({
+            where: { 
+                id: { in: ids },
+                jogos: {
+                    some: { status: 'FINALIZADO' }
+                }
+            },
+            select: { id: true, nome: true }
+        })
+
+        if (campeonatosComJogosFinalizados.length > 0) {
+            res.status(400).json({
+                error: 'Alguns campeonatos possuem jogos finalizados',
+                details: `Campeonatos: ${campeonatosComJogosFinalizados.map(c => c.nome).join(', ')}`
+            })
+            return
+        }
+
+        // Executar deleção em transação
+        const resultado = await prisma.$transaction(async (tx) => {
+            const deletedCount = await tx.campeonato.deleteMany({
+                where: { id: { in: ids } }
+            })
+
+            return deletedCount
+        })
+
+        res.status(200).json({
+            message: `${resultado.count} campeonatos deletados com sucesso`,
+            deletedIds: campeonatos.map(c => c.id)
+        })
+    } catch (error) {
+        console.error('Erro ao deletar campeonatos em massa:', error)
+        res.status(500).json({ error: 'Erro ao deletar campeonatos' })
+    }
+})
+
+// DELETE /admin/jogos/bulk-delete - Deletar múltiplos jogos
+campeonatoRouter.delete('/admin/jogos/bulk-delete', async (req: Request, res: Response) => {
+    try {
+        const { ids } = req.body
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            res.status(400).json({ error: 'IDs dos jogos são obrigatórios' })
+            return
+        }
+
+        // Verificar quais jogos existem
+        const jogos = await prisma.jogo.findMany({
+            where: { id: { in: ids } },
+            select: { 
+                id: true, 
+                status: true, 
+                estatisticasProcessadas: true,
+                timeCasa: { select: { nome: true } },
+                timeVisitante: { select: { nome: true } }
+            }
+        })
+
+        if (jogos.length === 0) {
+            res.status(404).json({ error: 'Nenhum jogo encontrado' })
+            return
+        }
+
+        // Verificar se algum jogo tem estatísticas processadas
+        const jogosComEstatisticas = jogos.filter(j => j.estatisticasProcessadas)
+
+        if (jogosComEstatisticas.length > 0) {
+            res.status(400).json({
+                error: 'Alguns jogos possuem estatísticas processadas',
+                details: `${jogosComEstatisticas.length} jogos com estatísticas`,
+                jogos: jogosComEstatisticas.map(j => ({
+                    id: j.id,
+                    confronto: `${j.timeCasa.nome} vs ${j.timeVisitante.nome}`
+                }))
+            })
+            return
+        }
+
+        // Executar deleção em transação
+        const resultado = await prisma.$transaction(async (tx) => {
+            // Deletar estatísticas primeiro (se houver)
+            await tx.estatisticaJogo.deleteMany({
+                where: { jogoId: { in: ids } }
+            })
+
+            // Deletar jogos
+            const deletedCount = await tx.jogo.deleteMany({
+                where: { id: { in: ids } }
+            })
+
+            return deletedCount
+        })
+
+        res.status(200).json({
+            message: `${resultado.count} jogos deletados com sucesso`,
+            deletedIds: jogos.map(j => j.id)
+        })
+    } catch (error) {
+        console.error('Erro ao deletar jogos em massa:', error)
+        res.status(500).json({ error: 'Erro ao deletar jogos' })
+    }
+})
+
+campeonatoRouter.post('/admin/campeonatos/limpar-temporada/:temporada', async (req: Request, res: Response) => {
+    try {
+        const { temporada } = req.params
+        const { confirmar } = req.body
+
+        if (!confirmar) {
+            res.status(400).json({ 
+                error: 'Confirmação necessária',
+                message: 'Envie { "confirmar": true } para executar a limpeza'
+            })
+            return
+        }
+
+        // Buscar campeonatos da temporada
+        const campeonatos = await prisma.campeonato.findMany({
+            where: { temporada },
+            select: { id: true, nome: true }
+        })
+
+        if (campeonatos.length === 0) {
+            res.status(404).json({ error: `Nenhum campeonato encontrado na temporada ${temporada}` })
+            return
+        }
+
+        // Executar limpeza em transação
+        const resultado = await prisma.$transaction(async (tx) => {
+            const campeonatoIds = campeonatos.map(c => c.id)
+
+            // Deletar todas as estatísticas de jogos
+            const estatisticasDeletadas = await tx.estatisticaJogo.deleteMany({
+                where: {
+                    jogo: { campeonatoId: { in: campeonatoIds } }
+                }
+            })
+
+            // Deletar todos os jogos
+            const jogosDeletados = await tx.jogo.deleteMany({
+                where: { campeonatoId: { in: campeonatoIds } }
+            })
+
+            // Deletar classificações
+            const classificacoesDeletadas = await tx.classificacaoGrupo.deleteMany({
+                where: {
+                    grupo: { campeonatoId: { in: campeonatoIds } }
+                }
+            })
+
+            // Deletar associações de grupos
+            const grupoTimesDeletados = await tx.grupoTime.deleteMany({
+                where: {
+                    grupo: { campeonatoId: { in: campeonatoIds } }
+                }
+            })
+
+            // Deletar grupos
+            const gruposDeletados = await tx.grupo.deleteMany({
+                where: { campeonatoId: { in: campeonatoIds } }
+            })
+
+            // Deletar campeonatos
+            const campeonatosDeletados = await tx.campeonato.deleteMany({
+                where: { id: { in: campeonatoIds } }
+            })
+
+            return {
+                campeonatos: campeonatosDeletados.count,
+                grupos: gruposDeletados.count,
+                jogos: jogosDeletados.count,
+                estatisticas: estatisticasDeletadas.count,
+                classificacoes: classificacoesDeletadas.count,
+                grupoTimes: grupoTimesDeletados.count
+            }
+        })
+
+        res.status(200).json({
+            message: `Temporada ${temporada} limpa com sucesso`,
+            detalhes: resultado
+        })
+    } catch (error) {
+        console.error('Erro ao limpar temporada:', error)
+        res.status(500).json({ error: 'Erro ao limpar temporada' })
+    }
+})
+
+// GET /admin/campeonatos/estatisticas - Estatísticas gerais dos campeonatos
+campeonatoRouter.get('/admin/campeonatos/estatisticas', async (req: Request, res: Response) => {
+    try {
+        const { temporada } = req.query
+
+        const whereClause = temporada ? { temporada: String(temporada) } : {}
+
+        const [
+            totalCampeonatos,
+            campeonatosPorStatus,
+            totalJogos,
+            jogosPorStatus,
+            totalGrupos,
+            estatisticasProcessadas
+        ] = await Promise.all([
+            prisma.campeonato.count({ where: whereClause }),
+            
+            prisma.campeonato.groupBy({
+                by: ['status'],
+                where: whereClause,
+                _count: { id: true }
+            }),
+            
+            prisma.jogo.count({
+                where: temporada ? { campeonato: { temporada: String(temporada) } } : {}
+            }),
+            
+            prisma.jogo.groupBy({
+                by: ['status'],
+                where: temporada ? { campeonato: { temporada: String(temporada) } } : {},
+                _count: { id: true }
+            }),
+            
+            prisma.grupo.count({
+                where: temporada ? { campeonato: { temporada: String(temporada) } } : {}
+            }),
+            
+            prisma.jogo.count({
+                where: {
+                    estatisticasProcessadas: true,
+                    ...(temporada ? { campeonato: { temporada: String(temporada) } } : {})
+                }
+            })
+        ])
+
+        res.status(200).json({
+            temporada: temporada || 'Todas',
+            campeonatos: {
+                total: totalCampeonatos,
+                porStatus: campeonatosPorStatus.reduce((acc, item) => {
+                    acc[item.status] = item._count.id
+                    return acc
+                }, {} as Record<string, number>)
+            },
+            jogos: {
+                total: totalJogos,
+                porStatus: jogosPorStatus.reduce((acc, item) => {
+                    acc[item.status] = item._count.id
+                    return acc
+                }, {} as Record<string, number>),
+                comEstatisticas: estatisticasProcessadas
+            },
+            grupos: {
+                total: totalGrupos
+            }
+        })
+    } catch (error) {
+        console.error('Erro ao buscar estatísticas:', error)
+        res.status(500).json({ error: 'Erro ao buscar estatísticas' })
     }
 })

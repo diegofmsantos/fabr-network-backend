@@ -6,11 +6,6 @@ import { calcularClassificacaoGrupo, gerarJogosCampeonato, verificarProgressaoCa
 const prisma = new PrismaClient()
 export const campeonatoRouter = express.Router()
 
-// ===========================================
-// ROTAS DE CAMPEONATOS
-// ===========================================
-
-// GET /campeonatos - Listar todos os campeonatos
 campeonatoRouter.get('/campeonatos', async (req: Request, res: Response) => {
     try {
         const { temporada, tipo, status } = req.query

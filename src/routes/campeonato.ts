@@ -39,6 +39,7 @@ campeonatoRouter.get('/campeonatos', async (req: Request, res: Response) => {
 })
 
 // GET /campeonatos/:id - Buscar campeonato específico
+// GET /campeonatos/:id - Buscar campeonato específico
 campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
@@ -49,14 +50,15 @@ campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => 
                 grupos: {
                     include: {
                         times: {
-                            include: {
+                            include: { 
                                 time: {
                                     select: {
                                         id: true,
                                         nome: true,
                                         sigla: true,
                                         cor: true,
-                                        logo: true
+                                        logo: true,
+                                        capacete: true
                                     }
                                 }
                             }
@@ -78,6 +80,23 @@ campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => 
                     },
                     orderBy: { ordem: 'asc' }
                 },
+                jogos: {
+                    include: {
+                        timeCasa: {
+                            select: { id: true, nome: true, sigla: true, cor: true, logo: true }
+                        },
+                        timeVisitante: {
+                            select: { id: true, nome: true, sigla: true, cor: true, logo: true }
+                        },
+                        grupo: {
+                            select: { id: true, nome: true }
+                        }
+                    },
+                    orderBy: [
+                        { dataJogo: 'asc' },
+                        { rodada: 'asc' }
+                    ]
+                },
                 _count: {
                     select: {
                         grupos: true,
@@ -95,7 +114,10 @@ campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => 
         res.status(200).json(campeonato)
     } catch (error) {
         console.error('Erro ao buscar campeonato:', error)
-        res.status(500).json({ error: 'Erro ao buscar campeonato' })
+        res.status(500).json({ 
+            error: 'Erro ao buscar campeonato',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
     }
 })
 

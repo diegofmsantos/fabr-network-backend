@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { Times } from '../data/times'
 import fs from 'fs';
@@ -38,78 +38,6 @@ const upload = multer({
     },
     limits: { fileSize: 5 * 1024 * 1024 }
 });
-
-adminRouter.post('/importar-dados', async (req, res) => {
-    try {
-        const teamsData = Times
-        const createdTeams = []
-
-        for (const teamData of teamsData) {
-            // Cria o time
-            const createdTeam = await prisma.time.create({
-                data: {
-                    nome: teamData.nome || '',
-                    sigla: teamData.sigla || '',
-                    cor: teamData.cor || '',
-                    cidade: teamData.cidade || '',
-                    bandeira_estado: teamData.bandeira_estado || '',
-                    fundacao: teamData.fundacao || '',
-                    logo: teamData.logo || '',
-                    capacete: teamData.capacete || '',
-                    instagram: teamData.instagram || '',
-                    instagram2: teamData.instagram2 || '',
-                    estadio: teamData.estadio || '',
-                    presidente: teamData.presidente || '',
-                    head_coach: teamData.head_coach || '',
-                    instagram_coach: teamData.instagram_coach || '',
-                    coord_ofen: teamData.coord_ofen || '',
-                    coord_defen: teamData.coord_defen || '',
-                    titulos: teamData.titulos || [],
-                    temporada: teamData.temporada || '2024',
-                },
-            })
-
-            createdTeams.push(createdTeam)
-            if (teamData.jogadores && teamData.jogadores.length > 0) {
-                for (const player of teamData.jogadores) {
-
-                    const jogadorCriado = await prisma.jogador.create({
-                        data: {
-                            nome: player.nome || '',
-                            timeFormador: player.timeFormador || '',
-                            posicao: player.posicao || '',
-                            setor: player.setor || 'Ataque',
-                            experiencia: player.experiencia || 0,
-                            idade: player.idade || 0,
-                            altura: player.altura || 0,
-                            peso: player.peso || 0,
-                            instagram: player.instagram || '',
-                            instagram2: player.instagram2 || '',
-                            cidade: player.cidade || '',
-                            nacionalidade: player.nacionalidade || '',
-                        },
-                    })
-
-                    await prisma.jogadorTime.create({
-                        data: {
-                            jogadorId: jogadorCriado.id,
-                            timeId: createdTeam.id,
-                            temporada: teamData.temporada || '2024',
-                            numero: player.numero || 0,
-                            camisa: player.camisa || '',
-                            estatisticas: player.estatisticas || {},
-                        },
-                    })
-                }
-            }
-        }
-
-        res.status(201).json({ message: 'Dados importados com sucesso!', teams: createdTeams.length })
-    } catch (error) {
-        console.error('Erro ao importar os dados:', error)
-        res.status(500).json({ error: 'Erro ao importar os dados' })
-    }
-})
 
 adminRouter.get('/transferencias-json', (req: Request, res: Response) => {
     try {
@@ -459,8 +387,8 @@ adminRouter.post('/iniciar-temporada/:ano', async (req, res) => {
 
             return {
                 message: `Temporada ${ano} iniciada com sucesso!`,
-                times: 0, 
-                jogadores: 0, 
+                times: 0,
+                jogadores: 0,
                 transferencias: totalSalvo
             };
 
@@ -1017,6 +945,81 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
     }
 });
 
+// Rota para estatísticas do dashboard admin
+adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
+    try {
+        const { temporada } = req.query
+        const temporadaFiltro = temporada ? String(temporada) : '2025'
+
+        // Buscar dados básicos
+        const [
+            totalCampeonatos,
+            campeonatosAtivos,
+            timesAtivos,
+            totalJogos,
+            jogosFinalizados
+        ] = await Promise.all([
+            prisma.campeonato.count({ where: { temporada: temporadaFiltro } }),
+            prisma.campeonato.count({ 
+                where: { 
+                    temporada: temporadaFiltro,
+                    status: 'EM_ANDAMENTO' 
+                } 
+            }),
+            prisma.time.count({ where: { temporada: temporadaFiltro } }),
+            prisma.jogo.count(),
+            prisma.jogo.count({ where: { status: 'FINALIZADO' } })
+        ])
+
+        // Retornar estatísticas básicas
+        const stats = {
+            totalCampeonatos,
+            campeonatosAtivos,
+            jogosAgendados: totalJogos - jogosFinalizados,
+            jogosFinalizados,
+            timesAtivos,
+            timesParticipantes: timesAtivos,
+            jogosEstaSemana: 0, // Implementar depois
+
+            // Valores básicos para não quebrar o frontend
+            crescimentoCampeonatos: 0,
+            novosTimes: 0,
+            melhoriaOperacional: 0,
+            taxaConclusao: 0,
+
+            // Arrays básicos
+            campeonatosPorStatus: [],
+            jogosPorMes: [],
+            evolucaoCampeonatos: [],
+            statusJogos: [],
+            performancePorTipo: [],
+            participacaoRegional: [],
+            tendenciaMensal: [],
+            atividadesRecentes: [],
+            alertas: [],
+            topCampeonatos: [],
+            topTimes: [],
+            topRegioes: [],
+
+            // Médias básicas
+            mediaJogosPorCampeonato: 0,
+            tempoMedioDuracao: 0,
+            taxaAdiamentos: 0,
+            mediaGruposPorCampeonato: 0,
+            participacaoMedia: 0,
+            pontuacaoMedia: 0,
+
+            recentActivities: [],
+            alerts: []
+        }
+
+        res.status(200).json(stats)
+    } catch (error) {
+        console.error('Erro ao buscar estatísticas:', error)
+        res.status(500).json({ error: 'Erro ao buscar estatísticas' })
+    }
+})
+
 adminRouter.post('/reprocessar-jogo', upload.single('arquivo'), async (req, res) => {
     try {
         if (!req.file) {
@@ -1087,7 +1090,7 @@ adminRouter.post('/reprocessar-jogo', upload.single('arquivo'), async (req, res)
         }
 
         await prisma.$transaction(async (tx) => {
-            
+
             if (estatisticasAnteriores.length > 0) {
                 console.log(`Revertendo estatísticas anteriores do jogo ${id_jogo}`);
 

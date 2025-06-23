@@ -1,7 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { CampeonatoSchema, GrupoSchema, JogoSchema, EstatisticaJogoSchema } from '../schemas/Campeonato'
-import { calcularClassificacaoGrupo, gerarJogosCampeonato, verificarProgressaoCampeonato } from '../utils/campeonatoUtils'
+import { calcularClassificacaoGrupo } from '../utils/campeonatoUtils'
 
 const prisma = new PrismaClient()
 export const campeonatoRouter = express.Router()
@@ -38,7 +38,6 @@ campeonatoRouter.get('/campeonatos', async (req: Request, res: Response) => {
     }
 })
 
-// GET /campeonatos/:id - Buscar campeonato específico
 // GET /campeonatos/:id - Buscar campeonato específico
 campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => {
     try {
@@ -121,135 +120,11 @@ campeonatoRouter.get('/campeonatos/:id', async (req: Request, res: Response) => 
     }
 })
 
-// POST /campeonatos - Criar novo campeonato
-campeonatoRouter.post('/campeonatos', async (req: Request, res: Response) => {
-    try {
-        const dadosCampeonato = CampeonatoSchema.parse(req.body)
-        const { grupos: gruposData, times: timesIds, gerarJogos, ...campeonatoData } = req.body
 
-        // Converter datas se necessário
-        if (typeof campeonatoData.dataInicio === 'string') {
-            campeonatoData.dataInicio = new Date(campeonatoData.dataInicio)
-        }
-        if (campeonatoData.dataFim && typeof campeonatoData.dataFim === 'string') {
-            campeonatoData.dataFim = new Date(campeonatoData.dataFim)
-        }
 
-        const campeonato = await prisma.$transaction(async (tx) => {
-            // Criar campeonato
-            const novoCampeonato = await tx.campeonato.create({
-                data: {
-                    ...campeonatoData,
-                    status: campeonatoData.status || 'NAO_INICIADO'
-                }
-            })
 
-            // Se tem grupos, criar grupos e associar times
-            if (dadosCampeonato.formato.temGrupos && gruposData && Array.isArray(gruposData)) {
-                for (let i = 0; i < gruposData.length; i++) {
-                    const grupoData = gruposData[i]
 
-                    const grupo = await tx.grupo.create({
-                        data: {
-                            nome: grupoData.nome,
-                            campeonatoId: novoCampeonato.id,
-                            ordem: i + 1
-                        }
-                    })
 
-                    // Associar times ao grupo
-                    if (grupoData.times && Array.isArray(grupoData.times)) {
-                        const grupoTimes = grupoData.times.map((timeId: number) => ({
-                            grupoId: grupo.id,
-                            timeId: timeId
-                        }))
-
-                        await tx.grupoTime.createMany({
-                            data: grupoTimes
-                        })
-
-                        // Criar registros de classificação inicial
-                        const classificacoes = grupoData.times.map((timeId: number, index: number) => ({
-                            grupoId: grupo.id,
-                            timeId: timeId,
-                            posicao: index + 1
-                        }))
-
-                        await tx.classificacaoGrupo.createMany({
-                            data: classificacoes
-                        })
-                    }
-                }
-            }
-
-            return novoCampeonato
-        })
-
-        // Gerar jogos automaticamente se solicitado
-        if (req.body.gerarJogos) {
-            await gerarJogosCampeonato(campeonato.id)
-        }
-
-        res.status(201).json(campeonato)
-    } catch (error) {
-        console.error('Erro ao criar campeonato:', error)
-        res.status(500).json({
-            error: 'Erro ao criar campeonato',
-            details: error instanceof Error ? error.message : 'Erro desconhecido'
-        })
-    }
-})
-
-// PUT /campeonatos/:id - Atualizar campeonato
-campeonatoRouter.put('/campeonatos/:id', async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params
-        const dadosAtualizacao = CampeonatoSchema.partial().parse(req.body)
-
-        // Converter datas se necessário
-        if (dadosAtualizacao.dataInicio && typeof dadosAtualizacao.dataInicio === 'string') {
-            dadosAtualizacao.dataInicio = new Date(dadosAtualizacao.dataInicio)
-        }
-        if (dadosAtualizacao.dataFim && typeof dadosAtualizacao.dataFim === 'string') {
-            dadosAtualizacao.dataFim = new Date(dadosAtualizacao.dataFim)
-        }
-
-        const campeonato = await prisma.campeonato.update({
-            where: { id: parseInt(id) },
-            data: dadosAtualizacao,
-            include: {
-                grupos: {
-                    include: {
-                        times: {
-                            include: { time: true }
-                        }
-                    }
-                }
-            }
-        })
-
-        res.status(200).json(campeonato)
-    } catch (error) {
-        console.error('Erro ao atualizar campeonato:', error)
-        res.status(500).json({ error: 'Erro ao atualizar campeonato' })
-    }
-})
-
-// DELETE /campeonatos/:id - Deletar campeonato
-campeonatoRouter.delete('/campeonatos/:id', async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params
-
-        await prisma.campeonato.delete({
-            where: { id: parseInt(id) }
-        })
-
-        res.status(200).json({ message: 'Campeonato deletado com sucesso' })
-    } catch (error) {
-        console.error('Erro ao deletar campeonato:', error)
-        res.status(500).json({ error: 'Erro ao deletar campeonato' })
-    }
-})
 
 // ===========================================
 // ROTAS DE GRUPOS
@@ -561,9 +436,6 @@ campeonatoRouter.put('/jogos/:id', async (req: Request, res: Response) => {
                 jogo.placarVisitante !== jogoAnterior?.placarVisitante)
         ) {
             await calcularClassificacaoGrupo(jogo.grupoId)
-
-            // Verificar se pode avançar para próxima fase
-            await verificarProgressaoCampeonato(jogo.campeonatoId)
         }
 
         res.status(200).json(jogo)
@@ -746,22 +618,6 @@ campeonatoRouter.post('/jogos/:id/estatisticas', async (req: Request, res: Respo
 // ROTAS UTILITÁRIAS
 // ===========================================
 
-// POST /campeonatos/:id/gerar-jogos - Gerar jogos automaticamente
-campeonatoRouter.post('/campeonatos/:id/gerar-jogos', async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params
-
-        const jogosGerados = await gerarJogosCampeonato(parseInt(id))
-
-        res.status(200).json({
-            message: 'Jogos gerados com sucesso',
-            totalJogos: jogosGerados
-        })
-    } catch (error) {
-        console.error('Erro ao gerar jogos:', error)
-        res.status(500).json({ error: 'Erro ao gerar jogos' })
-    }
-})
 
 // GET /campeonatos/:id/proximos-jogos - Próximos jogos do campeonato
 campeonatoRouter.get('/campeonatos/:id/proximos-jogos', async (req: Request, res: Response) => {

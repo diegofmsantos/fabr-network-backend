@@ -4,13 +4,11 @@ export const CampeonatoSchema = z.object({
     id: z.number().optional(),
     nome: z.string().min(1, "Nome é obrigatório"),
     temporada: z.string().min(4, "Temporada deve ter 4 dígitos"),
-    tipo: z.enum(['REGULAR', 'PLAYOFFS', 'COPA']),
     status: z.enum(['NAO_INICIADO', 'EM_ANDAMENTO', 'FINALIZADO']).default('NAO_INICIADO'),
     dataInicio: z.date().or(z.string()),
     dataFim: z.date().or(z.string()).optional(),
     descricao: z.string().optional(),
     formato: z.object({
-        tipoDisputa: z.enum(['PONTOS_CORRIDOS', 'MATA_MATA', 'MISTO']),
         numeroRodadas: z.number().min(1),
         temGrupos: z.boolean().default(false),
         numeroGrupos: z.number().optional(),
@@ -26,7 +24,7 @@ export const GrupoSchema = z.object({
     nome: z.string().min(1, "Nome do grupo é obrigatório"),
     campeonatoId: z.number(),
     ordem: z.number().default(1),
-    times: z.array(z.number()).optional() // Array de IDs dos times
+    times: z.array(z.number()).optional() 
 })
 
 export const JogoSchema = z.object({

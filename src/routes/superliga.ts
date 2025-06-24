@@ -1,4 +1,3 @@
-// src/routes/superliga.ts
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { gerarPlayoffsSudeste, gerarPlayoffsSul, gerarPlayoffsNordeste, gerarPlayoffsCentroNorte } from '../utils/superligaUtils'

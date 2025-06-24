@@ -34,11 +34,9 @@ model Time {
   playoffVitorias      PlayoffJogo[] @relation("PlayoffVencedor")
 
   // Relacionamentos com campeonatos
-  grupos           GrupoTime[]
   jogosCasa        Jogo[]               @relation("JogosCasa")
   jogosVisitante   Jogo[]               @relation("JogosVisitante")
   estatisticasJogo EstatisticaJogo[]
-  classificacoes   ClassificacaoGrupo[]
 
   @@unique([sigla, temporada])
 }
@@ -110,7 +108,6 @@ model Campeonato {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  grupos       Grupo[]
   jogos        Jogo[]
   conferencias Conferencia[]
   PlayoffJogo  PlayoffJogo[]
@@ -145,39 +142,11 @@ model Regional {
   timesPorRegional Int
 
   conferencia Conferencia @relation(fields: [conferenciaId], references: [id], onDelete: Cascade)
-  grupos      Grupo[]
 
   @@unique([conferenciaId, tipo])
   @@index([conferenciaId])
 }
 
-model Grupo {
-  id           Int    @id @default(autoincrement())
-  nome         String
-  campeonatoId Int
-  regionalId   Int?
-  ordem        Int
-
-  campeonato     Campeonato           @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
-  regional       Regional?            @relation(fields: [regionalId], references: [id], onDelete: SetNull)
-  times          GrupoTime[]
-  jogos          Jogo[]
-  classificacoes ClassificacaoGrupo[]
-
-  @@unique([campeonatoId, nome])
-  @@index([campeonatoId])
-}
-
-model GrupoTime {
-  id      Int @id @default(autoincrement())
-  grupoId Int
-  timeId  Int
-
-  grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Cascade)
-  time  Time  @relation(fields: [timeId], references: [id], onDelete: Cascade)
-
-  @@unique([grupoId, timeId])
-}
 
 model PlayoffJogo {
   id            Int    @id @default(autoincrement())
@@ -220,7 +189,6 @@ model PlayoffJogo {
 model Jogo {
   id                      Int      @id @default(autoincrement())
   campeonatoId            Int
-  grupoId                 Int?
   timeVisitanteId         Int
   timeCasaId              Int
   dataJogo                DateTime
@@ -234,7 +202,6 @@ model Jogo {
   estatisticasProcessadas Boolean  @default(false)
 
   campeonato    Campeonato        @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
-  grupo         Grupo?            @relation(fields: [grupoId], references: [id], onDelete: SetNull)
   timeCasa      Time              @relation("JogosCasa", fields: [timeCasaId], references: [id])
   timeVisitante Time              @relation("JogosVisitante", fields: [timeVisitanteId], references: [id])
   estatisticas  EstatisticaJogo[]
@@ -262,24 +229,4 @@ model EstatisticaJogo {
   @@index([jogadorId])
 }
 
-model ClassificacaoGrupo {
-  id             Int   @id @default(autoincrement())
-  grupoId        Int
-  timeId         Int
-  posicao        Int
-  jogos          Int   @default(0)
-  vitorias       Int   @default(0)
-  empates        Int   @default(0)
-  derrotas       Int   @default(0)
-  pontosPro      Int   @default(0)
-  pontosContra   Int   @default(0)
-  saldoPontos    Int   @default(0)
-  pontos         Int   @default(0)
-  aproveitamento Float @default(0)
 
-  grupo Grupo @relation(fields: [grupoId], references: [id], onDelete: Cascade)
-  time  Time  @relation(fields: [timeId], references: [id], onDelete: Cascade)
-
-  @@unique([grupoId, timeId])
-  @@index([grupoId, posicao])
-}

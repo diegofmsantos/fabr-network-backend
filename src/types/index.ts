@@ -1,5 +1,7 @@
 // ==================== BASE TYPES ====================
 
+import { Conferencia, PlayoffJogo, Regional } from "@prisma/client"
+
 export interface BaseEntity {
   id: number
   createdAt: string
@@ -1567,4 +1569,183 @@ export function getRegionalConfig(tipo: TipoRegional): RegionalConfig {
 
 export function getTimesByRegional(regional: TipoRegional): string[] {
   return TIMES_SUPERLIGA[regional] || []
+}
+
+// ==================== TIPOS ADICIONAIS SUPERLIGA ====================
+
+export interface SuperligaJogo extends Jogo {
+  conferencia?: TipoConferencia
+  regional?: TipoRegional
+  tipoJogo: 'TEMPORADA_REGULAR' | 'WILD_CARD' | 'SEMIFINAL_CONFERENCIA' | 'FINAL_CONFERENCIA' | 'SEMIFINAL_NACIONAL' | 'FINAL_NACIONAL'
+}
+
+export interface ClassificacaoRegional {
+  regionalId: number
+  regional: TipoRegional
+  conferencia: TipoConferencia
+  times: ClassificacaoTime[]
+}
+
+export interface ClassificacaoTime {
+  posicao: number
+  timeId: number
+  time: Time
+  jogos: number
+  vitorias: number
+  derrotas: number
+  pontosPro: number
+  pontosContra: number
+  saldo: number
+  aproveitamento: number
+}
+
+// Interface PlayoffBracket já existe no arquivo, não precisa redeclarar
+
+export interface FaseNacional {
+  semifinais: PlayoffJogo[]
+  final: PlayoffJogo
+  campeao?: Time
+}
+
+export interface SuperligaStatus {
+  campeonatoId: number
+  fase: 'CONFIGURACAO' | 'TEMPORADA_REGULAR' | 'PLAYOFFS_CONFERENCIA' | 'FASE_NACIONAL' | 'FINALIZADO'
+  jogosTemporadaRegular: {
+    total: number
+    finalizados: number
+    percentual: number
+  }
+  playoffsStatus: {
+    [key in TipoConferencia]?: {
+      wildcardCompleto: boolean
+      semifinalCompleto: boolean
+      finalCompleto: boolean
+      campeao?: Time
+    }
+  }
+  faseNacionalStatus?: {
+    semifinaisCompletas: boolean
+    campeaoNacional?: Time
+  }
+}
+
+// ==================== REQUESTS/RESPONSES SUPERLIGA ====================
+
+export interface DistribuirTimesRequest {
+  campeonatoId: number
+  distribuicao: {
+    [key in TipoRegional]?: number[] // IDs dos times
+  }
+}
+
+export interface GerarJogosRequest {
+  campeonatoId: number
+  rodadas: number
+  algoritmo: 'ROUND_ROBIN' | 'CUSTOM'
+}
+
+export interface GerarPlayoffsRequest {
+  campeonatoId: number
+  conferencia: TipoConferencia
+}
+
+export interface AtualizarJogoPlayoffRequest {
+  jogoId: number
+  placarTime1: number
+  placarTime2: number
+  observacoes?: string
+}
+
+// ==================== HELPERS E UTILS ====================
+
+export interface DistribuicaoTime {
+  timeId: number
+  timeNome: string
+  conferencia: TipoConferencia
+  regional: TipoRegional
+}
+
+export interface EstatisticasSuperliga {
+  campeonatoId: number
+  temporada: string
+  totalJogos: number
+  jogosRealizados: number
+  mediaGolsPorJogo: number
+  maiorGoleada: {
+    jogo: Jogo
+    placar: string
+  }
+  artilheiros: Array<{
+    jogador: Jogador
+    time: Time
+    tds: number
+  }>
+  melhoresDefesas: Array<{
+    time: Time
+    pontosSofridos: number
+    mediaPorJogo: number
+  }>
+  melhoresAtaques: Array<{
+    time: Time
+    pontosMarcados: number
+    mediaPorJogo: number
+  }>
+}
+
+// ==================== INTERFACES COMPONENTES ====================
+
+export interface SuperligaCardProps {
+  campeonato: Campeonato & {
+    _count?: {
+      jogos: number
+      conferencias: number
+    }
+  }
+  onEdit?: () => void
+  onDelete?: () => void
+  onViewDetails?: () => void
+}
+
+export interface ConferenciaViewProps {
+  conferencia: Conferencia & {
+    regionais: Regional[]
+    _count?: {
+      times: number
+      jogos: number
+    }
+  }
+  classificacao?: ClassificacaoRegional[]
+  jogos?: Jogo[]
+}
+
+export interface RegionalViewProps {
+  regional: Regional & {
+    conferencia: Conferencia
+  }
+  classificacao: ClassificacaoTime[]
+  jogos: Jogo[]
+}
+
+export interface PlayoffBracketViewProps {
+  bracket: PlayoffBracket  // Usando a interface que já existe
+  onUpdateJogo?: (jogo: PlayoffJogo) => void
+}
+
+// ==================== TYPES PARA FORMULÁRIOS ====================
+
+export interface FormDistribuirTimes {
+  [regional: string]: number[]
+}
+
+export interface FormGerarJogos {
+  rodadas: number
+  dataInicio: string
+  intervaloEntreDatas: number
+  jogosSimultaneos: boolean
+}
+
+export interface FormAtualizarPlacar {
+  placarCasa: string
+  placarVisitante: string
+  observacoes?: string
 }

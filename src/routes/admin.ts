@@ -1,6 +1,5 @@
-import { Prisma, PrismaClient } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
-import { Times } from '../data/times'
 import fs from 'fs';
 import path from 'path';
 import xlsx from 'xlsx'

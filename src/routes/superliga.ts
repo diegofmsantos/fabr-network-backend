@@ -8,6 +8,10 @@ import {
     distribuirTimesAutomaticamente
 } from '../utils/superligaUtils'
 import { SUPERLIGA_CONFIG, TIMES_SUPERLIGA, TipoConferencia, TipoRegional } from '../types'
+import { gerarSemifinaisNacionais, gerarFinalNacional, getFaseNacional } from '../utils/superligaRanking'
+import { calcularRankingGeral, getWildCardRanking } from '../utils/superligaRanking'
+import { validarIntegridadeSuperliga, repararIntegridadeSuperliga } from '../utils/superligaValidacao'
+
 
 const prisma = new PrismaClient()
 const superligaRouter = express.Router()
@@ -994,5 +998,132 @@ superligaRouter.post('/campeonatos/:id/gerar-fase-nacional', async (req: Request
         res.status(500).json({ error: 'Erro ao gerar fase nacional' })
     }
 })
+
+superligaRouter.post('/campeonatos/:id/gerar-semifinais-nacionais', async (req: Request, res: Response) => {
+  try {
+    const campeonatoId = validarId(req.params.id)
+    const resultado = await gerarSemifinaisNacionais(campeonatoId)
+    
+    res.status(201).json({
+      message: 'Semifinais nacionais geradas com sucesso!',
+      campeonatoId,
+      ...resultado
+    })
+  } catch (error) {
+    console.error('Erro ao gerar semifinais nacionais:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Erro ao gerar semifinais nacionais'
+    })
+  }
+})
+
+// POST /campeonatos/:id/gerar-final-nacional
+superligaRouter.post('/campeonatos/:id/gerar-final-nacional', async (req: Request, res: Response) => {
+  try {
+    const campeonatoId = validarId(req.params.id)
+    const resultado = await gerarFinalNacional(campeonatoId)
+    
+    res.status(201).json({
+      message: 'Final nacional gerada com sucesso!',
+      campeonatoId,
+      ...resultado
+    })
+  } catch (error) {
+    console.error('Erro ao gerar final nacional:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Erro ao gerar final nacional'
+    })
+  }
+})
+
+// GET /campeonatos/:id/fase-nacional
+superligaRouter.get('/campeonatos/:id/fase-nacional', async (req: Request, res: Response) => {
+  try {
+    const campeonatoId = validarId(req.params.id)
+    const faseNacional = await getFaseNacional(campeonatoId)
+    
+    res.status(200).json(faseNacional)
+  } catch (error) {
+    console.error('Erro ao buscar fase nacional:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Erro ao buscar fase nacional'
+    })
+  }
+})
+
+// ==================== RANKING E ESTATÍSTICAS ====================
+
+// GET /campeonatos/:id/ranking-geral
+superligaRouter.get('/campeonatos/:id/ranking-geral', async (req: Request, res: Response) => {
+  try {
+    const campeonatoId = validarId(req.params.id)
+    const ranking = await calcularRankingGeral(campeonatoId)
+    
+    res.status(200).json(ranking)
+  } catch (error) {
+    console.error('Erro ao calcular ranking geral:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Erro ao calcular ranking geral'
+    })
+  }
+})
+
+// GET /campeonatos/:id/wild-card-ranking/:conferencia
+superligaRouter.get('/campeonatos/:id/wild-card-ranking/:conferencia', async (req: Request, res: Response) => {
+  try {
+    const campeonatoId = validarId(req.params.id)
+    const { conferencia } = req.params
+    
+    const ranking = await getWildCardRanking(campeonatoId, conferencia.toUpperCase())
+    
+    res.status(200).json({
+      conferencia: conferencia.toUpperCase(),
+      ...ranking
+    })
+  } catch (error) {
+    console.error('Erro ao calcular ranking wild card:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Erro ao calcular ranking wild card'
+    })
+  }
+})
+
+// ==================== VALIDAÇÃO E INTEGRIDADE ====================
+
+// GET /campeonatos/:id/validar-integridade
+superligaRouter.get('/campeonatos/:id/validar-integridade', async (req: Request, res: Response) => {
+  try {
+    const campeonatoId = validarId(req.params.id)
+    const validacao = await validarIntegridadeSuperliga(campeonatoId)
+    
+    res.status(200).json(validacao)
+  } catch (error) {
+    console.error('Erro ao validar integridade:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Erro ao validar integridade'
+    })
+  }
+})
+
+// POST /campeonatos/:id/reparar-integridade
+superligaRouter.post('/campeonatos/:id/reparar-integridade', async (req: Request, res: Response) => {
+  try {
+    const campeonatoId = validarId(req.params.id)
+    const reparos = await repararIntegridadeSuperliga(campeonatoId)
+    
+    res.status(200).json({
+      message: 'Reparos executados',
+      campeonatoId,
+      ...reparos
+    })
+  } catch (error) {
+    console.error('Erro ao reparar integridade:', error)
+    res.status(500).json({
+      error: error instanceof Error ? error.message : 'Erro ao reparar integridade'
+    })
+  }
+})
+
+export { superligaRouter }
 
 export default superligaRouter

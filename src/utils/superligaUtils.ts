@@ -3,7 +3,6 @@ import { SUPERLIGA_CONFIG, TIMES_SUPERLIGA } from '../types'
 
 const prisma = new PrismaClient()
 
-// ==================== UTILITÁRIOS GERAIS ====================
 
 interface TimeClassificado {
     timeId: number
@@ -22,11 +21,9 @@ interface TimeClassificado {
     posicaoRegional: number
 }
 
-// ==================== PLAYOFFS CONFERÊNCIA SUDESTE ====================
 
 export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: number) {
     try {
-        // Buscar grupos da conferência Sudeste
         const grupos = await prisma.grupo.findMany({
             where: {
                 campeonatoId,
@@ -57,14 +54,12 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             throw new Error('Nenhum grupo encontrado para a conferência Sudeste')
         }
 
-        // Calcular classificação para cada grupo/regional
         const classificacoesPorRegional: { [key: string]: TimeClassificado[] } = {}
 
         for (const grupo of grupos) {
             const classificacaoGrupo: TimeClassificado[] = []
 
             for (const grupoTime of grupo.times) {
-                // Buscar jogos do time
                 const jogos = await prisma.jogo.findMany({
                     where: {
                         campeonatoId,
@@ -102,20 +97,18 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
                     saldo: pontosPro - pontosContra,
                     regional: grupo.regional?.nome || 'Desconhecido',
                     regionalTipo: grupo.regional?.tipo || 'DESCONHECIDO',
-                    posicaoRegional: 0 // Será atualizado abaixo
+                    posicaoRegional: 0 
                 }
 
                 classificacaoGrupo.push(timeClassificado)
             }
 
-            // Ordenar por vitórias, depois saldo, depois pontos pró
             classificacaoGrupo.sort((a, b) => {
                 if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
                 if (b.saldo !== a.saldo) return b.saldo - a.saldo
                 return b.pontosPro - a.pontosPro
             })
 
-            // Adicionar posição
             classificacaoGrupo.forEach((item, index) => {
                 item.posicaoRegional = index + 1
             })
@@ -125,7 +118,6 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             }
         }
 
-        // Extrair primeiros e segundos colocados de todos os regionais
         const primeirosColocados: TimeClassificado[] = []
         const segundosColocados: TimeClassificado[] = []
 
@@ -135,21 +127,18 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             if (classificacao[1]) segundosColocados.push(classificacao[1])
         })
 
-        // Ordenar primeiros colocados por desempenho
         primeirosColocados.sort((a, b) => {
             if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
             if (b.saldo !== a.saldo) return b.saldo - a.saldo
             return b.pontosPro - a.pontosPro
         })
 
-        // Ordenar segundos colocados por desempenho
         segundosColocados.sort((a, b) => {
             if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
             if (b.saldo !== a.saldo) return b.saldo - a.saldo
             return b.pontosPro - a.pontosPro
         })
 
-        // Verificar se temos times suficientes
         if (primeirosColocados.length < 3) {
             throw new Error(`Insuficientes primeiros colocados para playoffs Sudeste. Encontrados: ${primeirosColocados.length}, necessários: 3`)
         }
@@ -158,8 +147,6 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             throw new Error(`Insuficientes segundos colocados para playoffs Sudeste. Encontrados: ${segundosColocados.length}, necessários: 3`)
         }
 
-        // Gerar jogos de Wild Card
-        // Wild Card 1: 3º melhor 1º colocado × 3º melhor 2º colocado
         const wildCard1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -174,7 +161,6 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             }
         })
 
-        // Wild Card 2: 1º melhor 2º colocado × 2º melhor 2º colocado
         const wildCard2 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -189,8 +175,6 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             }
         })
 
-        // Gerar Semifinais
-        // Semifinal 1: 1º melhor 1º colocado × Vencedor Wild Card mais próximo
         const semifinal1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -199,7 +183,7 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
                 rodada: 1,
                 nome: 'Semifinal Sudeste 1: 1º Melhor 1º × Vencedor WC',
                 timeClassificado1Id: primeirosColocados[0].timeId,
-                timeClassificado2Id: null, // Será preenchido pelo vencedor do Wild Card
+                timeClassificado2Id: null,
                 jogoAnterior1Id: null,
                 jogoAnterior2Id: wildCard1.id,
                 dataJogo: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
@@ -207,7 +191,6 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             }
         })
 
-        // Semifinal 2: 2º melhor 1º colocado × Vencedor Wild Card mais próximo
         const semifinal2 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -216,7 +199,7 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
                 rodada: 1,
                 nome: 'Semifinal Sudeste 2: 2º Melhor 1º × Vencedor WC',
                 timeClassificado1Id: primeirosColocados[1].timeId,
-                timeClassificado2Id: null, // Será preenchido pelo vencedor do Wild Card
+                timeClassificado2Id: null, 
                 jogoAnterior1Id: null,
                 jogoAnterior2Id: wildCard2.id,
                 dataJogo: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
@@ -224,7 +207,6 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             }
         })
 
-        // Final da Conferência Sudeste
         const final = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -232,7 +214,7 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
                 fase: 'FINAL_CONFERENCIA',
                 rodada: 1,
                 nome: 'Final Sudeste',
-                timeClassificado1Id: null, // Será preenchido pelos vencedores das semifinais
+                timeClassificado1Id: null,
                 timeClassificado2Id: null,
                 jogoAnterior1Id: semifinal1.id,
                 jogoAnterior2Id: semifinal2.id,
@@ -246,17 +228,17 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             semifinais: [semifinal1, semifinal2],
             final,
             timesClassificados: {
-                diretos: primeirosColocados.slice(0, 2), // Os 2 melhores 1º colocados
+                diretos: primeirosColocados.slice(0, 2), 
                 wildcards: [
-                    primeirosColocados[2], // 3º melhor 1º colocado
-                    ...segundosColocados   // Todos os 2º colocados
+                    primeirosColocados[2], 
+                    ...segundosColocados   
                 ]
             },
             estatisticas: {
                 totalRegionais: Object.keys(classificacoesPorRegional).length,
                 primeirosColocados: primeirosColocados.length,
                 segundosColocados: segundosColocados.length,
-                jogosGerados: 5 // 2 wild cards + 2 semifinais + 1 final
+                jogosGerados: 5 
             }
         }
     } catch (error) {
@@ -265,11 +247,9 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
     }
 }
 
-// ==================== PLAYOFFS CONFERÊNCIA SUL ====================
 
 export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: number) {
     try {
-        // Buscar grupos da conferência Sul
         const grupos = await prisma.grupo.findMany({
             where: {
                 campeonatoId,
@@ -285,7 +265,6 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             }
         })
 
-        // Separar regionais Araucária e Pampa
         const grupoAraucaria = grupos.find(g => g.regional?.tipo === 'ARAUCARIA')
         const grupoPampa = grupos.find(g => g.regional?.tipo === 'PAMPA')
 
@@ -293,7 +272,6 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             throw new Error('Regionais Araucária ou Pampa não encontrados')
         }
 
-        // Calcular classificação para cada regional
         const calcularClassificacao = async (grupo: any) => {
             const classificacao = []
 
@@ -336,7 +314,6 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
                 })
             }
 
-            // Ordenar por vitórias, depois saldo, depois pontos pró
             classificacao.sort((a, b) => {
                 if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
                 if (b.saldo !== a.saldo) return b.saldo - a.saldo
@@ -349,7 +326,6 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
         const classificacaoAraucaria = await calcularClassificacao(grupoAraucaria)
         const classificacaoPampa = await calcularClassificacao(grupoPampa)
 
-        // Extrair posições para playoffs
         const primeiroAraucaria = classificacaoAraucaria[0]
         const primeiroPampa = classificacaoPampa[0]
         const segundoAraucaria = classificacaoAraucaria[1]
@@ -357,7 +333,6 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
         const terceiroAraucaria = classificacaoAraucaria[2]
         const terceiroPampa = classificacaoPampa[2]
 
-        // Wild Cards: 2º Araucária × 3º Pampa e 2º Pampa × 3º Araucária
         const wildCard1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -386,7 +361,6 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             }
         })
 
-        // Semifinais: 1º Araucária × Vencedor WC e 1º Pampa × Vencedor WC
         const semifinal1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -415,7 +389,6 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             }
         })
 
-        // Final da Conferência Sul
         const final = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -445,11 +418,8 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
     }
 }
 
-// ==================== PLAYOFFS CONFERÊNCIA NORDESTE ====================
-
 export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId: number) {
     try {
-        // Buscar grupo da conferência Nordeste (só tem 1 regional - Atlântico)
         const grupo = await prisma.grupo.findFirst({
             where: {
                 campeonatoId,
@@ -468,7 +438,6 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             throw new Error('Regional Atlântico não encontrado')
         }
 
-        // Calcular classificação do Regional Atlântico (6 times)
         const classificacao = []
 
         for (const grupoTime of grupo.times) {
@@ -510,14 +479,12 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             })
         }
 
-        // Ordenar classificação
         classificacao.sort((a, b) => {
             if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
             if (b.saldo !== a.saldo) return b.saldo - a.saldo
             return b.pontosPro - a.pontosPro
         })
 
-        // Extrair posições (1º e 2º vão direto, 3º×6º e 4º×5º nos wild cards)
         const primeiro = classificacao[0]
         const segundo = classificacao[1]
         const terceiro = classificacao[2]
@@ -525,7 +492,6 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
         const quinto = classificacao[4]
         const sexto = classificacao[5]
 
-        // Wild Cards: 3º × 6º e 4º × 5º
         const wildCard1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -554,7 +520,6 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             }
         })
 
-        // Semifinais: 1º × Vencedor WC e 2º × Vencedor WC
         const semifinal1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -583,7 +548,6 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             }
         })
 
-        // Final da Conferência Nordeste
         const final = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -613,11 +577,9 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
     }
 }
 
-// ==================== PLAYOFFS CONFERÊNCIA CENTRO-NORTE ====================
 
 export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferenciaId: number) {
     try {
-        // Buscar grupos da conferência Centro-Norte
         const grupos = await prisma.grupo.findMany({
             where: {
                 campeonatoId,
@@ -633,7 +595,6 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
             }
         })
 
-        // Separar regionais Cerrado e Amazônia
         const grupoCerrado = grupos.find(g => g.regional?.tipo === 'CERRADO')
         const grupoAmazonia = grupos.find(g => g.regional?.tipo === 'AMAZONIA')
 
@@ -641,7 +602,6 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
             throw new Error('Regionais Cerrado ou Amazônia não encontrados')
         }
 
-        // Calcular classificação para cada regional
         const calcularClassificacao = async (grupo: any) => {
             const classificacao = []
 
@@ -684,7 +644,6 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
                 })
             }
 
-            // Ordenar por vitórias, depois saldo, depois pontos pró
             classificacao.sort((a, b) => {
                 if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
                 if (b.saldo !== a.saldo) return b.saldo - a.saldo
@@ -697,13 +656,11 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
         const classificacaoCerrado = await calcularClassificacao(grupoCerrado)
         const classificacaoAmazonia = await calcularClassificacao(grupoAmazonia)
 
-        // Extrair posições (sistema direto para semifinal)
         const primeiroCerrado = classificacaoCerrado[0]
         const segundoCerrado = classificacaoCerrado[1]
         const primeiroAmazonia = classificacaoAmazonia[0]
         const segundoAmazonia = classificacaoAmazonia[1]
 
-        // Semifinais diretas (sem wild card na Centro-Norte)
         const semifinal1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -732,7 +689,6 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
             }
         })
 
-        // Final da Conferência Centro-Norte
         const final = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -748,7 +704,7 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
         })
 
         return {
-            wildcards: [], // Centro-Norte não tem wild card
+            wildcards: [], 
             semifinais: [semifinal1, semifinal2],
             final,
             timesClassificados: {
@@ -762,7 +718,6 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
     }
 }
 
-// ==================== UTILITÁRIOS PARA AVANÇO DE PLAYOFFS ====================
 
 export async function atualizarProximaFase(jogoFinalizadoId: number) {
     try {
@@ -813,8 +768,6 @@ export async function atualizarProximaFase(jogoFinalizadoId: number) {
         throw error
     }
 }
-
-// ==================== VALIDAÇÕES ====================
 
 export async function validarTimesClassificados(campeonatoId: number) {
     try {
@@ -870,7 +823,6 @@ export async function validarTimesClassificados(campeonatoId: number) {
     }
 }
 
-// ==================== ESTATÍSTICAS ====================
 
 export async function getEstatisticasPlayoffs(campeonatoId: number) {
     try {
@@ -908,8 +860,6 @@ export async function getEstatisticasPlayoffs(campeonatoId: number) {
     }
 }
 
-// ==================== LIMPEZA E RESET ====================
-
 export async function limparPlayoffsCampeonato(campeonatoId: number) {
     try {
         const jogosRemovidos = await prisma.playoffJogo.deleteMany({
@@ -932,8 +882,6 @@ export async function limparPlayoffsCampeonato(campeonatoId: number) {
         throw error
     }
 }
-
-// ==================== SIMULAÇÃO ====================
 
 export async function simularResultadosPlayoffs(campeonatoId: number) {
     try {
@@ -988,7 +936,6 @@ export async function simularResultadosPlayoffs(campeonatoId: number) {
 
 export async function distribuirTimesAutomaticamente(campeonatoId: number, temporada: string) {
     try {
-        // Buscar times da temporada
         const times = await prisma.time.findMany({
             where: { temporada }
         })
@@ -997,7 +944,6 @@ export async function distribuirTimesAutomaticamente(campeonatoId: number, tempo
             throw new Error(`Superliga precisa de exatamente 32 times. Encontrados: ${times.length}`)
         }
 
-        // Criar conferências
         const conferencias = []
         let ordemConferencia = 1
 
@@ -1008,12 +954,11 @@ export async function distribuirTimesAutomaticamente(campeonatoId: number, tempo
                     tipo: confConfig.tipo,
                     icone: confConfig.icone,
                     campeonatoId,
-                    ordem: ordemConferencia, // Usar contador em vez de confConfig.ordem
+                    ordem: ordemConferencia, 
                     totalTimes: confConfig.totalTimes
                 }
             })
 
-            // Criar regionais
             let ordemRegional = 1
             for (const regConfig of confConfig.regionais) {
                 const regional = await prisma.regional.create({
@@ -1021,22 +966,20 @@ export async function distribuirTimesAutomaticamente(campeonatoId: number, tempo
                         nome: regConfig.nome,
                         tipo: regConfig.tipo,
                         conferenciaId: conferencia.id,
-                        ordem: ordemRegional, // Usar contador em vez de regConfig.ordem
+                        ordem: ordemRegional,
                         timesPorRegional: regConfig.timesPorRegional
                     }
                 })
 
-                // Criar grupo para o regional
                 const grupo = await prisma.grupo.create({
                     data: {
                         nome: `Grupo ${regConfig.nome}`,
                         campeonatoId,
                         regionalId: regional.id,
-                        ordem: ordemRegional // Usar o mesmo contador
+                        ordem: ordemRegional 
                     }
                 })
 
-                // Distribuir times baseado na configuração
                 const timesDoRegional = TIMES_SUPERLIGA[regConfig.tipo as keyof typeof TIMES_SUPERLIGA] || []
 
                 for (const nomeTime of timesDoRegional) {
@@ -1060,13 +1003,11 @@ export async function distribuirTimesAutomaticamente(campeonatoId: number, tempo
             ordemConferencia++
         }
 
-        // Calcular estatísticas de distribuição
         const totalRegionais = conferencias.reduce((acc, c) => {
             const confConfig = SUPERLIGA_CONFIG.find(sc => sc.tipo === c.tipo)
             return acc + (confConfig?.regionais.length || 0)
         }, 0)
 
-        // Verificar se todos os times foram distribuídos
         const timesDistribuidos = await prisma.grupoTime.count({
             where: {
                 grupo: { campeonatoId }
@@ -1102,10 +1043,8 @@ export async function distribuirTimesAutomaticamente(campeonatoId: number, tempo
     }
 }
 
-// ==================== FUNÇÃO PARA GERAR FASE NACIONAL ====================
 export async function gerarFaseNacional(campeonatoId: number) {
     try {
-        // Verificar se todas as finais de conferência foram finalizadas
         const finaisConferencia = await prisma.playoffJogo.findMany({
             where: {
                 campeonatoId,
@@ -1126,17 +1065,15 @@ export async function gerarFaseNacional(campeonatoId: number) {
             throw new Error('Nem todas as finais de conferência foram finalizadas')
         }
 
-        // Extrair campeões
         const campeaoSudeste = finalizadas.find(f => f.conferencia?.tipo === 'SUDESTE')
         const campeaoSul = finalizadas.find(f => f.conferencia?.tipo === 'SUL')
         const campeaoNordeste = finalizadas.find(f => f.conferencia?.tipo === 'NORDESTE')
         const campeaoCentroNorte = finalizadas.find(f => f.conferencia?.tipo === 'CENTRO_NORTE')
 
-        // Semifinais Nacionais
         const semifinalNacional1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
-                conferenciaId: null, // Fase nacional não pertence a conferência específica
+                conferenciaId: null, 
                 fase: 'SEMIFINAL_NACIONAL',
                 rodada: 1,
                 nome: 'Semifinal Nacional 1: Campeão Sul × Campeão Sudeste',
@@ -1161,7 +1098,6 @@ export async function gerarFaseNacional(campeonatoId: number) {
             }
         })
 
-        // Grande Decisão Nacional
         const finalNacional = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,

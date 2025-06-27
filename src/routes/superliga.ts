@@ -1,22 +1,15 @@
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
-import {
-    gerarPlayoffsSudeste,
-    gerarPlayoffsSul,
-    gerarPlayoffsNordeste,
-    gerarPlayoffsCentroNorte,
-    distribuirTimesAutomaticamente
-} from '../utils/superligaUtils'
-import { SUPERLIGA_CONFIG, TIMES_SUPERLIGA, TipoConferencia, TipoRegional } from '../types'
+import { gerarPlayoffsSudeste,  gerarPlayoffsSul,  gerarPlayoffsNordeste,  gerarPlayoffsCentroNorte, distribuirTimesAutomaticamente } from '../utils/superligaUtils'
+import { TipoConferencia, TipoRegional } from '../types'
 import { gerarSemifinaisNacionais, gerarFinalNacional, getFaseNacional } from '../utils/superligaRanking'
 import { calcularRankingGeral, getWildCardRanking } from '../utils/superligaRanking'
-import { validarIntegridadeSuperliga, repararIntegridadeSuperliga } from '../utils/superligaValidacao'
+import { repararIntegridadeSuperliga, validarIntegridadeSuperliga } from '../utils/superligaValidacao'
 
 
 const prisma = new PrismaClient()
 const superligaRouter = express.Router()
 
-// Função helper para validar ID
 const validarId = (id: string) => {
     const numId = parseInt(id)
     if (isNaN(numId) || numId <= 0) {
@@ -25,14 +18,10 @@ const validarId = (id: string) => {
     return numId
 }
 
-// ==================== CRIAÇÃO DA SUPERLIGA ====================
-
-// POST /criar - Criar campeonato da Superliga
 superligaRouter.post('/criar', async (req: Request, res: Response) => {
     try {
         const { temporada, nome, dataInicio, descricao } = req.body
 
-        // Verificar se já existe Superliga para a temporada
         const superligaExistente = await prisma.campeonato.findFirst({
             where: {
                 temporada,
@@ -75,16 +64,12 @@ superligaRouter.post('/criar', async (req: Request, res: Response) => {
     }
 })
 
-// ==================== CONFIGURAÇÃO DE TIMES ====================
-
-// POST /campeonatos/:id/distribuir-times-superliga
 superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
         const campeonatoId = parseInt(id)
         const { distribuicao } = req.body
 
-        // Verificar se o campeonato existe e é Superliga
         const campeonato = await prisma.campeonato.findUnique({
             where: { id: campeonatoId }
         })
@@ -99,7 +84,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: 
             return
         }
 
-        // Buscar times da temporada
         const times = await prisma.time.findMany({
             where: { temporada: campeonato.temporada }
         })
@@ -111,7 +95,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: 
             return
         }
 
-        // Buscar conferências e regionais
         const conferencias = await prisma.conferencia.findMany({
             where: { campeonatoId },
             include: {
@@ -119,7 +102,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: 
             }
         })
 
-        // Validar distribuição
         let totalTimesDistribuidos = 0
         const timesUtilizados = new Set<number>()
 
@@ -127,7 +109,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: 
             const idsArray = timeIds as number[]
             totalTimesDistribuidos += idsArray.length
 
-            // Verificar duplicatas
             for (const timeId of idsArray) {
                 if (timesUtilizados.has(timeId)) {
                     res.status(400).json({
@@ -146,7 +127,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: 
             return
         }
 
-        // Limpar grupos existentes
         await prisma.grupoTime.deleteMany({
             where: {
                 grupo: {
@@ -158,7 +138,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: 
             where: { campeonatoId }
         })
 
-        // Criar grupos e associar times
         const gruposCriados = []
         for (const conferencia of conferencias) {
             for (const regional of conferencia.regionais) {
@@ -171,7 +150,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: 
                     return
                 }
 
-                // Criar grupo para o regional
                 const grupo = await prisma.grupo.create({
                     data: {
                         nome: `Grupo ${regional.nome}`,
@@ -181,7 +159,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-superliga', async (req: 
                     }
                 })
 
-                // Associar times ao grupo
                 for (const timeId of timesDoRegional) {
                     await prisma.grupoTime.create({
                         data: {
@@ -219,7 +196,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-automatico', async (req:
     try {
         const campeonatoId = validarId(req.params.id)
 
-        // Verificar se é Superliga
         const campeonato = await prisma.campeonato.findUnique({
             where: { id: campeonatoId }
         })
@@ -234,7 +210,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-automatico', async (req:
             return
         }
 
-        // Verificar se já foi distribuído
         const gruposExistentes = await prisma.grupo.count({
             where: { campeonatoId }
         })
@@ -244,7 +219,6 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-automatico', async (req:
             return
         }
 
-        // Chamar função utilitária
         const resultado = await distribuirTimesAutomaticamente(campeonatoId, campeonato.temporada)
 
         res.status(201).json({
@@ -259,15 +233,11 @@ superligaRouter.post('/campeonatos/:id/distribuir-times-automatico', async (req:
     }
 })
 
-// ==================== GERAÇÃO DE JOGOS ====================
-
-// POST /campeonatos/:id/gerar-jogos-temporada
 superligaRouter.post('/campeonatos/:id/gerar-jogos-temporada', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
         const { rodadas = 4 } = req.body
 
-        // Verificar se já existem jogos
         const jogosExistentes = await prisma.jogo.count({
             where: {
                 campeonatoId,
@@ -280,7 +250,6 @@ superligaRouter.post('/campeonatos/:id/gerar-jogos-temporada', async (req: Reque
             return
         }
 
-        // Buscar grupos com times
         const grupos = await prisma.grupo.findMany({
             where: { campeonatoId },
             include: {
@@ -299,22 +268,19 @@ superligaRouter.post('/campeonatos/:id/gerar-jogos-temporada', async (req: Reque
         const dataBase = new Date()
         let contadorJogo = 0
 
-        // Gerar 4 jogos por time dentro de cada regional
         for (const grupo of grupos) {
             const times = grupo.times.map(gt => gt.time)
 
             if (times.length < 2) continue
 
-            // Cada time joga contra todos os outros do regional
             for (let rodada = 1; rodada <= rodadas; rodada++) {
                 for (let i = 0; i < times.length; i++) {
                     for (let j = i + 1; j < times.length; j++) {
-                        // Alternar mando de campo
                         const timeCasa = (contadorJogo % 2 === 0) ? times[i] : times[j]
                         const timeVisitante = (contadorJogo % 2 === 0) ? times[j] : times[i]
 
                         const dataJogo = new Date(dataBase)
-                        dataJogo.setDate(dataBase.getDate() + (contadorJogo * 7)) // Uma semana entre jogos
+                        dataJogo.setDate(dataBase.getDate() + (contadorJogo * 7)) 
 
                         const jogo = await prisma.jogo.create({
                             data: {
@@ -352,9 +318,6 @@ superligaRouter.post('/campeonatos/:id/gerar-jogos-temporada', async (req: Reque
     }
 })
 
-// ==================== CLASSIFICAÇÃO ====================
-
-// GET /campeonatos/:id/classificacao
 superligaRouter.get('/campeonatos/:id/classificacao', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
@@ -378,7 +341,6 @@ superligaRouter.get('/campeonatos/:id/classificacao', async (req: Request, res: 
             const classificacaoGrupo = []
 
             for (const grupoTime of grupo.times) {
-                // Buscar jogos do time
                 const jogos = await prisma.jogo.findMany({
                     where: {
                         campeonatoId,
@@ -422,17 +384,12 @@ superligaRouter.get('/campeonatos/:id/classificacao', async (req: Request, res: 
                 })
             }
 
-            // Ordenar classificação
             classificacaoGrupo.sort((a, b) => {
-                // 1. Número de vitórias
                 if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
-                // 2. Saldo de pontos
                 if (b.saldo !== a.saldo) return b.saldo - a.saldo
-                // 3. Pontos marcados
                 return b.pontosPro - a.pontosPro
             })
 
-            // Adicionar posição
             classificacaoGrupo.forEach((item, index) => {
                 (item as any).posicao = index + 1
             })
@@ -452,13 +409,11 @@ superligaRouter.get('/campeonatos/:id/classificacao', async (req: Request, res: 
     }
 })
 
-// GET /campeonatos/:id/classificacao/:regional
 superligaRouter.get('/campeonatos/:id/classificacao/:regional', async (req: Request, res: Response) => {
     try {
         const { id, regional } = req.params
         const campeonatoId = parseInt(id)
 
-        // Buscar regional
         const regionalData = await prisma.regional.findFirst({
             where: {
                 tipo: regional.toUpperCase(),
@@ -476,7 +431,6 @@ superligaRouter.get('/campeonatos/:id/classificacao/:regional', async (req: Requ
             return
         }
 
-        // Buscar grupo do regional
         const grupo = await prisma.grupo.findFirst({
             where: {
                 campeonatoId,
@@ -542,14 +496,12 @@ superligaRouter.get('/campeonatos/:id/classificacao/:regional', async (req: Requ
             })
         }
 
-        // Ordenar classificação
         classificacao.sort((a, b) => {
             if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
             if (b.saldo !== a.saldo) return b.saldo - a.saldo
             return b.pontosPro - a.pontosPro
         })
 
-        // Adicionar posição
         classificacao.forEach((item, index) => {
             (item as any).posicao = index + 1
         })
@@ -566,14 +518,10 @@ superligaRouter.get('/campeonatos/:id/classificacao/:regional', async (req: Requ
     }
 })
 
-// ==================== PLAYOFFS ====================
-
-// POST /campeonatos/:id/gerar-playoffs/:conferencia
 superligaRouter.post('/campeonatos/:id/gerar-playoffs', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
 
-        // Verificar se a temporada regular acabou
         const jogosNaoFinalizados = await prisma.jogo.count({
             where: {
                 campeonatoId,
@@ -589,14 +537,12 @@ superligaRouter.post('/campeonatos/:id/gerar-playoffs', async (req: Request, res
             return
         }
 
-        // Buscar conferências
         const conferencias = await prisma.conferencia.findMany({
             where: { campeonatoId }
         })
 
         const resultados = []
 
-        // Gerar playoffs para cada conferência
         for (const conferencia of conferencias) {
             let resultado
 
@@ -636,14 +582,12 @@ superligaRouter.post('/campeonatos/:id/gerar-playoffs', async (req: Request, res
     }
 })
 
-// PUT /playoffs/:id/atualizar-resultado
 superligaRouter.put('/playoffs/:id/atualizar-resultado', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
         const jogoId = parseInt(id)
         const { placarTime1, placarTime2, observacoes } = req.body
 
-        // Buscar jogo
         const jogo = await prisma.playoffJogo.findUnique({
             where: { id: jogoId },
             include: {
@@ -667,11 +611,9 @@ superligaRouter.put('/playoffs/:id/atualizar-resultado', async (req: Request, re
             return
         }
 
-        // Determinar vencedor
         const vencedorId = placarTime1 > placarTime2 ?
             jogo.timeClassificado1Id : jogo.timeClassificado2Id
 
-        // Atualizar jogo
         const jogoAtualizado = await prisma.playoffJogo.update({
             where: { id: jogoId },
             data: {
@@ -683,7 +625,6 @@ superligaRouter.put('/playoffs/:id/atualizar-resultado', async (req: Request, re
             }
         })
 
-        // Atualizar próximos jogos se necessário
         const proximosJogos = await prisma.playoffJogo.findMany({
             where: {
                 OR: [
@@ -718,7 +659,6 @@ superligaRouter.put('/playoffs/:id/atualizar-resultado', async (req: Request, re
     }
 })
 
-// GET /campeonatos/:id/playoffs/bracket
 superligaRouter.get('/campeonatos/:id/playoffs/bracket', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
@@ -838,7 +778,6 @@ superligaRouter.get('/campeonatos/:id/status', async (req: Request, res: Respons
     }
 })
 
-// GET /campeonatos/:id/validar-estrutura
 superligaRouter.get('/campeonatos/:id/validar-estrutura', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
@@ -903,7 +842,6 @@ superligaRouter.get('/campeonatos/:id/validar-estrutura', async (req: Request, r
     }
 })
 
-// POST /campeonatos/:id/gerar-fase-nacional
 superligaRouter.post('/campeonatos/:id/gerar-fase-nacional', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
@@ -1017,7 +955,6 @@ superligaRouter.post('/campeonatos/:id/gerar-semifinais-nacionais', async (req: 
   }
 })
 
-// POST /campeonatos/:id/gerar-final-nacional
 superligaRouter.post('/campeonatos/:id/gerar-final-nacional', async (req: Request, res: Response) => {
   try {
     const campeonatoId = validarId(req.params.id)
@@ -1036,7 +973,6 @@ superligaRouter.post('/campeonatos/:id/gerar-final-nacional', async (req: Reques
   }
 })
 
-// GET /campeonatos/:id/fase-nacional
 superligaRouter.get('/campeonatos/:id/fase-nacional', async (req: Request, res: Response) => {
   try {
     const campeonatoId = validarId(req.params.id)
@@ -1051,9 +987,6 @@ superligaRouter.get('/campeonatos/:id/fase-nacional', async (req: Request, res: 
   }
 })
 
-// ==================== RANKING E ESTATÍSTICAS ====================
-
-// GET /campeonatos/:id/ranking-geral
 superligaRouter.get('/campeonatos/:id/ranking-geral', async (req: Request, res: Response) => {
   try {
     const campeonatoId = validarId(req.params.id)
@@ -1068,7 +1001,6 @@ superligaRouter.get('/campeonatos/:id/ranking-geral', async (req: Request, res: 
   }
 })
 
-// GET /campeonatos/:id/wild-card-ranking/:conferencia
 superligaRouter.get('/campeonatos/:id/wild-card-ranking/:conferencia', async (req: Request, res: Response) => {
   try {
     const campeonatoId = validarId(req.params.id)
@@ -1088,9 +1020,6 @@ superligaRouter.get('/campeonatos/:id/wild-card-ranking/:conferencia', async (re
   }
 })
 
-// ==================== VALIDAÇÃO E INTEGRIDADE ====================
-
-// GET /campeonatos/:id/validar-integridade
 superligaRouter.get('/campeonatos/:id/validar-integridade', async (req: Request, res: Response) => {
   try {
     const campeonatoId = validarId(req.params.id)
@@ -1105,7 +1034,6 @@ superligaRouter.get('/campeonatos/:id/validar-integridade', async (req: Request,
   }
 })
 
-// POST /campeonatos/:id/reparar-integridade
 superligaRouter.post('/campeonatos/:id/reparar-integridade', async (req: Request, res: Response) => {
   try {
     const campeonatoId = validarId(req.params.id)

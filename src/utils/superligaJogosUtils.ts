@@ -1,5 +1,6 @@
-import { prisma } from "../libs/prisma"
+import { PrismaClient } from '@prisma/client'
 
+const prisma = new PrismaClient()
 
 export interface ConfiguracaoJogos {
   campeonatoId: number
@@ -14,7 +15,6 @@ export async function gerarJogosTemporadaRegular(config: ConfiguracaoJogos) {
   try {
     const { campeonatoId, rodadas, algoritmo, dataInicio, intervaloDias, jogosInterregionais } = config
 
-    // Verificar se já existem jogos
     const jogosExistentes = await prisma.jogo.count({
       where: {
         campeonatoId,
@@ -26,7 +26,6 @@ export async function gerarJogosTemporadaRegular(config: ConfiguracaoJogos) {
       throw new Error('Jogos da temporada regular já foram gerados')
     }
 
-    // Buscar grupos com times
     const grupos = await prisma.grupo.findMany({
       where: { campeonatoId },
       include: {
@@ -48,13 +47,11 @@ export async function gerarJogosTemporadaRegular(config: ConfiguracaoJogos) {
     let contadorJogo = 0
 
     if (algoritmo === 'ROUND_ROBIN') {
-      // 1. JOGOS DENTRO DOS REGIONAIS (60% dos jogos)
       for (const grupo of grupos) {
         const times = grupo.times.map(gt => gt.time)
         
         if (times.length < 2) continue
 
-        // Gerar confrontos round-robin dentro do regional
         const confrontosRegional = gerarRoundRobin(times, Math.ceil(rodadas * 0.6))
         
         for (const confronto of confrontosRegional) {
@@ -75,28 +72,25 @@ export async function gerarJogosTemporadaRegular(config: ConfiguracaoJogos) {
           
           jogosGerados.push(jogo)
           
-          // Avançar data (espaçamento entre jogos)
-          if (contadorJogo % 4 === 0) { // A cada 4 jogos, avança 1 semana
+          if (contadorJogo % 4 === 0) { 
             dataAtual = new Date(dataAtual.getTime() + intervaloDias * 24 * 60 * 60 * 1000)
           }
           contadorJogo++
         }
       }
 
-      // 2. JOGOS INTERREGIONAIS (40% dos jogos) - Se habilitado
       if (jogosInterregionais) {
-        const jogosInterregionais = await gerarJogosInterregionais(
+        const jogosInterregionaisGerados = await gerarJogosInterregionais(
           campeonatoId, 
           grupos, 
           Math.floor(rodadas * 0.4),
           dataAtual,
           intervaloDias
         )
-        jogosGerados.push(...jogosInterregionais)
+        jogosGerados.push(...jogosInterregionaisGerados)
       }
 
     } else if (algoritmo === 'BALANCED') {
-      // Algoritmo balanceado: garantir 4 jogos exatos por time
       const jogosBalanceados = await gerarJogosBalanceados(
         campeonatoId,
         grupos,
@@ -107,7 +101,6 @@ export async function gerarJogosTemporadaRegular(config: ConfiguracaoJogos) {
       jogosGerados.push(...jogosBalanceados)
     }
 
-    // Atualizar status do campeonato
     await prisma.campeonato.update({
       where: { id: campeonatoId },
       data: { 
@@ -131,7 +124,6 @@ export async function gerarJogosTemporadaRegular(config: ConfiguracaoJogos) {
   }
 }
 
-// FUNÇÃO AUXILIAR: Round Robin dentro do regional
 function gerarRoundRobin(times: any[], totalRodadas: number) {
   const confrontos = []
   let rodadaAtual = 1
@@ -139,7 +131,6 @@ function gerarRoundRobin(times: any[], totalRodadas: number) {
   for (let rodada = 1; rodada <= totalRodadas; rodada++) {
     for (let i = 0; i < times.length; i++) {
       for (let j = i + 1; j < times.length; j++) {
-        // Alternar mando de campo a cada rodada
         const timeCasa = (rodada % 2 === 1) ? times[i] : times[j]
         const timeVisitante = (rodada % 2 === 1) ? times[j] : times[i]
 
@@ -148,68 +139,72 @@ function gerarRoundRobin(times: any[], totalRodadas: number) {
           timeVisitante,
           rodada: rodadaAtual
         })
-
-        if (confrontos.filter(c => c.rodada === rodadaAtual).length >= Math.floor(times.length / 2)) {
-          rodadaAtual++
-        }
       }
     }
+    rodadaAtual++
   }
 
-  return confrontos.slice(0, totalRodadas * Math.floor(times.length / 2))
+  return confrontos
 }
 
-// FUNÇÃO AUXILIAR: Jogos entre regionais diferentes
 async function gerarJogosInterregionais(
-  campeonatoId: number, 
-  grupos: any[], 
-  totalJogos: number,
+  campeonatoId: number,
+  grupos: any[],
+  rodadasInterregionais: number,
   dataInicio: Date,
   intervaloDias: number
 ) {
   const jogosInterregionais = []
-  const gruposPorConferencia = agruparPorConferencia(grupos)
-  
-  let dataAtual = new Date(dataInicio)
   let contadorJogo = 0
+  let dataAtual = new Date(dataInicio)
 
-  // Gerar confrontos entre regionais da mesma conferência
-  for (const [conferencia, gruposConf] of Object.entries(gruposPorConferencia)) {
-    if (gruposConf.length < 2) continue
+  const gruposPorConferencia = grupos.reduce((acc, grupo) => {
+    const conferencia = grupo.regional?.conferencia?.tipo || 'UNKNOWN'
+    if (!acc[conferencia]) acc[conferencia] = []
+    acc[conferencia].push(grupo)
+    return acc
+  }, {} as Record<string, any[]>)
 
-    for (let i = 0; i < gruposConf.length; i++) {
-      for (let j = i + 1; j < gruposConf.length; j++) {
-        const grupoA = gruposConf[i]
-        const grupoB = gruposConf[j]
-        
-        // Pegar os melhores times de cada regional (simulação)
-        const timesA = grupoA.times.slice(0, 2) // Top 2 do regional A
-        const timesB = grupoB.times.slice(0, 2) // Top 2 do regional B
+  const conferencias = Object.keys(gruposPorConferencia)
+  
+  for (let rodada = 1; rodada <= rodadasInterregionais; rodada++) {
+    for (let confA = 0; confA < conferencias.length; confA++) {
+      for (let confB = confA + 1; confB < conferencias.length; confB++) {
+        const gruposA = gruposPorConferencia[conferencias[confA]]
+        const gruposB = gruposPorConferencia[conferencias[confB]]
 
-        // Gerar confrontos cruzados
-        for (let a = 0; a < timesA.length && contadorJogo < totalJogos; a++) {
-          for (let b = 0; b < timesB.length && contadorJogo < totalJogos; b++) {
-            const jogo = await prisma.jogo.create({
-              data: {
-                campeonatoId,
-                grupoId: null, // Jogo interregional
-                timeCasaId: timesA[a].time.id,
-                timeVisitanteId: timesB[b].time.id,
-                dataJogo: new Date(dataAtual),
-                rodada: Math.ceil(contadorJogo / 8) + 5, // Rodadas finais
-                fase: 'TEMPORADA_REGULAR',
-                status: 'AGENDADO',
-                local: timesA[a].time.estadio,
-                observacoes: `Interregional: ${grupoA.regional?.nome} × ${grupoB.regional?.nome}`
+        for (const grupoA of gruposA) {
+          for (const grupoB of gruposB) {
+            const timesA = grupoA.times.map((gt: any) => gt.time)
+            const timesB = grupoB.times.map((gt: any) => gt.time)
+
+            const maxConfrontos = Math.min(2, timesA.length, timesB.length)
+            
+            for (let confronto = 0; confronto < maxConfrontos; confronto++) {
+              const timeA = timesA[confronto % timesA.length]
+              const timeB = timesB[confronto % timesB.length]
+
+              const jogo = await prisma.jogo.create({
+                data: {
+                  campeonatoId,
+                  grupoId: grupoA.id,
+                  timeCasaId: timeA.id,
+                  timeVisitanteId: timeB.id,
+                  dataJogo: new Date(dataAtual),
+                  rodada: Math.floor(contadorJogo / 8) + 5, 
+                  fase: 'TEMPORADA_REGULAR',
+                  status: 'AGENDADO',
+                  local: timeA.estadio || `Estádio ${timeA.cidade}`,
+                  observacoes: `Interregional: ${grupoA.regional?.nome} × ${grupoB.regional?.nome}`
+                }
+              })
+
+              jogosInterregionais.push(jogo)
+              contadorJogo++
+
+              if (contadorJogo % 6 === 0) {
+                dataAtual = new Date(dataAtual.getTime() + intervaloDias * 24 * 60 * 60 * 1000)
               }
-            })
-
-            jogosInterregionais.push(jogo)
-            contadorJogo++
-
-            // Avançar data
-            if (contadorJogo % 6 === 0) {
-              dataAtual = new Date(dataAtual.getTime() + intervaloDias * 24 * 60 * 60 * 1000)
             }
           }
         }
@@ -220,7 +215,6 @@ async function gerarJogosInterregionais(
   return jogosInterregionais
 }
 
-// FUNÇÃO AUXILIAR: Algoritmo balanceado (exatamente 4 jogos por time)
 async function gerarJogosBalanceados(
   campeonatoId: number,
   grupos: any[],
@@ -231,7 +225,6 @@ async function gerarJogosBalanceados(
   const jogosBalanceados = []
   const contadorJogosPorTime = new Map()
   
-  // Inicializar contador para cada time
   for (const grupo of grupos) {
     for (const grupoTime of grupo.times) {
       contadorJogosPorTime.set(grupoTime.time.id, 0)
@@ -240,13 +233,14 @@ async function gerarJogosBalanceados(
 
   let dataAtual = new Date(dataInicio)
   let rodadaAtual = 1
+  let tentativas = 0
+  const maxTentativas = jogosPerTime * 50 
 
-  while (true) {
+  while (tentativas < maxTentativas) {
     let jogosNaRodada = 0
     
-    // Tentar gerar jogos para times que ainda precisam
     for (const grupo of grupos) {
-      const times = grupo.times.map(gt => gt.time)
+      const times = grupo.times.map((gt: any) => gt.time)
       
       for (let i = 0; i < times.length; i++) {
         for (let j = i + 1; j < times.length; j++) {
@@ -256,69 +250,151 @@ async function gerarJogosBalanceados(
           const jogosA = contadorJogosPorTime.get(timeA.id) || 0
           const jogosB = contadorJogosPorTime.get(timeB.id) || 0
           
-          // Se ambos os times ainda precisam de jogos
           if (jogosA < jogosPerTime && jogosB < jogosPerTime) {
-            const jogo = await prisma.jogo.create({
-              data: {
+            const jaSeEnfrentaram = await prisma.jogo.findFirst({
+              where: {
                 campeonatoId,
-                grupoId: grupo.id,
-                timeCasaId: timeA.id,
-                timeVisitanteId: timeB.id,
-                dataJogo: new Date(dataAtual),
-                rodada: rodadaAtual,
-                fase: 'TEMPORADA_REGULAR',
-                status: 'AGENDADO',
-                local: timeA.estadio,
-                observacoes: `Rodada ${rodadaAtual} - ${grupo.regional?.nome || grupo.nome}`
+                OR: [
+                  { timeCasaId: timeA.id, timeVisitanteId: timeB.id },
+                  { timeCasaId: timeB.id, timeVisitanteId: timeA.id }
+                ]
               }
             })
 
-            jogosBalanceados.push(jogo)
-            contadorJogosPorTime.set(timeA.id, jogosA + 1)
-            contadorJogosPorTime.set(timeB.id, jogosB + 1)
-            jogosNaRodada++
+            if (!jaSeEnfrentaram) {
+              const jogo = await prisma.jogo.create({
+                data: {
+                  campeonatoId,
+                  grupoId: grupo.id,
+                  timeCasaId: timeA.id,
+                  timeVisitanteId: timeB.id,
+                  dataJogo: new Date(dataAtual),
+                  rodada: rodadaAtual,
+                  fase: 'TEMPORADA_REGULAR',
+                  status: 'AGENDADO',
+                  local: timeA.estadio || `Estádio ${timeA.cidade}`,
+                  observacoes: `${grupo.regional?.nome || grupo.nome} - Balanceado`
+                }
+              })
+
+              jogosBalanceados.push(jogo)
+              
+              contadorJogosPorTime.set(timeA.id, jogosA + 1)
+              contadorJogosPorTime.set(timeB.id, jogosB + 1)
+              
+              jogosNaRodada++
+            }
           }
         }
       }
     }
 
-    // Se não gerou nenhum jogo nesta rodada, parar
-    if (jogosNaRodada === 0) break
+    if (jogosNaRodada === 0) {
+      break
+    }
 
-    // Avançar para próxima rodada
     rodadaAtual++
     dataAtual = new Date(dataAtual.getTime() + intervaloDias * 24 * 60 * 60 * 1000)
+    tentativas++
+  }
+
+  const timesComPoucosJogos = []
+  for (const [timeId, jogos] of contadorJogosPorTime.entries()) {
+    if (jogos < jogosPerTime - 1) {
+      timesComPoucosJogos.push({ timeId, jogos })
+    }
+  }
+
+  if (timesComPoucosJogos.length > 0) {
+    console.warn('Times com poucos jogos:', timesComPoucosJogos)
   }
 
   return jogosBalanceados
 }
 
-// FUNÇÕES AUXILIARES
-function agruparPorConferencia(grupos: any[]) {
-  return grupos.reduce((acc, grupo) => {
-    const conferencia = grupo.regional?.conferencia?.tipo || 'INDEFINIDA'
-    if (!acc[conferencia]) acc[conferencia] = []
-    acc[conferencia].push(grupo)
-    return acc
-  }, {})
-}
-
 function contarJogosPorRodada(jogos: any[]) {
-  return jogos.reduce((acc, jogo) => {
-    acc[jogo.rodada] = (acc[jogo.rodada] || 0) + 1
+  const contadorRodadas = jogos.reduce((acc, jogo) => {
+    const rodada = jogo.rodada || 1
+    acc[rodada] = (acc[rodada] || 0) + 1
     return acc
-  }, {})
+  }, {} as Record<number, number>)
+
+  return contadorRodadas
 }
 
 function contarJogosPorConferencia(jogos: any[], grupos: any[]) {
-  const mapeamentoGrupoConferencia = grupos.reduce((acc, grupo) => {
-    acc[grupo.id] = grupo.regional?.conferencia?.tipo || 'INDEFINIDA'
-    return acc
-  }, {})
+  const jogosPorConferencia = {} as Record<string, number>
 
-  return jogos.reduce((acc, jogo) => {
-    const conferencia = mapeamentoGrupoConferencia[jogo.grupoId] || 'INTERREGIONAL'
-    acc[conferencia] = (acc[conferencia] || 0) + 1
-    return acc
-  }, {})
+  for (const jogo of jogos) {
+    const grupo = grupos.find(g => g.id === jogo.grupoId)
+    if (grupo?.regional?.conferencia?.tipo) {
+      const conferencia = grupo.regional.conferencia.tipo
+      jogosPorConferencia[conferencia] = (jogosPorConferencia[conferencia] || 0) + 1
+    }
+  }
+
+  return jogosPorConferencia
+}
+
+
+export async function validarTemporadaRegular(campeonatoId: number) {
+  try {
+    const jogos = await prisma.jogo.findMany({
+      where: {
+        campeonatoId,
+        fase: 'TEMPORADA_REGULAR'
+      },
+      include: {
+        timeCasa: true,
+        timeVisitante: true
+      }
+    })
+
+    const times = await prisma.time.findMany({
+      where: {
+        jogadores: {
+          some: {
+            temporada: '2025' 
+          }
+        }
+      }
+    })
+
+    const jogosPorTime = new Map()
+    for (const time of times) {
+      jogosPorTime.set(time.id, 0)
+    }
+
+    for (const jogo of jogos) {
+      jogosPorTime.set(jogo.timeCasaId, (jogosPorTime.get(jogo.timeCasaId) || 0) + 1)
+      jogosPorTime.set(jogo.timeVisitanteId, (jogosPorTime.get(jogo.timeVisitanteId) || 0) + 1)
+    }
+
+    const jogosValues = Array.from(jogosPorTime.values())
+    const minJogos = Math.min(...jogosValues)
+    const maxJogos = Math.max(...jogosValues)
+    const mediaJogos = jogosValues.reduce((sum, val) => sum + val, 0) / jogosValues.length
+
+    return {
+      totalJogos: jogos.length,
+      totalTimes: times.length,
+      jogosFinalizados: jogos.filter(j => j.status === 'FINALIZADO').length,
+      jogosAgendados: jogos.filter(j => j.status === 'AGENDADO').length,
+      balanceamento: {
+        minJogos,
+        maxJogos,
+        mediaJogos: Math.round(mediaJogos * 100) / 100,
+        diferencaMaxima: maxJogos - minJogos
+      },
+      jogosPorTime: Object.fromEntries(jogosPorTime),
+      validacao: {
+        balanceado: (maxJogos - minJogos) <= 1, 
+        completo: minJogos >= 3 
+      }
+    }
+
+  } catch (error) {
+    console.error('Erro ao validar temporada regular:', error)
+    throw error
+  }
 }

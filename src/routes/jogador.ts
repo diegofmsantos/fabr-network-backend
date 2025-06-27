@@ -67,8 +67,8 @@ jogadorRouter.get('/jogadores', async (req, res) => {
                 distinct: ['jogadorId', 'temporada']
             });
 
-            jogadoresFormatados.forEach(jogador => { // @ts-ignore
-                jogador.historicoTemporadas = jogadoresTodasTemporadas
+            jogadoresFormatados.forEach(jogador => {
+                (jogador as any).historicoTemporadas = jogadoresTodasTemporadas
                     .filter(jt => jt.jogadorId === jogador.id)
                     .map(jt => ({
                         temporada: jt.temporada,
@@ -117,7 +117,7 @@ jogadorRouter.get('/jogador/:id/temporada/:ano', async (req: Request, res: Respo
 
         if (!jogadorTime) {
             res.status(404).json({ error: 'Jogador não encontrado nesta temporada' });
-            return; 
+            return;
         }
 
         res.status(200).json({
@@ -127,7 +127,7 @@ jogadorRouter.get('/jogador/:id/temporada/:ano', async (req: Request, res: Respo
             numero: jogadorTime.numero,
             camisa: jogadorTime.camisa,
         });
-        return; 
+        return;
 
     } catch (error) {
         console.error('Erro ao buscar jogador:', error);
@@ -218,7 +218,7 @@ jogadorRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Resp
 
         const updatedJogador = await prisma.jogador.update({
             where: { id },
-            data: dadosJogador, 
+            data: dadosJogador,
         });
 
         if (temporada && timeId) {
@@ -252,7 +252,7 @@ jogadorRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Resp
                         timeId: parseInt(String(timeId)),
                         temporada: temporada,
                         numero: numero !== undefined ? parseInt(String(numero)) : 0,
-                        camisa: camisa || '',  
+                        camisa: camisa || '',
                         estatisticas: estatisticas || {},
                     }
                 });
@@ -271,9 +271,9 @@ jogadorRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Resp
                         id: true,
                         temporada: true,
                         numero: true,
-                        camisa: true, 
+                        camisa: true,
                         estatisticas: true,
-                        time: true 
+                        time: true
                     }
                 }
             }

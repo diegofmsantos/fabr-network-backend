@@ -33,7 +33,6 @@ model Time {
   playoffClassificado2 PlayoffJogo[] @relation("PlayoffTime2")
   playoffVitorias      PlayoffJogo[] @relation("PlayoffVencedor")
 
-  // Relacionamentos com campeonatos
   jogosCasa        Jogo[]               @relation("JogosCasa")
   jogosVisitante   Jogo[]               @relation("JogosVisitante")
   estatisticasJogo EstatisticaJogo[]

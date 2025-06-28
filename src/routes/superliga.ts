@@ -1052,6 +1052,123 @@ superligaRouter.post('/campeonatos/:id/reparar-integridade', async (req: Request
   }
 })
 
+superligaRouter.post('/campeonatos/:id/configurar-conferencias', async (req: Request, res: Response) => {
+    try {
+        const campeonatoId = validarId(req.params.id)
+        
+        const campeonato = await prisma.campeonato.findUnique({
+            where: { id: campeonatoId }
+        })
+
+        if (!campeonato) {
+            res.status(404).json({ error: 'Campeonato não encontrado' })
+            return
+        }
+
+        if (!campeonato.isSuperliga) {
+            res.status(400).json({ error: 'Este campeonato não é uma Superliga' })
+            return
+        }
+
+        const conferenciaExistente = await prisma.conferencia.findFirst({
+            where: { campeonatoId }
+        })
+
+        if (conferenciaExistente) {
+            res.status(400).json({ error: 'Conferências já foram configuradas' })
+            return
+        }
+
+        const SUPERLIGA_CONFIG = [
+            {
+                tipo: 'SUDESTE',
+                nome: 'Conferência Sudeste',
+                icone: '🏭',
+                totalTimes: 12,
+                ordem: 1,
+                regionais: [
+                    { tipo: 'SERRAMAR', nome: 'Regional Serramar', ordem: 1, timesPorRegional: 4 },
+                    { tipo: 'CANASTRA', nome: 'Regional Canastra', ordem: 2, timesPorRegional: 4 },
+                    { tipo: 'CANTAREIRA', nome: 'Regional Cantareira', ordem: 3, timesPorRegional: 4 }
+                ]
+            },
+            {
+                tipo: 'SUL',
+                nome: 'Conferência Sul',
+                icone: '🧊',
+                totalTimes: 8,
+                ordem: 2,
+                regionais: [
+                    { tipo: 'ARAUCARIA', nome: 'Regional Araucária', ordem: 1, timesPorRegional: 4 },
+                    { tipo: 'PAMPA', nome: 'Regional Pampa', ordem: 2, timesPorRegional: 4 }
+                ]
+            },
+            {
+                tipo: 'NORDESTE',
+                nome: 'Conferência Nordeste',
+                icone: '🌵',
+                totalTimes: 6,
+                ordem: 3,
+                regionais: [
+                    { tipo: 'ATLANTICO', nome: 'Regional Atlântico', ordem: 1, timesPorRegional: 6 }
+                ]
+            },
+            {
+                tipo: 'CENTRO_NORTE',
+                nome: 'Conferência Centro-Norte',
+                icone: '🌲',
+                totalTimes: 6,
+                ordem: 4,
+                regionais: [
+                    { tipo: 'CERRADO', nome: 'Regional Cerrado', ordem: 1, timesPorRegional: 3 },
+                    { tipo: 'AMAZONIA', nome: 'Regional Amazônia', ordem: 2, timesPorRegional: 3 }
+                ]
+            }
+        ]
+
+        for (const confConfig of SUPERLIGA_CONFIG) {
+            const conferencia = await prisma.conferencia.create({
+                data: {
+                    campeonatoId,
+                    nome: confConfig.nome,
+                    tipo: confConfig.tipo,
+                    icone: confConfig.icone,
+                    ordem: confConfig.ordem,
+                    totalTimes: confConfig.totalTimes
+                }
+            })
+
+            for (const regConfig of confConfig.regionais) {
+                await prisma.regional.create({
+                    data: {
+                        conferenciaId: conferencia.id,
+                        nome: regConfig.nome,
+                        tipo: regConfig.tipo,
+                        ordem: regConfig.ordem,
+                        timesPorRegional: regConfig.timesPorRegional
+                    }
+                })
+            }
+        }
+
+        res.status(201).json({
+            message: 'Conferências configuradas com sucesso!',
+            estrutura: {
+                conferencias: 4,
+                regionais: 8,
+                times: 32
+            }
+        })
+
+    } catch (error) {
+        console.error('Erro ao configurar conferências:', error)
+        res.status(500).json({ 
+            error: 'Erro ao configurar conferências',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+    }
+})
+
 export { superligaRouter }
 
 export default superligaRouter

@@ -4,7 +4,6 @@ import express, { Request, Response } from 'express'
 const prisma = new PrismaClient()
 const campeonatosRouter = express.Router()
 
-// Utilitário para validar ID
 const validarId = (id: string) => {
     const numId = parseInt(id)
     if (isNaN(numId) || numId <= 0) {
@@ -13,7 +12,6 @@ const validarId = (id: string) => {
     return numId
 }
 
-// GET /campeonatos/campeonatos - Listar campeonatos
 campeonatosRouter.get('/campeonatos', async (req: Request, res: Response) => {
     try {
         const { temporada, tipo, status } = req.query
@@ -25,11 +23,9 @@ campeonatosRouter.get('/campeonatos', async (req: Request, res: Response) => {
         }
         
         if (tipo) {
-            // Para compatibilidade com frontend que busca por tipo
             if (tipo === 'SUPERLIGA') {
                 where.isSuperliga = true
             } else {
-                // Outros tipos de campeonato podem ser adicionados aqui
                 where.isSuperliga = false
             }
         }
@@ -69,7 +65,6 @@ campeonatosRouter.get('/campeonatos', async (req: Request, res: Response) => {
     }
 })
 
-// GET /campeonatos/campeonatos/:id - Buscar campeonato específico
 campeonatosRouter.get('/campeonatos/:id', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
@@ -112,7 +107,6 @@ campeonatosRouter.get('/campeonatos/:id', async (req: Request, res: Response) =>
     }
 })
 
-// POST /campeonatos/campeonatos - Criar campeonato
 campeonatosRouter.post('/campeonatos', async (req: Request, res: Response) => {
     try {
         const { nome, temporada, tipo, status, dataInicio, dataFim, descricao } = req.body
@@ -139,7 +133,6 @@ campeonatosRouter.post('/campeonatos', async (req: Request, res: Response) => {
     }
 })
 
-// PUT /campeonatos/campeonatos/:id - Atualizar campeonato
 campeonatosRouter.put('/campeonatos/:id', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
@@ -167,7 +160,6 @@ campeonatosRouter.put('/campeonatos/:id', async (req: Request, res: Response) =>
     }
 })
 
-// DELETE /campeonatos/campeonatos/:id - Deletar campeonato
 campeonatosRouter.delete('/campeonatos/:id', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
@@ -186,7 +178,6 @@ campeonatosRouter.delete('/campeonatos/:id', async (req: Request, res: Response)
     }
 })
 
-// GET /campeonatos/campeonatos/:id/grupos - Buscar grupos do campeonato
 campeonatosRouter.get('/campeonatos/:id/grupos', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
@@ -218,7 +209,6 @@ campeonatosRouter.get('/campeonatos/:id/grupos', async (req: Request, res: Respo
     }
 })
 
-// GET /campeonatos/campeonatos/:id/proximos-jogos - Próximos jogos do campeonato
 campeonatosRouter.get('/campeonatos/:id/proximos-jogos', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
@@ -248,7 +238,6 @@ campeonatosRouter.get('/campeonatos/:id/proximos-jogos', async (req: Request, re
     }
 })
 
-// GET /campeonatos/campeonatos/:id/ultimos-resultados - Últimos resultados do campeonato
 campeonatosRouter.get('/campeonatos/:id/ultimos-resultados', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.id)
@@ -278,7 +267,6 @@ campeonatosRouter.get('/campeonatos/:id/ultimos-resultados', async (req: Request
     }
 })
 
-// GET /campeonatos/jogos - Buscar jogos com filtros
 campeonatosRouter.get('/jogos', async (req: Request, res: Response) => {
     try {
         const { campeonatoId, status, fase, timeId, rodada } = req.query
@@ -332,7 +320,6 @@ campeonatosRouter.get('/jogos', async (req: Request, res: Response) => {
     }
 })
 
-// GET /campeonatos/jogos/:id - Buscar jogo específico
 campeonatosRouter.get('/jogos/:id', async (req: Request, res: Response) => {
     try {
         const jogoId = validarId(req.params.id)
@@ -367,12 +354,10 @@ campeonatosRouter.get('/jogos/:id', async (req: Request, res: Response) => {
     }
 })
 
-// GET /campeonatos/classificacao/:campeonatoId - Classificação do campeonato
 campeonatosRouter.get('/classificacao/:campeonatoId', async (req: Request, res: Response) => {
     try {
         const campeonatoId = validarId(req.params.campeonatoId)
 
-        // Buscar grupos do campeonato
         const grupos = await prisma.grupo.findMany({
             where: { campeonatoId },
             include: {
@@ -388,7 +373,6 @@ campeonatosRouter.get('/classificacao/:campeonatoId', async (req: Request, res: 
             const classificacaoGrupo = []
 
             for (const grupoTime of grupo.times) {
-                // Buscar jogos do time neste grupo
                 const jogos = await prisma.jogo.findMany({
                     where: {
                         campeonatoId,
@@ -436,14 +420,12 @@ campeonatosRouter.get('/classificacao/:campeonatoId', async (req: Request, res: 
                 })
             }
 
-            // Ordenar classificação
             classificacaoGrupo.sort((a, b) => {
                 if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
                 if (b.saldo !== a.saldo) return b.saldo - a.saldo
                 return b.pontosPro - a.pontosPro
             })
 
-            // Adicionar posição
             classificacaoGrupo.forEach((item, index) => {
                 (item as any).posicao = index + 1
             })

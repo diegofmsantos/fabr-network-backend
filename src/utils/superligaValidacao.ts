@@ -70,7 +70,6 @@ export async function validarIntegridadeSuperliga(campeonatoId: number): Promise
         erros.push(...validacaoTimes.erros)
         avisos.push(...validacaoTimes.avisos)
         detalhes.times = validacaoTimes.times
-        detalhes.grupos = validacaoTimes.grupos
 
         const validacaoJogos = await validarJogos(campeonatoId)
         avisos.push(...validacaoJogos.avisos)
@@ -114,9 +113,6 @@ export async function repararIntegridadeSuperliga(campeonatoId: number): Promise
         reparosRealizados.push(...reparoRegionais.reparos)
         errosNaoCorrigidos.push(...reparoRegionais.erros)
 
-        const reparoGrupos = await repararGrupos(campeonatoId)
-        reparosRealizados.push(...reparoGrupos.reparos)
-        errosNaoCorrigidos.push(...reparoGrupos.erros)
 
         const validacaoFinal = await validarIntegridadeSuperliga(campeonatoId)
         detalhes.validacaoFinal = validacaoFinal
@@ -212,14 +208,6 @@ async function validarDistribuicaoTimes(campeonatoId: number) {
     const erros: string[] = []
     const avisos: string[] = []
 
-    const grupos = await prisma.grupo.findMany({
-        where: { campeonatoId },
-        include: {
-            times: {
-                include: { time: true }
-            }
-        }
-    })
 
     const temporada = (await prisma.campeonato.findUnique({
         where: { id: campeonatoId },
@@ -228,7 +216,7 @@ async function validarDistribuicaoTimes(campeonatoId: number) {
 
     if (!temporada) {
         erros.push('Temporada do campeonato não encontrada')
-        return { erros, avisos, times: [], grupos }
+        return { erros, avisos, times: [] }
     }
 
     const todosOsTimes = await prisma.time.findMany({
@@ -276,7 +264,7 @@ async function validarDistribuicaoTimes(campeonatoId: number) {
         }
     }
 
-    return { erros, avisos, times: todosOsTimes, grupos }
+    return { erros, avisos, times: todosOsTimes}
 }
 
 async function validarJogos(campeonatoId: number) {
@@ -376,45 +364,6 @@ async function repararRegionais(campeonatoId: number) {
         return { reparos, erros }
     } catch (error) {
         erros.push(`Erro ao reparar regionais: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
-        return { reparos, erros }
-    }
-}
-
-async function repararGrupos(campeonatoId: number) {
-    const reparos: string[] = []
-    const erros: string[] = []
-
-    try {
-        const regionais = await prisma.regional.findMany({
-            where: {
-                conferencia: { campeonatoId }
-            }
-        })
-
-        for (const regional of regionais) {
-            const grupoExistente = await prisma.grupo.findFirst({
-                where: {
-                    campeonatoId,
-                    regionalId: regional.id
-                }
-            })
-
-            if (!grupoExistente) {
-                await prisma.grupo.create({
-                    data: {
-                        nome: `Grupo ${regional.nome}`,
-                        campeonatoId,
-                        regionalId: regional.id,
-                        ordem: 1,
-                    }
-                })
-                reparos.push(`Grupo criado para regional ${regional.nome}`)
-            }
-        }
-
-        return { reparos, erros }
-    } catch (error) {
-        erros.push(`Erro ao reparar grupos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
         return { reparos, erros }
     }
 }

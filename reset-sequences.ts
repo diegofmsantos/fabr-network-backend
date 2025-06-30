@@ -1,4 +1,3 @@
-// reset-sequences.ts
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
@@ -10,10 +9,7 @@ async function resetDatabase() {
     console.log('📊 Limpando dados das tabelas...');
     
     await prisma.estatisticaJogo.deleteMany();
-    await prisma.classificacaoGrupo.deleteMany();
     await prisma.jogo.deleteMany();
-    await prisma.grupoTime.deleteMany();
-    await prisma.grupo.deleteMany();
     await prisma.campeonato.deleteMany();
     await prisma.jogadorTime.deleteMany();
     await prisma.jogador.deleteMany();
@@ -47,7 +43,6 @@ async function resetDatabase() {
       prisma.time.count(),
       prisma.jogador.count(),
       prisma.campeonato.count(),
-      prisma.grupo.count(),
       prisma.jogo.count(),
     ]);
 
@@ -55,8 +50,7 @@ async function resetDatabase() {
     console.log(`   Times: ${counts[0]}`);
     console.log(`   Jogadores: ${counts[1]}`);
     console.log(`   Campeonatos: ${counts[2]}`);
-    console.log(`   Grupos: ${counts[3]}`);
-    console.log(`   Jogos: ${counts[4]}`);
+    console.log(`   Jogos: ${counts[3]}`);
 
     if (counts.every(count => count === 0)) {
       console.log('🎉 BANCO ZERADO COM SUCESSO!');

@@ -188,9 +188,9 @@ async function validarRegionais(campeonatoId: number) {
 
     const tiposEsperados: TipoRegional[] = [
         'SERRAMAR', 'CANASTRA', 'CANTAREIRA',
-        'ARAUCARIA', 'PAMPA', 
-        'ATLANTICO', 
-        'CERRADO', 'AMAZONIA' 
+        'ARAUCARIA', 'PAMPA',
+        'ATLANTICO',
+        'CERRADO', 'AMAZONIA'
     ]
 
     const tiposEncontrados = regionais.map(r => r.tipo)
@@ -226,45 +226,26 @@ async function validarDistribuicaoTimes(campeonatoId: number) {
     if (todosOsTimes.length !== 32) {
         erros.push(`Esperados 32 times na temporada ${temporada}, encontrados ${todosOsTimes.length}`)
     }
+    
+    for (const [regionalTipo, timesEsperados] of Object.entries(TIMES_SUPERLIGA)) {
+        const timesEncontrados = todosOsTimes.filter(time =>
+            timesEsperados.includes(time.nome)
+        )
 
-    for (const grupo of grupos) {
-        const regionalInfo = await prisma.regional.findUnique({
-            where: { id: grupo.regionalId || 0 },
-            include: { conferencia: true }
-        })
-
-        if (!regionalInfo) {
-            erros.push(`Grupo ${grupo.nome} não está associado a um regional válido`)
-            continue
+        if (timesEncontrados.length !== timesEsperados.length) {
+            erros.push(`Regional ${regionalTipo}: esperados ${timesEsperados.length} times, encontrados ${timesEncontrados.length}`)
         }
 
-        const regional = regionalInfo.tipo as TipoRegional
-        const timesEsperados = TIMES_SUPERLIGA[regional]
-
-        if (!timesEsperados) {
-            erros.push(`Regional ${regional} não tem times configurados`)
-            continue
-        }
-
-        if (grupo.times.length !== timesEsperados.length) {
-            erros.push(`Regional ${regional}: esperados ${timesEsperados.length} times, encontrados ${grupo.times.length}`)
-        }
-
-        const nomesTimesGrupo = grupo.times.map(gt => gt.time.nome)
+        const nomesEncontrados = timesEncontrados.map(t => t.nome)
         for (const nomeEsperado of timesEsperados) {
-            if (!nomesTimesGrupo.includes(nomeEsperado)) {
-                erros.push(`Time "${nomeEsperado}" não encontrado no regional ${regional}`)
-            }
-        }
-
-        for (const nomeTime of nomesTimesGrupo) {
-            if (!timesEsperados.includes(nomeTime)) {
-                avisos.push(`Time "${nomeTime}" no regional ${regional} não está na configuração esperada`)
+            if (!nomesEncontrados.includes(nomeEsperado)) {
+                erros.push(`Time "${nomeEsperado}" não encontrado no regional ${regionalTipo}`)
             }
         }
     }
 
-    return { erros, avisos, times: todosOsTimes}
+
+    return { erros, avisos, times: todosOsTimes }
 }
 
 async function validarJogos(campeonatoId: number) {

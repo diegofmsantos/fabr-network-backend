@@ -731,7 +731,6 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, re
     }
 });
 
-// ==================== IMPORTAÇÃO DE AGENDA DE JOGOS ====================
 adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req, res) => {
     try {
         if (!req.file) {
@@ -751,7 +750,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
 
         let jogosRaw = xlsx.utils.sheet_to_json(agendaSheet) as any[];
 
-        // Converter números para strings
         function convertNumbersToStrings(obj: any): any {
             if (obj === null || obj === undefined) return obj;
             if (typeof obj === 'number') return String(obj);
@@ -773,7 +771,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
             erros: [] as any[]
         };
 
-        // Buscar Superliga da temporada
         const temporada = jogosRaw[0]?.temporada || '2025';
         const superliga = await prisma.campeonato.findFirst({
             where: {
@@ -784,111 +781,84 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
 
         if (!superliga) {
             res.status(400).json({ 
-                error: `Superliga ${temporada} não encontrada. Crie a Superliga antes de importar a agenda.` 
+                error: `Superliga ${temporada} não encontrada. Crie a Superliga primeiro.` 
             });
             return;
         }
 
-        for (const jogo of jogosRaw) {
+        for (const jogoData of jogosRaw) {
             try {
-                if (!jogo.time_mandante || !jogo.time_visitante || !jogo.data_jogo) {
+                if (!jogoData.time_mandante || !jogoData.time_visitante || !jogoData.data) {
                     resultados.erros.push({
-                        jogo: jogo.id_jogo || 'Desconhecido',
-                        erro: 'Dados obrigatórios ausentes (time_mandante, time_visitante, data_jogo)'
+                        jogo: `${jogoData.time_mandante || 'N/A'} x ${jogoData.time_visitante || 'N/A'}`,
+                        erro: 'Dados obrigatórios ausentes (time_mandante, time_visitante, data)'
                     });
                     continue;
                 }
 
-                // Buscar times
-                const timeMandante = await prisma.time.findFirst({
+                const timeCasa = await prisma.time.findFirst({
                     where: {
-                        nome: jogo.time_mandante,
-                        temporada: temporada
+                        nome: jogoData.time_mandante,
+                        temporada
                     }
                 });
 
                 const timeVisitante = await prisma.time.findFirst({
                     where: {
-                        nome: jogo.time_visitante,
-                        temporada: temporada
+                        nome: jogoData.time_visitante,
+                        temporada
                     }
                 });
 
-                if (!timeMandante) {
+                if (!timeCasa || !timeVisitante) {
                     resultados.erros.push({
-                        jogo: jogo.id_jogo || 'Desconhecido',
-                        erro: `Time mandante "${jogo.time_mandante}" não encontrado`
+                        jogo: `${jogoData.time_mandante} x ${jogoData.time_visitante}`,
+                        erro: `Time não encontrado: ${!timeCasa ? jogoData.time_mandante : jogoData.time_visitante}`
                     });
                     continue;
                 }
 
-                if (!timeVisitante) {
-                    resultados.erros.push({
-                        jogo: jogo.id_jogo || 'Desconhecido',
-                        erro: `Time visitante "${jogo.time_visitante}" não encontrado`
-                    });
-                    continue;
-                }
-
-                // Verificar se o jogo já existe
                 const jogoExistente = await prisma.jogo.findFirst({
                     where: {
                         campeonatoId: superliga.id,
-                        timeCasaId: timeMandante.id,
+                        timeCasaId: timeCasa.id,
                         timeVisitanteId: timeVisitante.id,
-                        rodada: parseInt(jogo.rodada) || 1
+                        rodada: parseInt(jogoData.rodada) || 1
                     }
                 });
 
                 if (jogoExistente) {
                     resultados.erros.push({
-                        jogo: jogo.id_jogo || 'Desconhecido',
-                        erro: 'Jogo já cadastrado'
+                        jogo: `${jogoData.time_mandante} x ${jogoData.time_visitante}`,
+                        erro: 'Jogo já existe na agenda'
                     });
                     continue;
                 }
 
-                // Processar data
-                let dataJogo: Date;
-                try {
-                    dataJogo = new Date(jogo.data_jogo);
-                    if (isNaN(dataJogo.getTime())) {
-                        throw new Error('Data inválida');
-                    }
-                } catch (error) {
-                    resultados.erros.push({
-                        jogo: jogo.id_jogo || 'Desconhecido',
-                        erro: `Data inválida: ${jogo.data_jogo}`
-                    });
-                    continue;
-                }
-
-                // Criar jogo
                 await prisma.jogo.create({
                     data: {
                         campeonatoId: superliga.id,
-                        timeCasaId: timeMandante.id,
+                        timeCasaId: timeCasa.id,
                         timeVisitanteId: timeVisitante.id,
-                        dataJogo: dataJogo,
-                        local: jogo.local || '',
-                        rodada: parseInt(jogo.rodada) || 1,
-                        fase: jogo.fase || 'TEMPORADA_REGULAR',
+                        dataJogo: new Date(jogoData.data),
+                        rodada: parseInt(jogoData.rodada) || 1,
+                        fase: jogoData.fase || 'TEMPORADA_REGULAR',
                         status: 'AGENDADO',
-                        observacoes: jogo.observacoes || null
+                        local: timeCasa.estadio || `Estádio ${timeCasa.cidade}`,
+                        observacoes: jogoData.conferencia ? `Conferência: ${jogoData.conferencia}` : null
                     }
                 });
 
                 resultados.sucesso++;
+
             } catch (error) {
-                console.error(`Erro ao processar jogo:`, error);
                 resultados.erros.push({
-                    jogo: jogo.id_jogo || 'Desconhecido',
+                    jogo: `${jogoData.time_mandante || 'N/A'} x ${jogoData.time_visitante || 'N/A'}`,
                     erro: error instanceof Error ? error.message : 'Erro desconhecido'
                 });
             }
         }
 
-        // Limpar arquivo
         fs.unlinkSync(req.file.path);
 
         res.status(200).json({
@@ -896,6 +866,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
             sucesso: resultados.sucesso,
             erros: resultados.erros.length > 0 ? resultados.erros : null
         });
+
     } catch (error) {
         console.error('Erro ao processar planilha de agenda:', error);
 
@@ -1123,13 +1094,11 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
     }
 });
 
-// Rota para estatísticas do dashboard admin
 adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
     try {
         const { temporada } = req.query
         const temporadaFiltro = temporada ? String(temporada) : '2025'
 
-        // Buscar dados básicos
         const [
             totalCampeonatos,
             campeonatosAtivos,
@@ -1149,7 +1118,6 @@ adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
             prisma.jogo.count({ where: { status: 'FINALIZADO' } })
         ])
 
-        // Retornar estatísticas básicas
         const stats = {
             totalCampeonatos,
             campeonatosAtivos,
@@ -1157,15 +1125,11 @@ adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
             jogosFinalizados,
             timesAtivos,
             timesParticipantes: timesAtivos,
-            jogosEstaSemana: 0, // Implementar depois
-
-            // Valores básicos para não quebrar o frontend
+            jogosEstaSemana: 0,
             crescimentoCampeonatos: 0,
             novosTimes: 0,
             melhoriaOperacional: 0,
             taxaConclusao: 0,
-
-            // Arrays básicos
             campeonatosPorStatus: [],
             jogosPorMes: [],
             evolucaoCampeonatos: [],
@@ -1178,8 +1142,6 @@ adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
             topCampeonatos: [],
             topTimes: [],
             topRegioes: [],
-
-            // Médias básicas
             mediaJogosPorCampeonato: 0,
             tempoMedioDuracao: 0,
             taxaAdiamentos: 0,
@@ -1679,10 +1641,6 @@ adminRouter.get('/jogos-processados', async (req, res) => {
     }
 });
 
-
-// ==================== ROTAS DE JOGOS ====================
-
-// Listar jogos com filtros
 adminRouter.get('/jogos', async (req, res) => {
     try {
         const { 
@@ -1694,10 +1652,8 @@ adminRouter.get('/jogos', async (req, res) => {
             limite 
         } = req.query
 
-        // Construir filtros
         const where: any = {}
 
-        // Filtrar por temporada (via campeonato)
         if (temporada) {
             const campeonato = await prisma.campeonato.findFirst({
                 where: {
@@ -1714,12 +1670,10 @@ adminRouter.get('/jogos', async (req, res) => {
             }
         }
 
-        // Filtros adicionais
         if (status) where.status = status as string
         if (fase) where.fase = fase as string
         if (rodada) where.rodada = parseInt(rodada as string)
 
-        // Buscar jogos
         const jogos = await prisma.jogo.findMany({
             where,
             include: {
@@ -1756,15 +1710,11 @@ adminRouter.get('/jogos', async (req, res) => {
             take: limite ? parseInt(limite as string) : undefined
         })
 
-        // Filtrar por conferência se especificado (precisa verificar os times)
         let jogosFiltrados = jogos
         if (conferencia) {
-            // Buscar times da conferência
             const timesConferencia = await prisma.time.findMany({
                 where: {
                     temporada: temporada as string,
-                    // Aqui você pode adicionar lógica para filtrar por conferência
-                    // baseado na configuração da Superliga
                 }
             })
 
@@ -1785,7 +1735,6 @@ adminRouter.get('/jogos', async (req, res) => {
     }
 })
 
-// Buscar jogo específico
 adminRouter.get('/jogos/:id', async (req, res) => {
     try {
         const { id } = req.params
@@ -1861,13 +1810,11 @@ adminRouter.get('/jogos/:id', async (req, res) => {
     }
 })
 
-// Atualizar resultado do jogo
 adminRouter.put('/jogos/:id/resultado', async (req, res) => {
     try {
         const { id } = req.params
         const { placarCasa, placarVisitante, status, observacoes } = req.body
 
-        // Validações
         if (placarCasa === undefined || placarVisitante === undefined) {
             res.status(400).json({ error: 'Placares são obrigatórios' })
             return
@@ -1878,7 +1825,6 @@ adminRouter.put('/jogos/:id/resultado', async (req, res) => {
             return
         }
 
-        // Verificar se o jogo existe
         const jogoExistente = await prisma.jogo.findUnique({
             where: { id: parseInt(id) },
             include: {
@@ -1892,15 +1838,11 @@ adminRouter.put('/jogos/:id/resultado', async (req, res) => {
             return
         }
 
-        // Determinar status baseado nos placares
         let novoStatus = status || 'FINALIZADO'
         if (placarCasa === placarVisitante && (placarCasa > 0 || placarVisitante > 0)) {
-            // Em caso de empate, pode ser necessário lógica específica do futebol americano
-            // Por enquanto, mantém como finalizado
             novoStatus = 'FINALIZADO'
         }
 
-        // Atualizar jogo
         const jogoAtualizado = await prisma.jogo.update({
             where: { id: parseInt(id) },
             data: {
@@ -1930,7 +1872,6 @@ adminRouter.put('/jogos/:id/resultado', async (req, res) => {
     }
 })
 
-// Estatísticas dos jogos por temporada
 adminRouter.get('/jogos/stats/:temporada', async (req, res) => {
     try {
         const { temporada } = req.params
@@ -1947,7 +1888,6 @@ adminRouter.get('/jogos/stats/:temporada', async (req, res) => {
             return
         }
 
-        // Buscar estatísticas dos jogos
         const totalJogos = await prisma.jogo.count({
             where: { campeonatoId: campeonato.id }
         })
@@ -1971,7 +1911,6 @@ adminRouter.get('/jogos/stats/:temporada', async (req, res) => {
             orderBy: { rodada: 'asc' }
         })
 
-        // Próximos jogos (até 5)
         const proximosJogos = await prisma.jogo.findMany({
             where: {
                 campeonatoId: campeonato.id,
@@ -1986,7 +1925,6 @@ adminRouter.get('/jogos/stats/:temporada', async (req, res) => {
             take: 5
         })
 
-        // Últimos resultados (até 5)
         const ultimosResultados = await prisma.jogo.findMany({
             where: {
                 campeonatoId: campeonato.id,

@@ -7,8 +7,6 @@ import { gerarJogosTemporadaRegular } from '../utils/superligaJogosUtils'
 
 const superligaRouter = express.Router()
 
-// ==================== UTILITÁRIOS ====================
-
 async function buscarSuperligaPorTemporada(temporada: string) {
   return await prisma.campeonato.findFirst({
     where: { 
@@ -32,9 +30,6 @@ async function buscarSuperligaPorTemporada(temporada: string) {
   })
 }
 
-// ==================== ROTAS PRINCIPAIS ====================
-
-// Listar todas as temporadas de Superliga
 superligaRouter.get('/temporadas', async (req: Request, res: Response) => {
   try {
     const temporadas = await prisma.campeonato.findMany({
@@ -64,7 +59,6 @@ superligaRouter.get('/temporadas', async (req: Request, res: Response) => {
   }
 })
 
-// Buscar temporada atual
 superligaRouter.get('/atual', async (req: Request, res: Response) => {
   try {
     const atual = await prisma.campeonato.findFirst({
@@ -89,7 +83,6 @@ superligaRouter.get('/atual', async (req: Request, res: Response) => {
   }
 })
 
-// Buscar Superliga por temporada
 superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -114,9 +107,6 @@ superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
   }
 })
 
-// ==================== CRIAÇÃO E CONFIGURAÇÃO ====================
-
-// Criar nova Superliga
 superligaRouter.post('/criar', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.body
@@ -124,7 +114,6 @@ superligaRouter.post('/criar', async (req: Request, res: Response) => {
     if (!temporada) {
       res.status(400).json({ error: 'Temporada é obrigatória' })
     } else {
-      // Verificar se já existe
       const existente = await prisma.campeonato.findFirst({
         where: { temporada, isSuperliga: true }
       })
@@ -135,7 +124,6 @@ superligaRouter.post('/criar', async (req: Request, res: Response) => {
           superliga: existente
         })
       } else {
-        // Criar nova Superliga
         const superliga = await prisma.campeonato.create({
           data: {
             nome: `Superliga de Futebol Americano ${temporada}`,
@@ -163,7 +151,6 @@ superligaRouter.post('/criar', async (req: Request, res: Response) => {
   }
 })
 
-// Configurar conferências
 superligaRouter.post('/:temporada/configurar-conferencias', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -172,7 +159,6 @@ superligaRouter.post('/:temporada/configurar-conferencias', async (req: Request,
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
-      // Verificar se já foi configurado
       const conferenciaExistente = await prisma.conferencia.findFirst({
         where: { campeonatoId: superliga.id }
       })
@@ -180,7 +166,6 @@ superligaRouter.post('/:temporada/configurar-conferencias', async (req: Request,
       if (conferenciaExistente) {
         res.status(400).json({ error: 'Conferências já foram configuradas' })
       } else {
-        // Criar estrutura da Superliga usando configuração existente
         const conferencias = []
         let ordemConferencia = 1
 
@@ -228,7 +213,6 @@ superligaRouter.post('/:temporada/configurar-conferencias', async (req: Request,
   }
 })
 
-// Distribuir times automaticamente
 superligaRouter.post('/:temporada/distribuir-times-automatico', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -237,7 +221,6 @@ superligaRouter.post('/:temporada/distribuir-times-automatico', async (req: Requ
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
-      // Verificar se conferências existem
       const conferencias = await prisma.conferencia.count({
         where: { campeonatoId: superliga.id }
       })
@@ -247,7 +230,6 @@ superligaRouter.post('/:temporada/distribuir-times-automatico', async (req: Requ
           error: 'Configure as conferências antes de distribuir times' 
         })
       } else {
-        // Verificar se já foram distribuídos
         const gruposExistentes = await prisma.grupo.count({
           where: { campeonatoId: superliga.id }
         })
@@ -273,9 +255,6 @@ superligaRouter.post('/:temporada/distribuir-times-automatico', async (req: Requ
   }
 })
 
-// ==================== TEMPORADA REGULAR ====================
-
-// Gerar jogos da temporada regular
 superligaRouter.post('/:temporada/gerar-jogos-temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -285,7 +264,6 @@ superligaRouter.post('/:temporada/gerar-jogos-temporada', async (req: Request, r
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
-      // Verificar se jogos já existem
       const jogosExistentes = await prisma.jogo.count({
         where: {
           campeonatoId: superliga.id,
@@ -313,9 +291,6 @@ superligaRouter.post('/:temporada/gerar-jogos-temporada', async (req: Request, r
   }
 })
 
-// ==================== CONSULTAS GERAIS ====================
-
-// Status da Superliga
 superligaRouter.get('/:temporada/status', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -324,7 +299,6 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
-      // Calcular status baseado nos dados existentes
       const totalJogos = await prisma.jogo.count({
         where: { campeonatoId: superliga.id }
       })
@@ -357,7 +331,6 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
   }
 })
 
-// Conferências
 superligaRouter.get('/:temporada/conferencias', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -384,7 +357,6 @@ superligaRouter.get('/:temporada/conferencias', async (req: Request, res: Respon
   }
 })
 
-// Times por conferência
 superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -429,9 +401,6 @@ superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, re
   }
 })
 
-// ==================== JOGOS ====================
-
-// Buscar jogos
 superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -471,7 +440,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
   }
 })
 
-// Próximos jogos
 superligaRouter.get('/:temporada/proximos-jogos', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -505,7 +473,6 @@ superligaRouter.get('/:temporada/proximos-jogos', async (req: Request, res: Resp
   }
 })
 
-// Últimos resultados
 superligaRouter.get('/:temporada/ultimos-resultados', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -536,7 +503,6 @@ superligaRouter.get('/:temporada/ultimos-resultados', async (req: Request, res: 
   }
 })
 
-// Jogos por rodada
 superligaRouter.get('/:temporada/jogos/rodada/:rodada', async (req: Request, res: Response) => {
   try {
     const { temporada, rodada } = req.params
@@ -565,9 +531,6 @@ superligaRouter.get('/:temporada/jogos/rodada/:rodada', async (req: Request, res
   }
 })
 
-// ==================== PLAYOFFS ====================
-
-// Gerar playoffs
 superligaRouter.post('/:temporada/gerar-playoffs', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -576,10 +539,8 @@ superligaRouter.post('/:temporada/gerar-playoffs', async (req: Request, res: Res
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
-      // Gerar playoffs por conferência
       const resultados = []
       
-      // Buscar conferências
       const conferencias = await prisma.conferencia.findMany({
         where: { campeonatoId: superliga.id },
         orderBy: { ordem: 'asc' }
@@ -618,7 +579,6 @@ superligaRouter.post('/:temporada/gerar-playoffs', async (req: Request, res: Res
   }
 })
 
-// Bracket de playoffs
 superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -649,7 +609,6 @@ superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) =
   }
 })
 
-// Fase nacional
 superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -682,7 +641,6 @@ superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Respo
   }
 })
 
-// Gerar fase nacional
 superligaRouter.post('/:temporada/gerar-fase-nacional', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -706,9 +664,6 @@ superligaRouter.post('/:temporada/gerar-fase-nacional', async (req: Request, res
   }
 })
 
-// ==================== UTILITÁRIOS ====================
-
-// Simular playoffs (para desenvolvimento)
 superligaRouter.post('/:temporada/simular-playoffs', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -731,7 +686,6 @@ superligaRouter.post('/:temporada/simular-playoffs', async (req: Request, res: R
   }
 })
 
-// Deletar Superliga (CUIDADO!)
 superligaRouter.delete('/:temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -740,7 +694,6 @@ superligaRouter.delete('/:temporada', async (req: Request, res: Response) => {
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
-      // Deletar em cascata
       await prisma.campeonato.delete({
         where: { id: superliga.id }
       })

@@ -9,9 +9,9 @@ const superligaRouter = express.Router()
 
 async function buscarSuperligaPorTemporada(temporada: string) {
   return await prisma.campeonato.findFirst({
-    where: { 
+    where: {
       temporada,
-      isSuperliga: true 
+      isSuperliga: true
     },
     include: {
       conferencias: {
@@ -52,7 +52,7 @@ superligaRouter.get('/temporadas', async (req: Request, res: Response) => {
     res.json(temporadas)
   } catch (error) {
     console.error('Erro ao buscar temporadas:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Erro ao buscar temporadas',
       details: error instanceof Error ? error.message : 'Erro desconhecido'
     })
@@ -62,7 +62,7 @@ superligaRouter.get('/temporadas', async (req: Request, res: Response) => {
 superligaRouter.get('/atual', async (req: Request, res: Response) => {
   try {
     const atual = await prisma.campeonato.findFirst({
-      where: { 
+      where: {
         isSuperliga: true,
         status: { in: ['EM_ANDAMENTO', 'NAO_INICIADO'] }
       },
@@ -70,7 +70,7 @@ superligaRouter.get('/atual', async (req: Request, res: Response) => {
     })
 
     if (!atual) {
-      res.status(404).json({ 
+      res.status(404).json({
         error: 'Nenhuma Superliga ativa encontrada',
         suggestion: 'Crie uma nova Superliga'
       })
@@ -86,11 +86,11 @@ superligaRouter.get('/atual', async (req: Request, res: Response) => {
 superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
-    
+
     if (!superliga) {
-      res.status(404).json({ 
+      res.status(404).json({
         error: `Superliga ${temporada} não encontrada`,
         temporada,
         message: 'Esta temporada ainda não foi criada'
@@ -100,7 +100,7 @@ superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error('Erro ao buscar Superliga:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Erro interno do servidor',
       details: error instanceof Error ? error.message : 'Erro desconhecido'
     })
@@ -119,7 +119,7 @@ superligaRouter.post('/criar', async (req: Request, res: Response) => {
       })
 
       if (existente) {
-        res.status(400).json({ 
+        res.status(400).json({
           error: `Superliga ${temporada} já existe`,
           superliga: existente
         })
@@ -144,7 +144,7 @@ superligaRouter.post('/criar', async (req: Request, res: Response) => {
     }
   } catch (error) {
     console.error('Erro ao criar Superliga:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Erro ao criar Superliga',
       details: error instanceof Error ? error.message : 'Erro desconhecido'
     })
@@ -154,7 +154,7 @@ superligaRouter.post('/criar', async (req: Request, res: Response) => {
 superligaRouter.post('/:temporada/configurar-conferencias', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -216,7 +216,7 @@ superligaRouter.post('/:temporada/configurar-conferencias', async (req: Request,
 superligaRouter.post('/:temporada/distribuir-times-automatico', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -226,16 +226,19 @@ superligaRouter.post('/:temporada/distribuir-times-automatico', async (req: Requ
       })
 
       if (conferencias === 0) {
-        res.status(400).json({ 
-          error: 'Configure as conferências antes de distribuir times' 
+        res.status(400).json({
+          error: 'Configure as conferências antes de distribuir times'
         })
       } else {
-        const gruposExistentes = await prisma.grupo.count({
-          where: { campeonatoId: superliga.id }
+        const timesDistribuidos = await prisma.time.count({
+          where: {
+            temporada: superliga.temporada,
+            // Verificar se times estão associados à superliga
+          }
         })
 
-        if (gruposExistentes > 0) {
-          res.status(400).json({ error: 'Times já foram distribuídos' })
+        if (timesDistribuidos === 0) {
+          res.status(400).json({ error: 'Nenhum time foi importado para esta temporada' })
         } else {
           const resultado = await distribuirTimesAutomaticamente(superliga.id, temporada)
 
@@ -294,7 +297,7 @@ superligaRouter.post('/:temporada/gerar-jogos-temporada', async (req: Request, r
 superligaRouter.get('/:temporada/status', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -304,7 +307,7 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
       })
 
       const jogosFinalizados = await prisma.jogo.count({
-        where: { 
+        where: {
           campeonatoId: superliga.id,
           status: 'FINALIZADO'
         }
@@ -315,8 +318,8 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
       })
 
       const status = {
-        fase: totalJogos === 0 ? 'CONFIGURACAO' : 
-              jogosFinalizados === totalJogos && totalJogos > 0 ? 'PLAYOFFS' : 'TEMPORADA_REGULAR',
+        fase: totalJogos === 0 ? 'CONFIGURACAO' :
+          jogosFinalizados === totalJogos && totalJogos > 0 ? 'PLAYOFFS' : 'TEMPORADA_REGULAR',
         totalJogos,
         jogosFinalizados,
         jogosPlayoff,
@@ -334,7 +337,7 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
 superligaRouter.get('/:temporada/conferencias', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -360,7 +363,7 @@ superligaRouter.get('/:temporada/conferencias', async (req: Request, res: Respon
 superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -368,30 +371,37 @@ superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, re
       const conferencias = await prisma.conferencia.findMany({
         where: { campeonatoId: superliga.id },
         include: {
-          regionais: {
-            include: {
-              grupos: {
-                include: {
-                  times: {
-                    include: {
-                      time: true
-                    }
-                  }
-                }
-              }
-            }
-          }
+          regionais: true
         }
       })
 
-      const resultado = conferencias.map(conf => ({
-        ...conf,
-        times: conf.regionais.flatMap(reg => 
-          reg.grupos.flatMap(grupo => 
-            grupo.times.map(gt => gt.time)
-          )
-        )
-      }))
+      // Buscar times baseado na estrutura TIMES_SUPERLIGA
+      const { TIMES_SUPERLIGA } = require('../types/index')
+
+      const resultado = await Promise.all(
+        conferencias.map(async (conf) => {
+          const timesConferencia = []
+
+          for (const regional of conf.regionais) {
+            const timesRegional = TIMES_SUPERLIGA[regional.tipo as keyof typeof TIMES_SUPERLIGA]
+
+            if (timesRegional) {
+              const times = await prisma.time.findMany({
+                where: {
+                  nome: { in: timesRegional },
+                  temporada: temporada
+                }
+              })
+              timesConferencia.push(...times)
+            }
+          }
+
+          return {
+            ...conf,
+            times: timesConferencia
+          }
+        })
+      )
 
       res.json(resultado)
     }
@@ -405,7 +415,7 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
   try {
     const { temporada } = req.params
     const { conferencia, fase, rodada, status, limit } = req.query
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -413,12 +423,12 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
       const whereClause: any = {
         campeonatoId: superliga.id
       }
-      
+
       if (conferencia) whereClause.conferencia = conferencia
       if (fase) whereClause.fase = fase
       if (rodada) whereClause.rodada = parseInt(rodada as string)
       if (status) whereClause.status = status
-      
+
       const jogos = await prisma.jogo.findMany({
         where: whereClause,
         include: {
@@ -431,7 +441,7 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
         ],
         take: limit ? parseInt(limit as string) : undefined
       })
-      
+
       res.json(jogos)
     }
   } catch (error) {
@@ -444,7 +454,7 @@ superligaRouter.get('/:temporada/proximos-jogos', async (req: Request, res: Resp
   try {
     const { temporada } = req.params
     const { limite = 5 } = req.query
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -464,7 +474,7 @@ superligaRouter.get('/:temporada/proximos-jogos', async (req: Request, res: Resp
         orderBy: { dataJogo: 'asc' },
         take: parseInt(limite as string)
       })
-      
+
       res.json(jogos)
     }
   } catch (error) {
@@ -477,7 +487,7 @@ superligaRouter.get('/:temporada/ultimos-resultados', async (req: Request, res: 
   try {
     const { temporada } = req.params
     const { limite = 5 } = req.query
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -494,7 +504,7 @@ superligaRouter.get('/:temporada/ultimos-resultados', async (req: Request, res: 
         orderBy: { dataJogo: 'desc' },
         take: parseInt(limite as string)
       })
-      
+
       res.json(jogos)
     }
   } catch (error) {
@@ -506,7 +516,7 @@ superligaRouter.get('/:temporada/ultimos-resultados', async (req: Request, res: 
 superligaRouter.get('/:temporada/jogos/rodada/:rodada', async (req: Request, res: Response) => {
   try {
     const { temporada, rodada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -522,7 +532,7 @@ superligaRouter.get('/:temporada/jogos/rodada/:rodada', async (req: Request, res
         },
         orderBy: { dataJogo: 'asc' }
       })
-      
+
       res.json(jogos)
     }
   } catch (error) {
@@ -534,13 +544,13 @@ superligaRouter.get('/:temporada/jogos/rodada/:rodada', async (req: Request, res
 superligaRouter.post('/:temporada/gerar-playoffs', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
       const resultados = []
-      
+
       const conferencias = await prisma.conferencia.findMany({
         where: { campeonatoId: superliga.id },
         orderBy: { ordem: 'asc' }
@@ -582,7 +592,7 @@ superligaRouter.post('/:temporada/gerar-playoffs', async (req: Request, res: Res
 superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -612,7 +622,7 @@ superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) =
 superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -644,7 +654,7 @@ superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Respo
 superligaRouter.post('/:temporada/gerar-fase-nacional', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -667,7 +677,7 @@ superligaRouter.post('/:temporada/gerar-fase-nacional', async (req: Request, res
 superligaRouter.post('/:temporada/simular-playoffs', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
@@ -689,7 +699,7 @@ superligaRouter.post('/:temporada/simular-playoffs', async (req: Request, res: R
 superligaRouter.delete('/:temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    
+
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })

@@ -780,82 +780,58 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
         });
 
         if (!superliga) {
-            res.status(400).json({ 
-                error: `Superliga ${temporada} não encontrada. Crie a Superliga primeiro.` 
+            res.status(400).json({
+                error: `Superliga ${temporada} não encontrada. Crie a Superliga primeiro.`
             });
             return;
         }
 
+        // ✅ CORRIGIR a lógica de criação dos jogos
         for (const jogoData of jogosRaw) {
             try {
-                if (!jogoData.time_mandante || !jogoData.time_visitante || !jogoData.data) {
-                    resultados.erros.push({
-                        jogo: `${jogoData.time_mandante || 'N/A'} x ${jogoData.time_visitante || 'N/A'}`,
-                        erro: 'Dados obrigatórios ausentes (time_mandante, time_visitante, data)'
-                    });
-                    continue;
-                }
-
-                const timeCasa = await prisma.time.findFirst({
+                // Buscar times por nome
+                const timeMandante = await prisma.time.findFirst({
                     where: {
                         nome: jogoData.time_mandante,
-                        temporada
+                        temporada: temporada
                     }
-                });
+                })
 
                 const timeVisitante = await prisma.time.findFirst({
                     where: {
                         nome: jogoData.time_visitante,
-                        temporada
+                        temporada: temporada
                     }
-                });
+                })
 
-                if (!timeCasa || !timeVisitante) {
+                if (!timeMandante || !timeVisitante) {
                     resultados.erros.push({
-                        jogo: `${jogoData.time_mandante} x ${jogoData.time_visitante}`,
-                        erro: `Time não encontrado: ${!timeCasa ? jogoData.time_mandante : jogoData.time_visitante}`
-                    });
-                    continue;
+                        jogo: `${jogoData.time_mandante} vs ${jogoData.time_visitante}`,
+                        erro: 'Um ou ambos os times não foram encontrados'
+                    })
+                    continue
                 }
 
-                const jogoExistente = await prisma.jogo.findFirst({
-                    where: {
-                        campeonatoId: superliga.id,
-                        timeCasaId: timeCasa.id,
-                        timeVisitanteId: timeVisitante.id,
-                        rodada: parseInt(jogoData.rodada) || 1
-                    }
-                });
-
-                if (jogoExistente) {
-                    resultados.erros.push({
-                        jogo: `${jogoData.time_mandante} x ${jogoData.time_visitante}`,
-                        erro: 'Jogo já existe na agenda'
-                    });
-                    continue;
-                }
-
+                // Criar o jogo
                 await prisma.jogo.create({
                     data: {
                         campeonatoId: superliga.id,
-                        timeCasaId: timeCasa.id,
+                        timeCasaId: timeMandante.id,
                         timeVisitanteId: timeVisitante.id,
                         dataJogo: new Date(jogoData.data),
                         rodada: parseInt(jogoData.rodada) || 1,
                         fase: jogoData.fase || 'TEMPORADA_REGULAR',
                         status: 'AGENDADO',
-                        local: timeCasa.estadio || `Estádio ${timeCasa.cidade}`,
-                        observacoes: jogoData.conferencia ? `Conferência: ${jogoData.conferencia}` : null
+                        local: timeMandante.estadio || `Estádio ${timeMandante.cidade}`
                     }
-                });
+                })
 
-                resultados.sucesso++;
-
+                resultados.sucesso++
             } catch (error) {
                 resultados.erros.push({
-                    jogo: `${jogoData.time_mandante || 'N/A'} x ${jogoData.time_visitante || 'N/A'}`,
+                    jogo: `${jogoData.time_mandante} vs ${jogoData.time_visitante}`,
                     erro: error instanceof Error ? error.message : 'Erro desconhecido'
-                });
+                })
             }
         }
 
@@ -1107,11 +1083,11 @@ adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
             jogosFinalizados
         ] = await Promise.all([
             prisma.campeonato.count({ where: { temporada: temporadaFiltro } }),
-            prisma.campeonato.count({ 
-                where: { 
+            prisma.campeonato.count({
+                where: {
                     temporada: temporadaFiltro,
-                    status: 'EM_ANDAMENTO' 
-                } 
+                    status: 'EM_ANDAMENTO'
+                }
             }),
             prisma.time.count({ where: { temporada: temporadaFiltro } }),
             prisma.jogo.count(),
@@ -1643,13 +1619,13 @@ adminRouter.get('/jogos-processados', async (req, res) => {
 
 adminRouter.get('/jogos', async (req, res) => {
     try {
-        const { 
-            temporada = '2025', 
-            status, 
-            fase, 
-            rodada, 
+        const {
+            temporada = '2025',
+            status,
+            fase,
+            rodada,
             conferencia,
-            limite 
+            limite
         } = req.query
 
         const where: any = {}
@@ -1719,8 +1695,8 @@ adminRouter.get('/jogos', async (req, res) => {
             })
 
             const idsTimesConferencia = timesConferencia.map(t => t.id)
-            jogosFiltrados = jogos.filter(jogo => 
-                idsTimesConferencia.includes(jogo.timeCasaId) || 
+            jogosFiltrados = jogos.filter(jogo =>
+                idsTimesConferencia.includes(jogo.timeCasaId) ||
                 idsTimesConferencia.includes(jogo.timeVisitanteId)
             )
         }
@@ -1728,7 +1704,7 @@ adminRouter.get('/jogos', async (req, res) => {
         res.json(jogosFiltrados)
     } catch (error) {
         console.error('Erro ao buscar jogos:', error)
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Erro ao buscar jogos',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
@@ -1803,7 +1779,7 @@ adminRouter.get('/jogos/:id', async (req, res) => {
         res.json(jogo)
     } catch (error) {
         console.error('Erro ao buscar jogo:', error)
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Erro ao buscar jogo',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
@@ -1865,7 +1841,7 @@ adminRouter.put('/jogos/:id/resultado', async (req, res) => {
         })
     } catch (error) {
         console.error('Erro ao atualizar resultado:', error)
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Erro ao atualizar resultado do jogo',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
@@ -1960,9 +1936,69 @@ adminRouter.get('/jogos/stats/:temporada', async (req, res) => {
         res.json(stats)
     } catch (error) {
         console.error('Erro ao buscar estatísticas dos jogos:', error)
-        res.status(500).json({ 
+        res.status(500).json({
             error: 'Erro ao buscar estatísticas',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
     }
+})
+
+adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'Nenhum arquivo enviado' })
+      return
+    }
+
+    const workbook = xlsx.readFile(req.file.path)
+    const sheetName = workbook.SheetNames[0]
+    const resultadosSheet = workbook.Sheets[sheetName]
+    const resultadosRaw = xlsx.utils.sheet_to_json(resultadosSheet) as any[]
+
+    const resultados = { sucesso: 0, erros: [] as any[] }
+
+    for (const resultado of resultadosRaw) {
+      try {
+        const jogo = await prisma.jogo.findUnique({
+          where: { id: parseInt(resultado.id_jogo) }
+        })
+
+        if (!jogo) {
+          resultados.erros.push({
+            linha: resultado.id_jogo,
+            erro: 'Jogo não encontrado'
+          })
+          continue
+        }
+
+        await prisma.jogo.update({
+          where: { id: jogo.id },
+          data: {
+            placarCasa: parseInt(resultado.placar_mandante) || 0,
+            placarVisitante: parseInt(resultado.placar_visitante) || 0,
+            status: 'FINALIZADO'
+          }
+        })
+
+        resultados.sucesso++
+      } catch (error) {
+        resultados.erros.push({
+          linha: resultado.id_jogo,
+          erro: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+      }
+    }
+
+    fs.unlinkSync(req.file.path)
+    res.json({
+      mensagem: `${resultados.sucesso} resultados importados`,
+      erros: resultados.erros.length > 0 ? resultados.erros : null
+    })
+
+  } catch (error) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path)
+    }
+    res.status(500).json({ error: 'Erro ao processar resultados' })
+  }
 })

@@ -719,4 +719,158 @@ superligaRouter.delete('/:temporada', async (req: Request, res: Response) => {
   }
 })
 
+superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Response) => {
+  try {
+    const { temporada } = req.params
+
+    const superliga = await buscarSuperligaPorTemporada(temporada)
+    if (!superliga) {
+      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
+      return
+    }
+
+    // Buscar conferências com regionais
+    const conferencias = await prisma.conferencia.findMany({
+      where: { campeonatoId: superliga.id },
+      include: {
+        regionais: {
+          orderBy: { ordem: 'asc' }
+        }
+      },
+      orderBy: { ordem: 'asc' }
+    })
+
+    // Buscar todos os jogos da temporada regular finalizados
+    const jogos = await prisma.jogo.findMany({
+      where: {
+        campeonatoId: superliga.id,
+        fase: 'TEMPORADA_REGULAR',
+        status: 'FINALIZADO'
+      },
+      include: {
+        timeCasa: true,
+        timeVisitante: true
+      }
+    })
+
+    // Buscar todos os times
+    const times = await prisma.time.findMany({
+      where: { temporada }
+    })
+
+    // Calcular estatísticas por time
+    const estatisticasTimes = new Map()
+    
+    times.forEach(time => {
+      estatisticasTimes.set(time.id, {
+        timeId: time.id,
+        time: time,
+        jogos: 0,
+        vitorias: 0,
+        derrotas: 0,
+        pontosPro: 0,
+        pontosContra: 0,
+        saldo: 0,
+        aproveitamento: 0
+      })
+    })
+
+    // Processar jogos
+    jogos.forEach(jogo => {
+      const statsCasa = estatisticasTimes.get(jogo.timeCasaId)
+      const statsVisitante = estatisticasTimes.get(jogo.timeVisitanteId)
+
+      if (statsCasa && statsVisitante) {
+        statsCasa.jogos++
+        statsVisitante.jogos++
+        
+        statsCasa.pontosPro += jogo.placarCasa || 0
+        statsCasa.pontosContra += jogo.placarVisitante || 0
+        
+        statsVisitante.pontosPro += jogo.placarVisitante || 0
+        statsVisitante.pontosContra += jogo.placarCasa || 0
+
+        if ((jogo.placarCasa || 0) > (jogo.placarVisitante || 0)) {
+          statsCasa.vitorias++
+          statsVisitante.derrotas++
+        } else {
+          statsVisitante.vitorias++
+          statsCasa.derrotas++
+        }
+      }
+    })
+
+    // Calcular saldo e aproveitamento
+    estatisticasTimes.forEach(stats => {
+      stats.saldo = stats.pontosPro - stats.pontosContra
+      stats.aproveitamento = stats.jogos > 0 ? (stats.vitorias / stats.jogos) * 100 : 0
+    })
+
+    // Organizar por conferência e regional - CORRIGIDO O TIPO
+    const classificacaoPorConferencia: any = {}
+
+    for (const conferencia of conferencias) {
+      const regionaisClassificacao = []
+
+      for (const regional of conferencia.regionais) {
+        // Buscar times deste regional (isso precisa ser implementado na tabela de distribuição)
+        // Por ora, vamos usar uma lógica temporária baseada no nome
+        const timesRegional = times.filter(time => {
+          // LÓGICA TEMPORÁRIA - deve ser substituída por tabela de distribuição
+          return isTimeNoRegional(time.nome, regional.tipo)
+        })
+
+        const timesComStats = timesRegional
+          .map(time => estatisticasTimes.get(time.id))
+          .filter(Boolean)
+          .sort((a, b) => {
+            if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
+            if (b.saldo !== a.saldo) return b.saldo - a.saldo
+            return b.pontosPro - a.pontosPro
+          })
+          .map((stats, index) => ({
+            posicao: index + 1,
+            ...stats
+          }))
+
+        regionaisClassificacao.push({
+          regionalId: regional.id,
+          regional: regional.tipo,
+          nome: regional.nome,
+          times: timesComStats
+        })
+      }
+
+      classificacaoPorConferencia[conferencia.tipo] = {
+        nome: conferencia.nome,
+        tipo: conferencia.tipo,
+        regionais: regionaisClassificacao
+      }
+    }
+
+    res.json(classificacaoPorConferencia)
+  } catch (error) {
+    console.error('Erro ao buscar classificação:', error)
+    res.status(500).json({ error: 'Erro ao buscar classificação' })
+  }
+})
+
+// ==================== FUNÇÃO AUXILIAR - CORRIGIDA ====================
+
+function isTimeNoRegional(nomeTime: string, tipoRegional: string): boolean {
+  // LÓGICA TEMPORÁRIA - deve ser substituída por tabela de distribuição
+  const distribuicaoTimes: { [key: string]: string[] } = {
+    'SERRAMAR': ['Vasco Almirantes', 'Flamengo Imperadores', 'Locomotiva FA', 'Tritões FA'],
+    'CANASTRA': ['Galo FA', 'Moura Lacerda Dragons', 'Rio Preto Weilers', 'Spartans FA'],
+    'CANTAREIRA': ['Corinthians Steamrollers', 'Cruzeiro FA', 'Guarulhos Rhynos', 'Ocelots FA'],
+    'ARAUCARIA': ['Timbó Rex', 'Coritiba Crocodiles', 'Calvary Cavaliers', 'Brown Spiders'],
+    'PAMPA': ['Santa Maria Soldiers', 'Juventude FA', 'Bravos FA', 'Istepôs FA'],
+    'ATLANTICO': ['Fortaleza Tritões', 'Ceará Sabres', 'João Pessoa Espectros', 'Recife Mariners', 'Cavalaria 2 de Julho', 'Caruaru Wolves'],
+    'CERRADO': ['Rondonópolis Hawks', 'Cuiabá Arsenal', 'Tubarões do Cerrado'],
+    'AMAZONIA': ['Porto Velho Miners', 'Manaus FA', 'Manaus Cavaliers']
+  }
+
+  return distribuicaoTimes[tipoRegional]?.includes(nomeTime) || false
+}
+
 export default superligaRouter

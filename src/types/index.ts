@@ -1750,3 +1750,169 @@ export interface FormAtualizarPlacar {
   placarVisitante: string
   observacoes?: string
 }
+
+// ADICIONAR ESTAS INTERFACES AO FINAL DO ARQUIVO src/types/index.ts
+
+// ==================== DISTRIBUIÇÃO DE TIMES (NOVO) ====================
+
+export interface DistribuicaoTime {
+  id: number;
+  campeonatoId: number;
+  conferenciaId: number;
+  regionalId: number;
+  timeId: number;
+  temporada: string;
+  conferenciaType: TipoConferencia;
+  regionalType: TipoRegional;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DistribuicaoTimeCompleta {
+  id: number;
+  campeonatoId: number;
+  conferenciaId: number;
+  regionalId: number;
+  timeId: number;
+  temporada: string;
+  conferenciaType: TipoConferencia;
+  regionalType: TipoRegional;
+  createdAt: Date;
+  updatedAt: Date;
+  time: {
+    id: number;
+    nome: string;
+    sigla: string;
+    logo: string;
+    cor: string;
+  };
+  conferencia: {
+    id: number;
+    nome: string;
+    tipo: TipoConferencia; // ✅ CORRIGIDO: usar TipoConferencia em vez de string
+    icone: string;
+  };
+  regional: {
+    id: number;
+    nome: string;
+    tipo: TipoRegional; // ✅ CORRIGIDO: usar TipoRegional em vez de string
+  };
+}
+
+// ==================== CLASSIFICAÇÃO PARA SUPERLIGA (NOVO) ====================
+
+export interface TimeClassificadoSuperliga {
+  timeId: number;
+  time: {
+    id: number;
+    nome: string;
+    sigla: string;
+    logo: string;
+    cor?: string;
+  };
+  posicaoRegional: number;
+  jogos: number;
+  vitorias: number;
+  derrotas: number;
+  pontosPro: number;
+  pontosContra: number;
+  saldo: number;
+  percentualVitorias: number;
+  regional: string;
+  regionalType: TipoRegional;
+}
+
+// ✅ USAR NOME DIFERENTE PARA EVITAR CONFLITO
+export interface ClassificacaoRegionalSuperliga {
+  regionalId: number;
+  regionalNome: string;
+  regionalType: TipoRegional;
+  times: TimeClassificadoSuperliga[]; // ✅ USAR O TIPO CORRETO
+}
+
+export interface ClassificacaoConferenciaSuperliga {
+  conferenciaId: number;
+  conferenciaNome: string;
+  conferenciaType: TipoConferencia;
+  icone: string;
+  regionais: ClassificacaoRegionalSuperliga[];
+  totalTimes: number;
+}
+
+// ==================== VALIDAÇÃO (NOVO) ====================
+
+export interface ValidacaoDistribuicao {
+  isValid: boolean;
+  errors: string[];
+  warnings?: string[];
+  summary: {
+    totalTimes: number;
+    timesPorConferencia: Record<TipoConferencia, number>;
+    timesPorRegional: Record<TipoRegional, number>;
+  };
+}
+
+// ==================== APENAS PARA PLANILHAS (NOVO) ====================
+
+export interface AgendaJogoRow {
+  id_jogo?: number;
+  data: string;
+  fase: string;
+  time_mandante: string;
+  time_visitante: string;
+  rodada: string | number;
+  conferencia?: string;
+  regional?: string;
+  temporada?: string;
+  local?: string;
+  observacoes?: string;
+}
+
+export interface ResultadoJogoRow {
+  id_jogo: number;
+  placar_mandante: number;
+  placar_visitante: number;
+  status?: string;
+  observacoes?: string;
+}
+
+export interface EstatisticaJogoRow {
+  jogador_id?: number;
+  jogador_nome?: string;
+  time_id?: number;
+  time_nome?: string;
+  id_jogo: number;
+  data_jogo: string;
+  temporada?: string;
+  rodada?: number;
+  fase?: string;
+  
+  // Todas as estatísticas (como já existem no seu projeto)
+  passe_completado?: number;
+  passe_tentado?: number;
+  jardas_passadas?: number;
+  tds_passados?: number;
+  // ... etc (você já tem isso definido)
+}
+
+// ==================== RESPONSE DE IMPORTAÇÃO (NOVO) ====================
+
+export interface ImportacaoResponse {
+  sucesso: number;
+  erros: Array<{
+    linha?: number;
+    item?: string;
+    erro: string;
+  }>;
+  warnings?: Array<{
+    linha?: number;
+    item?: string;
+    warning: string;
+  }>;
+  resumo?: {
+    totalProcessado: number;
+    totalSucesso: number;
+    totalErros: number;
+    totalWarnings: number;
+  };
+}

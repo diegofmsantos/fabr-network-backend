@@ -731,6 +731,8 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, re
     }
 });
 
+// SUBSTITUIR a rota existente em src/routes/admin.ts
+
 adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req, res) => {
     try {
         if (!req.file) {
@@ -738,8 +740,10 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
             return;
         }
 
-        console.log('Arquivo de agenda recebido:', req.file.path);
+        console.log('📋 Iniciando importação de agenda de jogos...');
+        console.log('Arquivo recebido:', req.file.path);
 
+        // ✅ 1. LER PLANILHA
         const workbook = xlsx.readFile(req.file.path, {
             raw: false,
             cellText: true
@@ -750,6 +754,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
 
         let jogosRaw = xlsx.utils.sheet_to_json(agendaSheet) as any[];
 
+        // ✅ 2. CONVERTER NÚMEROS PARA STRINGS
         function convertNumbersToStrings(obj: any): any {
             if (obj === null || obj === undefined) return obj;
             if (typeof obj === 'number') return String(obj);
@@ -766,12 +771,30 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
 
         jogosRaw = convertNumbersToStrings(jogosRaw);
 
-        const resultados = {
-            sucesso: 0,
-            erros: [] as any[]
-        };
+        console.log(`📊 Total de jogos na planilha: ${jogosRaw.length}`);
 
-        const temporada = jogosRaw[0]?.temporada || '2025';
+        // ✅ 3. VALIDAR ESTRUTURA DA PLANILHA
+        if (jogosRaw.length === 0) {
+            res.status(400).json({ error: 'Planilha vazia ou sem dados válidos' });
+            return;
+        }
+
+        // Verificar colunas obrigatórias
+        const primeiroJogo = jogosRaw[0];
+        const colunasObrigatorias = ['data', 'time_mandante', 'time_visitante', 'rodada'];
+        const colunasFaltando = colunasObrigatorias.filter(col => !(col in primeiroJogo));
+
+        if (colunasFaltando.length > 0) {
+            res.status(400).json({
+                error: 'Colunas obrigatórias faltando na planilha',
+                colunasFaltando,
+                colunasEncontradas: Object.keys(primeiroJogo)
+            });
+            return;
+        }
+
+        // ✅ 4. BUSCAR SUPERLIGA
+        const temporada = primeiroJogo.temporada || '2025';
         const superliga = await prisma.campeonato.findFirst({
             where: {
                 temporada: temporada,
@@ -786,65 +809,297 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
             return;
         }
 
-        // ✅ CORRIGIR a lógica de criação dos jogos
-        for (const jogoData of jogosRaw) {
+        console.log(`✅ Superliga encontrada: ${superliga.nome}`);
+
+        // ✅ 5. BUSCAR TODOS OS TIMES E DISTRIBUIÇÃO
+        const times = await prisma.time.findMany({
+            where: { temporada }
+        });
+
+        const distribuicao = await prisma.distribuicaoTime.findMany({
+            where: { campeonatoId: superliga.id },
+            include: {
+                time: true,
+                conferencia: true,
+                regional: true
+            }
+        });
+
+        console.log(`📋 Times cadastrados: ${times.length}`);
+        console.log(`🗺️  Distribuição configurada: ${distribuicao.length}`);
+
+        // ✅ 6. CRIAR MAPA DE TIMES POR NOME
+        const mapaTimes = new Map<string, any>();
+        times.forEach(time => {
+            // Múltiplas variações do nome para busca flexível
+            const nomeNormalizado = time.nome.toLowerCase().trim();
+            mapaTimes.set(nomeNormalizado, time);
+            mapaTimes.set(time.sigla.toLowerCase().trim(), time);
+        });
+
+        // ✅ 7. CRIAR MAPA DE DISTRIBUIÇÃO
+        const mapaDistribuicao = new Map<number, any>();
+        distribuicao.forEach(dist => {
+            mapaDistribuicao.set(dist.timeId, {
+                conferencia: dist.conferenciaType,
+                regional: dist.regionalType,
+                conferenciaObj: dist.conferencia,
+                regionalObj: dist.regional
+            });
+        });
+
+        // ✅ 8. PROCESSAR JOGOS
+        const resultados = {
+            sucesso: 0,
+            erros: [] as any[],
+            warnings: [] as any[]
+        };
+
+        for (let i = 0; i < jogosRaw.length; i++) {
+            const jogoData = jogosRaw[i];
+            const linha = i + 2; // +2 porque linha 1 é header e array começa em 0
+
             try {
-                // Buscar times por nome
-                const timeMandante = await prisma.time.findFirst({
-                    where: {
-                        nome: jogoData.time_mandante,
-                        temporada: temporada
-                    }
-                })
+                // Buscar time mandante
+                const nomeTimeMandante = jogoData.time_mandante?.toString().toLowerCase().trim();
+                const timeMandante = mapaTimes.get(nomeTimeMandante);
 
-                const timeVisitante = await prisma.time.findFirst({
-                    where: {
-                        nome: jogoData.time_visitante,
-                        temporada: temporada
-                    }
-                })
-
-                if (!timeMandante || !timeVisitante) {
+                if (!timeMandante) {
                     resultados.erros.push({
+                        linha,
                         jogo: `${jogoData.time_mandante} vs ${jogoData.time_visitante}`,
-                        erro: 'Um ou ambos os times não foram encontrados'
-                    })
-                    continue
+                        erro: `Time mandante "${jogoData.time_mandante}" não encontrado`
+                    });
+                    continue;
                 }
 
-                // Criar o jogo
-                await prisma.jogo.create({
+                // Buscar time visitante
+                const nomeTimeVisitante = jogoData.time_visitante?.toString().toLowerCase().trim();
+                const timeVisitante = mapaTimes.get(nomeTimeVisitante);
+
+                if (!timeVisitante) {
+                    resultados.erros.push({
+                        linha,
+                        jogo: `${jogoData.time_mandante} vs ${jogoData.time_visitante}`,
+                        erro: `Time visitante "${jogoData.time_visitante}" não encontrado`
+                    });
+                    continue;
+                }
+
+                // Validar data
+                let dataJogo: Date;
+                try {
+                    const dataRaw = jogoData.data;
+
+                    // Se a data é um número (formato serial do Excel)
+                    if (typeof dataRaw === 'number' || !isNaN(Number(dataRaw))) {
+                        // Converter número serial do Excel para data
+                        // Excel conta dias desde 1/1/1900 (com bug: trata 1900 como bissexto)
+                        const serialNumber = Number(dataRaw);
+                        const excelEpoch = new Date(1900, 0, 1); // 1 de janeiro de 1900
+                        dataJogo = new Date(excelEpoch.getTime() + (serialNumber - 2) * 24 * 60 * 60 * 1000);
+                    }
+                    // Se a data é uma string
+                    else if (typeof dataRaw === 'string') {
+                        dataJogo = new Date(dataRaw);
+                    }
+                    // Se já é um objeto Date
+                    else if (dataRaw instanceof Date) {
+                        dataJogo = dataRaw;
+                    }
+                    // Formato não reconhecido
+                    else {
+                        throw new Error(`Formato de data não reconhecido: ${dataRaw}`);
+                    }
+
+                    // Validar se a data é válida
+                    if (isNaN(dataJogo.getTime())) {
+                        throw new Error(`Data inválida: ${dataRaw}`);
+                    }
+
+                    // Validar se a data está em um range razoável (entre 2020 e 2030)
+                    const year = dataJogo.getFullYear();
+                    if (year < 2020 || year > 2030) {
+                        throw new Error(`Data fora do range válido (2020-2030): ${dataJogo.toISOString()}`);
+                    }
+
+                } catch (error) {
+                    resultados.erros.push({
+                        linha,
+                        jogo: `${jogoData.time_mandante} vs ${jogoData.time_visitante}`,
+                        erro: `Erro de data: ${error instanceof Error ? error.message : 'Data inválida'} (valor original: ${jogoData.data})`
+                    });
+                    continue;
+                }
+
+                // Buscar informações de distribuição
+                const distMandante = mapaDistribuicao.get(timeMandante.id);
+                const distVisitante = mapaDistribuicao.get(timeVisitante.id);
+
+                // ✅ 9. DETERMINAR CONFERÊNCIA E REGIONAL DO JOGO
+                let conferenciaJogo = jogoData.conferencia || null;
+                let regionalJogo = jogoData.regional || null;
+
+                // Se não especificado na planilha, usar do time mandante
+                if (!conferenciaJogo && distMandante) {
+                    conferenciaJogo = distMandante.conferencia;
+                }
+                if (!regionalJogo && distMandante) {
+                    regionalJogo = distMandante.regional;
+                }
+
+                // ✅ 10. CRIAR JOGO NO BANCO
+                const novoJogo = await prisma.jogo.create({
                     data: {
                         campeonatoId: superliga.id,
                         timeCasaId: timeMandante.id,
                         timeVisitanteId: timeVisitante.id,
-                        dataJogo: new Date(jogoData.data),
-                        rodada: parseInt(jogoData.rodada) || 1,
+                        dataJogo: dataJogo,
+                        rodada: parseInt(jogoData.rodada?.toString()) || 1,
                         fase: jogoData.fase || 'TEMPORADA_REGULAR',
                         status: 'AGENDADO',
-                        local: timeMandante.estadio || `Estádio ${timeMandante.cidade}`
-                    }
-                })
+                        local: jogoData.local || timeMandante.estadio || `Estádio ${timeMandante.cidade}`,
+                        observacoes: jogoData.observacoes || null,
 
-                resultados.sucesso++
+                        // ✅ NOVOS CAMPOS DA FASE 1
+                        conferencia: conferenciaJogo,
+                        regional: regionalJogo,
+                        temporada: temporada
+                    }
+                });
+
+                resultados.sucesso++;
+
+                console.log(`✅ Jogo ${resultados.sucesso}: ${timeMandante.sigla} vs ${timeVisitante.sigla} - Rodada ${novoJogo.rodada}`);
+
             } catch (error) {
                 resultados.erros.push({
+                    linha,
                     jogo: `${jogoData.time_mandante} vs ${jogoData.time_visitante}`,
                     erro: error instanceof Error ? error.message : 'Erro desconhecido'
-                })
+                });
             }
         }
 
+        // ✅ 11. LIMPAR ARQUIVO
         fs.unlinkSync(req.file.path);
 
+        // ✅ 12. RESPOSTA FINAL
+        console.log(`🎉 Importação concluída: ${resultados.sucesso} jogos criados`);
+
+        // ✅ 12. DEBUG TEMPORÁRIO - ADICIONAR ANTES DA RESPOSTA FINAL
+        console.log('\n' + '='.repeat(80));
+        console.log('🔍 DEBUG DETALHADO DA IMPORTAÇÃO');
+        console.log('='.repeat(80));
+
+        console.log(`📊 RESUMO GERAL:`);
+        console.log(`   📥 Total de jogos na planilha: ${jogosRaw.length}`);
+        console.log(`   ✅ Jogos criados com sucesso: ${resultados.sucesso}`);
+        console.log(`   ❌ Jogos com erro: ${resultados.erros.length}`);
+        console.log(`   ⚠️  Warnings: ${resultados.warnings.length}`);
+
+        if (resultados.erros.length > 0) {
+            console.log(`\n❌ PRIMEIROS 10 ERROS:`);
+            resultados.erros.slice(0, 10).forEach((erro, index) => {
+                console.log(`   ${index + 1}. Linha ${erro.linha}: ${erro.erro}`);
+                console.log(`      Jogo: ${erro.jogo}`);
+            });
+        }
+
+        console.log(`\n📋 TIMES CADASTRADOS NO SISTEMA (primeiros 15):`);
+        times.slice(0, 15).forEach(time => {
+            console.log(`   - "${time.nome}" (Sigla: "${time.sigla}", ID: ${time.id})`);
+        });
+
+        console.log(`\n📑 PRIMEIROS 5 JOGOS DA PLANILHA:`);
+        jogosRaw.slice(0, 5).forEach((jogo, index) => {
+            console.log(`   ${index + 1}. "${jogo.time_mandante}" vs "${jogo.time_visitante}"`);
+            console.log(`      Data: ${jogo.data}, Rodada: ${jogo.rodada}`);
+            console.log(`      Temporada: ${jogo.temporada || 'não informada'}`);
+        });
+
+        console.log(`\n🗺️  DISTRIBUIÇÃO CONFIGURADA:`);
+        const amostraDistribuicao = distribuicao.slice(0, 5);
+        amostraDistribuicao.forEach(dist => {
+            console.log(`   - ${dist.time.nome} -> ${dist.conferencia.nome} / ${dist.regional.nome}`);
+        });
+
+        console.log(`\n🔍 TESTE DE BUSCA DE TIMES (primeiros 3 jogos):`);
+        for (let i = 0; i < Math.min(3, jogosRaw.length); i++) {
+            const jogo = jogosRaw[i];
+
+            console.log(`\n   JOGO ${i + 1}: ${jogo.time_mandante} vs ${jogo.time_visitante}`);
+
+            // Teste busca mandante
+            const nomeMandate = jogo.time_mandante?.toString().toLowerCase().trim();
+            const mandanteEncontrado = mapaTimes.get(nomeMandate);
+            console.log(`      Mandante "${jogo.time_mandante}" -> normalizado: "${nomeMandate}"`);
+            console.log(`      Encontrado: ${mandanteEncontrado ? `✅ ${mandanteEncontrado.nome}` : '❌ NÃO'}`);
+
+            // Teste busca visitante
+            const nomeVisitante = jogo.time_visitante?.toString().toLowerCase().trim();
+            const visitanteEncontrado = mapaTimes.get(nomeVisitante);
+            console.log(`      Visitante "${jogo.time_visitante}" -> normalizado: "${nomeVisitante}"`);
+            console.log(`      Encontrado: ${visitanteEncontrado ? `✅ ${visitanteEncontrado.nome}` : '❌ NÃO'}`);
+        }
+
+        console.log(`\n🔤 MAPA DE TIMES (primeiras 10 chaves):`);
+        const chavesMapaTimes = Array.from(mapaTimes.keys()).slice(0, 10);
+        chavesMapaTimes.forEach(chave => {
+            const time = mapaTimes.get(chave);
+            console.log(`   "${chave}" -> ${time?.nome}`);
+        });
+
+        console.log(`\n📈 ANÁLISE DE PROBLEMAS COMUNS:`);
+
+        // Verificar se há times com nomes similares
+        const timesNaoPlanilha = jogosRaw.slice(0, 5).map(j => [j.time_mandante, j.time_visitante]).flat();
+        const timesSistema = times.map(t => t.nome);
+
+        console.log(`   🔍 Buscando correspondências aproximadas:`);
+        timesNaoPlanilha.forEach(timePlanilha => {
+            const nomeNormalizado = timePlanilha?.toString().toLowerCase().trim();
+            if (!mapaTimes.has(nomeNormalizado)) {
+                console.log(`      "${timePlanilha}" não encontrado. Possíveis correspondências:`);
+
+                const palavras = nomeNormalizado.split(' ').filter(p => p.length > 2);
+                const possiveis = timesSistema.filter(timeSistema => {
+                    const nomeSistemaNorm = timeSistema.toLowerCase();
+                    return palavras.some(palavra => nomeSistemaNorm.includes(palavra));
+                });
+
+                if (possiveis.length > 0) {
+                    possiveis.slice(0, 3).forEach(possivel => {
+                        console.log(`         - "${possivel}"`);
+                    });
+                } else {
+                    console.log(`         - Nenhuma correspondência encontrada`);
+                }
+            }
+        });
+
+        console.log('='.repeat(80));
+        console.log('🔍 FIM DO DEBUG - VERIFIQUE AS INFORMAÇÕES ACIMA');
+        console.log('='.repeat(80) + '\n');
+
+        // ✅ 13. RESPOSTA FINAL (após o debug)
+
         res.status(200).json({
-            mensagem: `Processamento concluído: ${resultados.sucesso} jogos importados com sucesso`,
+            mensagem: `Importação concluída: ${resultados.sucesso} jogos criados com sucesso`,
             sucesso: resultados.sucesso,
-            erros: resultados.erros.length > 0 ? resultados.erros : null
+            total: jogosRaw.length,
+            erros: resultados.erros.length > 0 ? resultados.erros : null,
+            warnings: resultados.warnings.length > 0 ? resultados.warnings : null,
+            resumo: {
+                totalProcessado: jogosRaw.length,
+                totalSucesso: resultados.sucesso,
+                totalErros: resultados.erros.length,
+                percentualSucesso: ((resultados.sucesso / jogosRaw.length) * 100).toFixed(1)
+            }
         });
 
     } catch (error) {
-        console.error('Erro ao processar planilha de agenda:', error);
+        console.error('❌ Erro ao processar planilha de agenda:', error);
 
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path);
@@ -1944,61 +2199,61 @@ adminRouter.get('/jogos/stats/:temporada', async (req, res) => {
 })
 
 adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (req, res) => {
-  try {
-    if (!req.file) {
-      res.status(400).json({ error: 'Nenhum arquivo enviado' })
-      return
-    }
-
-    const workbook = xlsx.readFile(req.file.path)
-    const sheetName = workbook.SheetNames[0]
-    const resultadosSheet = workbook.Sheets[sheetName]
-    const resultadosRaw = xlsx.utils.sheet_to_json(resultadosSheet) as any[]
-
-    const resultados = { sucesso: 0, erros: [] as any[] }
-
-    for (const resultado of resultadosRaw) {
-      try {
-        const jogo = await prisma.jogo.findUnique({
-          where: { id: parseInt(resultado.id_jogo) }
-        })
-
-        if (!jogo) {
-          resultados.erros.push({
-            linha: resultado.id_jogo,
-            erro: 'Jogo não encontrado'
-          })
-          continue
+    try {
+        if (!req.file) {
+            res.status(400).json({ error: 'Nenhum arquivo enviado' })
+            return
         }
 
-        await prisma.jogo.update({
-          where: { id: jogo.id },
-          data: {
-            placarCasa: parseInt(resultado.placar_mandante) || 0,
-            placarVisitante: parseInt(resultado.placar_visitante) || 0,
-            status: 'FINALIZADO'
-          }
+        const workbook = xlsx.readFile(req.file.path)
+        const sheetName = workbook.SheetNames[0]
+        const resultadosSheet = workbook.Sheets[sheetName]
+        const resultadosRaw = xlsx.utils.sheet_to_json(resultadosSheet) as any[]
+
+        const resultados = { sucesso: 0, erros: [] as any[] }
+
+        for (const resultado of resultadosRaw) {
+            try {
+                const jogo = await prisma.jogo.findUnique({
+                    where: { id: parseInt(resultado.id_jogo) }
+                })
+
+                if (!jogo) {
+                    resultados.erros.push({
+                        linha: resultado.id_jogo,
+                        erro: 'Jogo não encontrado'
+                    })
+                    continue
+                }
+
+                await prisma.jogo.update({
+                    where: { id: jogo.id },
+                    data: {
+                        placarCasa: parseInt(resultado.placar_mandante) || 0,
+                        placarVisitante: parseInt(resultado.placar_visitante) || 0,
+                        status: 'FINALIZADO'
+                    }
+                })
+
+                resultados.sucesso++
+            } catch (error) {
+                resultados.erros.push({
+                    linha: resultado.id_jogo,
+                    erro: error instanceof Error ? error.message : 'Erro desconhecido'
+                })
+            }
+        }
+
+        fs.unlinkSync(req.file.path)
+        res.json({
+            mensagem: `${resultados.sucesso} resultados importados`,
+            erros: resultados.erros.length > 0 ? resultados.erros : null
         })
 
-        resultados.sucesso++
-      } catch (error) {
-        resultados.erros.push({
-          linha: resultado.id_jogo,
-          erro: error instanceof Error ? error.message : 'Erro desconhecido'
-        })
-      }
+    } catch (error) {
+        if (req.file && fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path)
+        }
+        res.status(500).json({ error: 'Erro ao processar resultados' })
     }
-
-    fs.unlinkSync(req.file.path)
-    res.json({
-      mensagem: `${resultados.sucesso} resultados importados`,
-      erros: resultados.erros.length > 0 ? resultados.erros : null
-    })
-
-  } catch (error) {
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path)
-    }
-    res.status(500).json({ error: 'Erro ao processar resultados' })
-  }
 })

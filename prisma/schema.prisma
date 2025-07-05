@@ -29,6 +29,9 @@ model Time {
   temporada       String
   jogadores       JogadorTime[]
 
+  // ✅ NOVOS RELACIONAMENTOS PARA DISTRIBUIÇÃO
+  distribuicaoRegional DistribuicaoTime[] // Novo relacionamento
+
   playoffClassificado1 PlayoffJogo[] @relation("PlayoffTime1")
   playoffClassificado2 PlayoffJogo[] @relation("PlayoffTime2")
   playoffVitorias      PlayoffJogo[] @relation("PlayoffVencedor")
@@ -110,6 +113,9 @@ model Campeonato {
   jogos        Jogo[]
   conferencias Conferencia[]
   PlayoffJogo  PlayoffJogo[]
+  
+  // ✅ NOVO RELACIONAMENTO PARA DISTRIBUIÇÃO
+  distribuicoesTimes DistribuicaoTime[]
 
   @@index([temporada])
   @@index([status])
@@ -127,6 +133,9 @@ model Conferencia {
   campeonato   Campeonato    @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
   regionais    Regional[]
   playoffJogos PlayoffJogo[]
+  
+  // ✅ NOVO RELACIONAMENTO PARA DISTRIBUIÇÃO
+  distribuicoesTimes DistribuicaoTime[]
 
   @@unique([campeonatoId, tipo])
   @@index([campeonatoId])
@@ -141,11 +150,44 @@ model Regional {
   timesPorRegional Int
 
   conferencia Conferencia @relation(fields: [conferenciaId], references: [id], onDelete: Cascade)
+  
+  // ✅ NOVO RELACIONAMENTO PARA DISTRIBUIÇÃO
+  distribuicoesTimes DistribuicaoTime[]
 
   @@unique([conferenciaId, tipo])
   @@index([conferenciaId])
 }
 
+// ✅ NOVA TABELA PARA DISTRIBUIÇÃO DE TIMES
+model DistribuicaoTime {
+  id           Int @id @default(autoincrement())
+  campeonatoId Int
+  conferenciaId Int
+  regionalId   Int
+  timeId       Int
+  temporada    String
+  
+  // Campos para facilitar consultas
+  conferenciaType String // SUDESTE, SUL, NORDESTE, CENTRO_NORTE
+  regionalType    String // SERRAMAR, CANASTRA, etc.
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  campeonato  Campeonato  @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  conferencia Conferencia @relation(fields: [conferenciaId], references: [id], onDelete: Cascade)
+  regional    Regional    @relation(fields: [regionalId], references: [id], onDelete: Cascade)
+  time        Time        @relation(fields: [timeId], references: [id], onDelete: Cascade)
+
+  // ✅ ÍNDICES PARA PERFORMANCE
+  @@unique([campeonatoId, timeId, temporada]) // Um time por campeonato/temporada
+  @@index([campeonatoId, temporada])
+  @@index([conferenciaId])
+  @@index([regionalId])
+  @@index([timeId])
+  @@index([temporada])
+}
 
 model PlayoffJogo {
   id            Int    @id @default(autoincrement())
@@ -199,6 +241,15 @@ model Jogo {
   placarVisitante         Int?
   observacoes             String?
   estatisticasProcessadas Boolean  @default(false)
+  
+  // ✅ NOVOS CAMPOS PARA MELHOR CONTROLE
+  conferencia             String?  // Para facilitar consultas
+  regional                String?  // Para facilitar consultas
+  temporada               String?  // Campo redundante mas útil para consultas rápidas
+  
+  // ✅ CAMPOS DE AUDITORIA
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
   campeonato    Campeonato        @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
   timeCasa      Time              @relation("JogosCasa", fields: [timeCasaId], references: [id])
@@ -210,6 +261,10 @@ model Jogo {
   @@index([status])
   @@index([timeCasaId])
   @@index([timeVisitanteId])
+  @@index([conferencia]) // ✅ NOVO ÍNDICE
+  @@index([regional])    // ✅ NOVO ÍNDICE
+  @@index([temporada])   // ✅ NOVO ÍNDICE
+  @@index([fase])        // ✅ NOVO ÍNDICE
 }
 
 model EstatisticaJogo {
@@ -218,6 +273,15 @@ model EstatisticaJogo {
   jogadorId    Int
   timeId       Int
   estatisticas Json
+  
+  // ✅ NOVOS CAMPOS PARA MELHOR CONTROLE
+  temporada    String?  // Para facilitar consultas
+  rodada       Int?     // Para facilitar relatórios
+  fase         String?  // Para separar temporada regular de playoffs
+  
+  // ✅ CAMPOS DE AUDITORIA
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   jogo    Jogo    @relation(fields: [jogoId], references: [id], onDelete: Cascade)
   jogador Jogador @relation(fields: [jogadorId], references: [id], onDelete: Cascade)
@@ -226,6 +290,8 @@ model EstatisticaJogo {
   @@unique([jogoId, jogadorId])
   @@index([jogoId])
   @@index([jogadorId])
+  @@index([timeId])      // ✅ NOVO ÍNDICE
+  @@index([temporada])   // ✅ NOVO ÍNDICE
+  @@index([rodada])      // ✅ NOVO ÍNDICE
+  @@index([fase])        // ✅ NOVO ÍNDICE
 }
-
-

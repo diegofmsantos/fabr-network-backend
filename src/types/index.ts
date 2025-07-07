@@ -1029,18 +1029,6 @@ export interface TimeChange {
   alteracoes: Record<string, any>
 }
 
-export interface TimeClassificado {
-    timeId: number
-    time: any
-    vitorias: number
-    derrotas: number
-    pontosPro: number
-    pontosContra: number
-    saldo: number
-    regionalTipo: string
-    posicaoRegional: number
-}
-
 export interface TransferenciaTemporada {
   jogadorId: number
   timeOrigemId: number

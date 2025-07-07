@@ -2457,8 +2457,8 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                         } else {
                             // Outras conferências: com wild cards
                             const regionaisTipos = conferencia.regionais.map(r => r.tipo)
-                            const primeirosColocados: TimeClassificado[] = []
-                            const segundosColocados: TimeClassificado[] = []
+                            const primeirosColocados = []
+                            const segundosColocados = []
 
                             regionaisTipos.forEach(regionalTipo => {
                                 const classificacao = classificacaoPorRegional.get(regionalTipo) || []

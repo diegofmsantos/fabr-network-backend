@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import xlsx from 'xlsx'
 import multer from 'multer'
-import { TimeClassificado } from '../types';
+import { TimeClassificado, TimeClassificadoSuperliga } from '../types';
 
 const prisma = new PrismaClient()
 
@@ -36,7 +36,7 @@ const upload = multer({
             cb(null, false);
         }
     },
-    limits: { fileSize: 5 * 1024 * 1024 }
+    limits: { fileSize: 100 * 1024 * 1024 }
 });
 
 adminRouter.get('/transferencias-json', (req: Request, res: Response) => {
@@ -422,7 +422,7 @@ adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) =
 
         const times = timesRaw.map(time => ({
             ...time,
-            temporada: time.temporada ? String(time.temporada) : '2024'
+            temporada: time.temporada ? String(time.temporada) : '2025'
         }));
 
         const resultados = {
@@ -579,7 +579,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, re
                 const time = await prisma.time.findFirst({
                     where: {
                         nome: jogador.time_nome,
-                        temporada: jogador.temporada || '2024'
+                        temporada: jogador.temporada || '2025'
                     }
                 });
 
@@ -647,7 +647,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, re
                         times: {
                             some: {
                                 timeId: time.id,
-                                temporada: jogador.temporada || '2024'
+                                temporada: jogador.temporada || '2025'
                             }
                         }
                     },
@@ -655,7 +655,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, re
                         times: {
                             where: {
                                 timeId: time.id,
-                                temporada: jogador.temporada || '2024'
+                                temporada: jogador.temporada || '2025'
                             }
                         }
                     }
@@ -694,7 +694,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, re
                         data: {
                             jogadorId: novoJogador.id,
                             timeId: time.id,
-                            temporada: jogador.temporada || '2024',
+                            temporada: jogador.temporada || '2025',
                             numero: Number(jogador.numero || 0),
                             camisa: jogador.camisa || '',
                             estatisticas: estatisticas
@@ -1148,7 +1148,7 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                     continue;
                 }
 
-                const temporada = String(stat.temporada || '2024');
+                const temporada = String(stat.temporada || '2025');
 
                 let jogador;
                 let jogadorTime;
@@ -1567,7 +1567,7 @@ adminRouter.post('/reprocessar-jogo', upload.single('arquivo'), async (req, res)
                         continue;
                     }
 
-                    const temporada = String(stat.temporada || '2024');
+                    const temporada = String(stat.temporada || '2025');
 
                     let jogador;
                     if (stat.jogador_id) {
@@ -2244,7 +2244,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
 
                 resultados.sucesso++
                 console.log(`✅ Jogo ${jogo.id} atualizado: ${resultado.placar_mandante} x ${resultado.placar_visitante}`)
-                
+
             } catch (error) {
                 resultados.erros.push({
                     linha: resultado.id_jogo,
@@ -2258,7 +2258,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
 
         // ✅ 3. LÓGICA AUTOMÁTICA DE GERAÇÃO DE PLAYOFFS
         console.log('\n🔍 Verificando se deve gerar playoffs automaticamente...')
-        
+
         // Buscar superliga
         const superliga = await prisma.campeonato.findFirst({
             where: {
@@ -2310,7 +2310,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
 
             if (playoffsExistentes === 0) {
                 console.log('🏆 TODOS OS JOGOS FINALIZADOS! Gerando playoffs automaticamente...')
-                
+
                 try {
                     // ✅ 5. CALCULAR CLASSIFICAÇÃO
                     const distribuicao = await prisma.distribuicaoTime.findMany({
@@ -2348,7 +2348,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                         const classificacao = []
 
                         for (const dist of timesRegional) {
-                            const jogosTime = jogos.filter(j => 
+                            const jogosTime = jogos.filter(j =>
                                 j.timeCasaId === dist.timeId || j.timeVisitanteId === dist.timeId
                             )
 
@@ -2457,8 +2457,8 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                         } else {
                             // Outras conferências: com wild cards
                             const regionaisTipos = conferencia.regionais.map(r => r.tipo)
-                            const primeirosColocados = []
-                            const segundosColocados = []
+                            const primeirosColocados: TimeClassificado[] = []
+                            const segundosColocados: TimeClassificado[] = []
 
                             regionaisTipos.forEach(regionalTipo => {
                                 const classificacao = classificacaoPorRegional.get(regionalTipo) || []
@@ -2467,7 +2467,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                             })
 
                             // Ordenar primeiros e segundos colocados
-                            const ordenarTimes = (times) => times.sort((a, b) => {
+                            const ordenarTimes = (times: TimeClassificado[]) => times.sort((a, b) => {
                                 if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
                                 if (b.saldo !== a.saldo) return b.saldo - a.saldo
                                 return b.pontosPro - a.pontosPro
@@ -2629,12 +2629,12 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
 
     } catch (error) {
         console.error('❌ Erro ao processar resultados:', error)
-        
+
         if (req.file && fs.existsSync(req.file.path)) {
             fs.unlinkSync(req.file.path)
         }
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             error: 'Erro ao processar resultados',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })

@@ -9,8 +9,14 @@
     "dev": "tsx src/server.ts",
     "build": "tsup src",
     "start": "node dist/server.js",
-    "reset-db": "tsx reset-sequences.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "reset-db": "npx ts-node scripts/reset-sequences.ts",
+    "distribuir": "npx ts-node scripts/distribuir-times.ts", 
+    "validar": "npx ts-node scripts/validar-fase1.ts",
+    "generate:resultados": "npx ts-node scripts/gerar-resultados-fake.ts",
+    "generate:estatisticas": "npx ts-node scripts/gerar-estatisticas-fake.ts",
+    "simulate:fase-nacional": "npx ts-node scripts/simular-fase-nacional.ts",
+    "test:fluxo-completo": "npx ts-node scripts/fluxo-completo-teste.ts"
   },
   "author": "",
   "license": "ISC",

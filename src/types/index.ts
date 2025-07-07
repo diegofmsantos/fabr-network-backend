@@ -1029,6 +1029,27 @@ export interface TimeChange {
   alteracoes: Record<string, any>
 }
 
+export interface TimeClassificado {
+  timeId: number
+  nome: string
+  sigla: string
+  vitorias: number
+  derrotas: number
+  pontos: number
+  pontosPro: number
+  pontosContra: number
+  saldo: number
+  regional: string
+  conferencia: string
+}
+
+export interface ClassificacaoResultado {
+  conferencia: string
+  primeirosColocados: TimeClassificado[]
+  segundosColocados: TimeClassificado[]
+  terceirosColocados: TimeClassificado[]
+}
+
 export interface TransferenciaTemporada {
   jogadorId: number
   timeOrigemId: number
@@ -1886,7 +1907,7 @@ export interface EstatisticaJogoRow {
   temporada?: string;
   rodada?: number;
   fase?: string;
-  
+
   // Todas as estatísticas (como já existem no seu projeto)
   passe_completado?: number;
   passe_tentado?: number;

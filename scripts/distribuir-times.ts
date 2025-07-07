@@ -64,7 +64,7 @@ const DISTRIBUICAO_SUPERLIGA = {
   }
 };
 
-async function popularDistribuicaoInicial() {
+async function distribuirTimes() {
   try {
     console.log('🚀 Iniciando população da distribuição inicial...');
 
@@ -223,7 +223,7 @@ async function popularDistribuicaoInicial() {
 
 // Executar se chamado diretamente
 if (require.main === module) {
-  popularDistribuicaoInicial();
+  distribuirTimes();
 }
 
-export default popularDistribuicaoInicial;
+export default distribuirTimes;

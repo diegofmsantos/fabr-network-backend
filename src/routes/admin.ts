@@ -798,19 +798,36 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
         const temporada = primeiroJogo.temporada || '2025';
         const superliga = await prisma.campeonato.findFirst({
             where: {
-                temporada: temporada,
+                temporada: '2025', // ✅ HARDCODED POR ENQUANTO
                 isSuperliga: true
             }
         });
 
         if (!superliga) {
             res.status(400).json({
-                error: `Superliga ${temporada} não encontrada. Crie a Superliga primeiro.`
+                error: 'Superliga 2025 não encontrada',
+                message: 'Crie a Superliga antes de importar a agenda de jogos'
             });
             return;
         }
 
-        console.log(`✅ Superliga encontrada: ${superliga.nome}`);
+        // ✅ ADICIONAR BUSCA DE DISTRIBUIÇÃO DE TIMES
+        const distribuicaoTimes = await prisma.distribuicaoTime.findMany({
+            where: { campeonatoId: superliga.id },
+            include: {
+                time: true,
+                conferencia: true,
+                regional: true
+            }
+        });
+
+        if (distribuicaoTimes.length === 0) {
+            res.status(400).json({
+                error: 'Times não distribuídos',
+                message: 'Execute o script de distribuição dos times antes de importar a agenda'
+            });
+            return;
+        }
 
         // ✅ 5. BUSCAR TODOS OS TIMES E DISTRIBUIÇÃO
         const times = await prisma.time.findMany({

@@ -764,33 +764,63 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
 
 export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId: number) {
     try {
-        // ✅ CORREÇÃO: calcularClassificacaoPorConferencia só recebe 1 parâmetro
+        console.log('🌵 INICIANDO GERAÇÃO DE PLAYOFFS NORDESTE...')
+
+        // ✅ CORREÇÃO: Melhor validação e debug
         const classificacao = await calcularClassificacaoPorConferencia(campeonatoId);
 
-        // Buscar classificação específica da conferência Nordeste
-        const nordeste = classificacao['NORDESTE'];
+        console.log('📊 Classificação geral recebida:', Object.keys(classificacao))
 
-        if (!nordeste || !nordeste[0] || !nordeste[0].times) {
+        const nordeste = classificacao['NORDESTE'];
+        console.log('🔍 Conferência Nordeste encontrada:', !!nordeste, nordeste?.length || 0)
+
+        if (!nordeste || nordeste.length === 0) {
             throw new Error('Classificação da Conferência Nordeste não encontrada');
         }
 
-        // A conferência Nordeste tem apenas 1 regional (ATLÂNTICO) com 6 times
+        // ✅ CORREÇÃO: A conferência Nordeste tem apenas 1 regional (ATLÂNTICO) com 6 times
         const atlantico = nordeste[0]; // Primeiro (e único) regional
+        console.log('🏖️  Regional Atlântico encontrado:', !!atlantico, atlantico?.regionalType)
+
+        if (!atlantico || !atlantico.times) {
+            throw new Error('Regional Atlântico não encontrado ou sem times');
+        }
+
         const times = atlantico.times;
+        console.log(`⚽ Times no Atlântico: ${times.length}`)
 
         if (times.length < 6) {
             throw new Error(`Regional Atlântico deve ter 6 times, encontrados ${times.length}`);
         }
 
-        // Os times já vêm ordenados da função calcularClassificacaoRegional
-        // Não precisamos ordenar novamente, mas vamos garantir que temos as propriedades certas
+        // ✅ DEBUG: Listar todos os times encontrados
+        console.log('📋 Times classificados no Regional Atlântico:')
+        times.forEach((time, index) => {
+            console.log(`   ${index + 1}º. ${time.time?.nome || 'Nome não encontrado'} (${time.vitorias} vitórias)`)
+        })
 
+        // Os times já vêm ordenados da função calcularClassificacaoRegional
         const primeiro = times[0];
         const segundo = times[1];
         const terceiro = times[2];
         const quarto = times[3];
         const quinto = times[4];
         const sexto = times[5];
+
+        // ✅ VALIDAÇÃO: Verificar se todos os times têm as propriedades necessárias
+        if (!primeiro?.timeId || !segundo?.timeId || !terceiro?.timeId ||
+            !quarto?.timeId || !quinto?.timeId || !sexto?.timeId) {
+            console.error('❌ Times sem timeId válido:')
+            times.forEach((time, i) => {
+                console.error(`   ${i + 1}º: timeId=${time.timeId}, nome=${time.time?.nome}`)
+            })
+            throw new Error('Alguns times não possuem timeId válido');
+        }
+
+        console.log('🎯 Configurando playoffs Nordeste:')
+        console.log(`   Direto para Semifinal: ${primeiro.time?.nome} e ${segundo.time?.nome}`)
+        console.log(`   Wild Card 1: ${terceiro.time?.nome} vs ${sexto.time?.nome}`)
+        console.log(`   Wild Card 2: ${quarto.time?.nome} vs ${quinto.time?.nome}`)
 
         // Wild Cards: 3º vs 6º e 4º vs 5º
         const wildCard1 = await prisma.playoffJogo.create({
@@ -821,16 +851,17 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             }
         });
 
-        // Semifinais: 1º vs Vencedor WC1, 2º vs Vencedor WC2
+        // Semifinais: 1º vs Vencedor WC mais próximo, 2º vs Vencedor WC mais próximo
         const semifinal1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
                 conferenciaId,
                 fase: 'SEMIFINAL_CONFERENCIA',
-                rodada: 1,
+                rodada: 2,
                 nome: 'Semifinal Nordeste 1',
                 timeClassificado1Id: primeiro.timeId,
-                jogoAnterior1Id: wildCard1.id, // Vencedor do WC1
+                timeClassificado2Id: null, // Será preenchido após wild card
+                jogoAnterior2Id: wildCard1.id, // Vencedor do Wild Card 1
                 dataJogo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
                 status: 'AGUARDANDO'
             }
@@ -841,29 +872,37 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
                 campeonatoId,
                 conferenciaId,
                 fase: 'SEMIFINAL_CONFERENCIA',
-                rodada: 1,
+                rodada: 2,
                 nome: 'Semifinal Nordeste 2',
                 timeClassificado1Id: segundo.timeId,
-                jogoAnterior2Id: wildCard2.id, // Vencedor do WC2
+                timeClassificado2Id: null, // Será preenchido após wild card
+                jogoAnterior2Id: wildCard2.id, // Vencedor do Wild Card 2
                 dataJogo: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
                 status: 'AGUARDANDO'
             }
         });
 
-        // Final da Conferência
+        // Final de Conferência
         const final = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
                 conferenciaId,
                 fase: 'FINAL_CONFERENCIA',
-                rodada: 1,
+                rodada: 3,
                 nome: 'Final Conferência Nordeste',
+                timeClassificado1Id: null,
+                timeClassificado2Id: null,
                 jogoAnterior1Id: semifinal1.id,
                 jogoAnterior2Id: semifinal2.id,
                 dataJogo: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000),
                 status: 'AGUARDANDO'
             }
         });
+
+        console.log('✅ Playoffs Nordeste gerados com sucesso!')
+        console.log(`   Wild Cards: ${wildCard1.id}, ${wildCard2.id}`)
+        console.log(`   Semifinais: ${semifinal1.id}, ${semifinal2.id}`)
+        console.log(`   Final: ${final.id}`)
 
         return {
             wildcards: [wildCard1, wildCard2],
@@ -876,7 +915,7 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
         };
 
     } catch (error) {
-        console.error('Erro ao gerar playoffs Nordeste:', error);
+        console.error('❌ Erro ao gerar playoffs Nordeste:', error);
         throw error;
     }
 }

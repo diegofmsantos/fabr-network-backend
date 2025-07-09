@@ -140,7 +140,7 @@ async function validarConferencias(campeonatoId: number, conferencias: any[]) {
         erros.push(`Esperadas 4 conferências, encontradas ${conferencias.length}`)
     }
 
-    const tiposEsperados: TipoConferencia[] = ['SUDESTE', 'SUL', 'NORDESTE', 'CENTRO_NORTE']
+    const tiposEsperados: TipoConferencia[] = ['SUDESTE', 'SUL', 'NORDESTE', 'CENTRO NORTE']
     const tiposEncontrados = conferencias.map(c => c.tipo)
 
     for (const tipo of tiposEsperados) {
@@ -258,8 +258,8 @@ async function validarJogos(campeonatoId: number) {
     if (jogos.length === 0) {
         avisos.push('Nenhum jogo encontrado - temporada regular ainda não foi gerada')
     } else {
-        const jogosTemporadaRegular = jogos.filter(j => j.fase === 'TEMPORADA_REGULAR')
-        const jogosPlayoffs = jogos.filter(j => j.fase !== 'TEMPORADA_REGULAR')
+        const jogosTemporadaRegular = jogos.filter(j => j.fase === 'TEMPORADA REGULAR')
+        const jogosPlayoffs = jogos.filter(j => j.fase !== 'TEMPORADA REGULAR')
 
         if (jogosTemporadaRegular.length > 0) {
             avisos.push(`${jogosTemporadaRegular.length} jogos da temporada regular encontrados`)

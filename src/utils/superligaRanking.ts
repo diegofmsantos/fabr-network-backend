@@ -294,7 +294,7 @@ export async function gerarFinalNacional(campeonatoId: number) {
     const finaisConferencia = await prisma.playoffJogo.findMany({
       where: {
         campeonatoId,
-        fase: 'FINAL_CONFERENCIA',
+        fase: 'FINAL CONFERENCIA',
         status: 'FINALIZADO',
         timeVencedorId: { not: null }
       },
@@ -311,7 +311,7 @@ export async function gerarFinalNacional(campeonatoId: number) {
     const semifinaisExistentes = await prisma.playoffJogo.findMany({
       where: {
         campeonatoId,
-        fase: 'SEMIFINAL_NACIONAL'
+        fase: 'SEMIFINAL NACIONAL'
       }
     })
 
@@ -328,7 +328,7 @@ export async function gerarFinalNacional(campeonatoId: number) {
     const campeaoSudeste = campeoes.find(c => c.conferencia === 'SUDESTE')
     const campeaoSul = campeoes.find(c => c.conferencia === 'SUL')
     const campeaoNordeste = campeoes.find(c => c.conferencia === 'NORDESTE')
-    const campeaoCentroNorte = campeoes.find(c => c.conferencia === 'CENTRO_NORTE')
+    const campeaoCentroNorte = campeoes.find(c => c.conferencia === 'CENTRO NORTE')
 
     if (!campeaoSudeste || !campeaoSul || !campeaoNordeste || !campeaoCentroNorte) {
       throw new Error('Nem todos os campeões de conferência foram encontrados')
@@ -345,7 +345,7 @@ export async function gerarFinalNacional(campeonatoId: number) {
     const semifinal1 = await prisma.playoffJogo.create({
       data: {
         campeonatoId,
-        fase: 'SEMIFINAL_NACIONAL',
+        fase: 'SEMIFINAL NACIONAL',
         rodada: 1,
         nome: 'Semifinal Nacional 1',
         timeClassificado1Id: campeaoSul.timeId,
@@ -358,7 +358,7 @@ export async function gerarFinalNacional(campeonatoId: number) {
     const semifinal2 = await prisma.playoffJogo.create({
       data: {
         campeonatoId,
-        fase: 'SEMIFINAL_NACIONAL',
+        fase: 'SEMIFINAL NACIONAL',
         rodada: 1,
         nome: 'Semifinal Nacional 2',
         timeClassificado1Id: campeaoNordeste.timeId,
@@ -371,7 +371,7 @@ export async function gerarFinalNacional(campeonatoId: number) {
     const finalNacional = await prisma.playoffJogo.create({
       data: {
         campeonatoId,
-        fase: 'FINAL_NACIONAL',
+        fase: 'FINAL NACIONAL',
         rodada: 1,
         nome: 'Grande Decisão Nacional',
         jogoAnterior1Id: semifinal1.id,

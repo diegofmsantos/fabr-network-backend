@@ -65,7 +65,7 @@ async function gerarResultadosFake(): Promise<void> {
     const jogos = await prisma.jogo.findMany({
       where: {
         campeonatoId: superliga.id,
-        fase: 'TEMPORADA_REGULAR'
+        fase: 'TEMPORADA REGULAR'
       },
       include: {
         timeCasa: true,
@@ -204,7 +204,7 @@ async function aplicarResultadosNoBanco(): Promise<void> {
     const jogos = await prisma.jogo.findMany({
       where: {
         campeonatoId: superliga.id,
-        fase: 'TEMPORADA_REGULAR',
+        fase: 'TEMPORADA REGULAR',
         status: { not: 'FINALIZADO' }
       }
     })
@@ -256,7 +256,7 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
     const jogosTemporada = await prisma.jogo.findMany({
       where: {
         campeonatoId: superliga.id,
-        fase: 'TEMPORADA_REGULAR',
+        fase: 'TEMPORADA REGULAR',
         status: { not: 'FINALIZADO' }
       }
     })
@@ -298,7 +298,7 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
     const wildCards = await prisma.playoffJogo.findMany({
       where: {
         campeonatoId: superliga.id,
-        fase: 'WILD_CARD',
+        fase: 'WILD CARD',
         status: 'AGUARDANDO'
       }
     })
@@ -328,7 +328,7 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
     const semifinais = await prisma.playoffJogo.findMany({
       where: {
         campeonatoId: superliga.id,
-        fase: 'SEMIFINAL_CONFERENCIA',
+        fase: 'SEMIFINAL CONFERENCIA',
         status: 'AGUARDANDO'
       }
     })
@@ -378,7 +378,7 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
     const finais = await prisma.playoffJogo.findMany({
       where: {
         campeonatoId: superliga.id,
-        fase: 'FINAL_CONFERENCIA',
+        fase: 'FINAL CONFERENCIA',
         status: 'AGUARDANDO'
       }
     })
@@ -428,7 +428,7 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
     const faseNacionalExistente = await prisma.playoffJogo.count({
       where: {
         campeonatoId: superliga.id,
-        fase: { in: ['SEMIFINAL_NACIONAL', 'FINAL_NACIONAL'] }
+        fase: { in: ['SEMIFINAL NACIONAL', 'FINAL NACIONAL'] }
       }
     })
 
@@ -437,7 +437,7 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
       const campeoes = await prisma.playoffJogo.findMany({
         where: {
           campeonatoId: superliga.id,
-          fase: 'FINAL_CONFERENCIA',
+          fase: 'FINAL CONFERENCIA',
           status: 'FINALIZADO'
         },
         include: { conferencia: true }
@@ -447,13 +447,13 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
         const sudeste = campeoes.find(c => c.conferencia?.tipo === 'SUDESTE')
         const sul = campeoes.find(c => c.conferencia?.tipo === 'SUL')
         const nordeste = campeoes.find(c => c.conferencia?.tipo === 'NORDESTE')
-        const centroNorte = campeoes.find(c => c.conferencia?.tipo === 'CENTRO_NORTE')
+        const centroNorte = campeoes.find(c => c.conferencia?.tipo === 'CENTRO NORTE')
 
         // Semifinal Nacional 1: Sudeste vs Nordeste
         const sf1 = await prisma.playoffJogo.create({
           data: {
             campeonatoId: superliga.id,
-            fase: 'SEMIFINAL_NACIONAL',
+            fase: 'SEMIFINAL NACIONAL',
             rodada: 1,
             nome: 'Semifinal Nacional 1',
             timeClassificado1Id: sudeste?.timeVencedorId,
@@ -467,7 +467,7 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
         const sf2 = await prisma.playoffJogo.create({
           data: {
             campeonatoId: superliga.id,
-            fase: 'SEMIFINAL_NACIONAL',
+            fase: 'SEMIFINAL NACIONAL',
             rodada: 1,
             nome: 'Semifinal Nacional 2',
             timeClassificado1Id: sul?.timeVencedorId,
@@ -499,7 +499,7 @@ async function aplicarResultadosCompletoNoBanco(): Promise<void> {
         const finalNacional = await prisma.playoffJogo.create({
           data: {
             campeonatoId: superliga.id,
-            fase: 'FINAL_NACIONAL',
+            fase: 'FINAL NACIONAL',
             rodada: 1,
             nome: 'Final Nacional - Brasil Bowl',
             timeClassificado1Id: sf1.timeClassificado1Id, // Será atualizado
@@ -588,7 +588,7 @@ async function gerarTodosPlayoffs(campeonatoId: number) {
         case 'NORDESTE':
           await gerarPlayoffsNordeste(campeonatoId, conf.id)
           break
-        case 'CENTRO_NORTE':
+        case 'CENTRO NORTE':
           await gerarPlayoffsCentroNorte(campeonatoId, conf.id)
           break
       }

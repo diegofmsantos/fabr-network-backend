@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { SUPERLIGA_CONFIG, TIMES_SUPERLIGA } from '../types'
+import { TIMES_SUPERLIGA } from '../types'
 import { calcularClassificacaoPorConferencia } from './distribuicaoUtils'
 
 const prisma = new PrismaClient()
@@ -186,7 +186,7 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'SEMIFINAL_CONFERENCIA',
+                fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Semifinal Centro-Norte 1',
                 timeClassificado1Id: primeiroAmazonia.timeId,
@@ -200,7 +200,7 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'SEMIFINAL_CONFERENCIA',
+                fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Semifinal Centro-Norte 2',
                 timeClassificado1Id: primeiroCerrado.timeId,
@@ -215,7 +215,7 @@ export async function gerarPlayoffsSudeste(campeonatoId: number, conferenciaId: 
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'FINAL_CONFERENCIA',
+                fase: 'FINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Final Conferência Centro-Norte',
                 jogoAnterior1Id: semifinal1.id,
@@ -503,7 +503,7 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'WILD_CARD',
+                fase: 'WILD CARD',
                 rodada: 1,
                 nome: 'Wild Card Sul 1',
                 timeClassificado1Id: segundoAraucaria?.timeId,
@@ -517,7 +517,7 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'WILD_CARD',
+                fase: 'WILD CARD',
                 rodada: 1,
                 nome: 'Wild Card Sul 2',
                 timeClassificado1Id: segundoPampa?.timeId,
@@ -532,7 +532,7 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'SEMIFINAL_CONFERENCIA',
+                fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Semifinal Sul 1',
                 timeClassificado1Id: primeiroAraucaria.timeId,
@@ -546,7 +546,7 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'SEMIFINAL_CONFERENCIA',
+                fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Semifinal Sul 2',
                 timeClassificado1Id: primeiroPampa.timeId,
@@ -561,7 +561,7 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'FINAL_CONFERENCIA',
+                fase: 'FINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Final Conferência Sul',
                 jogoAnterior1Id: semifinal1.id,
@@ -706,7 +706,7 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'SEMIFINAL_CONFERENCIA',
+                fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Semifinal Centro-Norte 1',
                 timeClassificado1Id: primeiroAmazonia.timeId,
@@ -720,7 +720,7 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'SEMIFINAL_CONFERENCIA',
+                fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Semifinal Centro-Norte 2',
                 timeClassificado1Id: primeiroCerrado.timeId,
@@ -735,7 +735,7 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'FINAL_CONFERENCIA',
+                fase: 'FINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Final Conferência Centro-Norte',
                 jogoAnterior1Id: semifinal1.id,
@@ -811,7 +811,7 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'WILD_CARD',
+                fase: 'WILD CARD',
                 rodada: 1,
                 nome: 'Wild Card Nordeste',
                 timeClassificado1Id: quarto.timeId,   // 4º lugar
@@ -827,7 +827,7 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'SEMIFINAL_CONFERENCIA',
+                fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Semifinal Nordeste 1',
                 timeClassificado1Id: primeiro.timeId, // 1º lugar
@@ -844,7 +844,7 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'SEMIFINAL_CONFERENCIA',
+                fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Semifinal Nordeste 2 (Bye)',
                 timeClassificado1Id: segundo.timeId, // 2º lugar
@@ -866,7 +866,7 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             data: {
                 campeonatoId,
                 conferenciaId,
-                fase: 'FINAL_CONFERENCIA',
+                fase: 'FINAL CONFERENCIA',
                 rodada: 1,
                 nome: 'Final Conferência Nordeste',
                 timeClassificado1Id: null,
@@ -921,9 +921,9 @@ export async function obterStatusPlayoffs(campeonatoId: number) {
         for (const conferencia of conferencias) {
             const jogosConferencia = conferencia.playoffJogos
 
-            const wildcards = jogosConferencia.filter(j => j.fase === 'WILD_CARD')
-            const semifinais = jogosConferencia.filter(j => j.fase === 'SEMIFINAL_CONFERENCIA')
-            const final = jogosConferencia.find(j => j.fase === 'FINAL_CONFERENCIA')
+            const wildcards = jogosConferencia.filter(j => j.fase === 'WILD CARD')
+            const semifinais = jogosConferencia.filter(j => j.fase === 'SEMIFINAL CONFERENCIA')
+            const final = jogosConferencia.find(j => j.fase === 'FINAL CONFERENCIA')
 
             status[conferencia.tipo] = {
                 wildcards: {
@@ -948,12 +948,12 @@ export async function obterStatusPlayoffs(campeonatoId: number) {
         const faseNacional = await prisma.playoffJogo.findMany({
             where: {
                 campeonatoId,
-                fase: { in: ['SEMIFINAL_NACIONAL', 'FINAL_NACIONAL'] }
+                fase: { in: ['SEMIFINAL NACIONAL', 'FINAL NACIONAL'] }
             }
         })
 
-        const semifinaisNacionais = faseNacional.filter(j => j.fase === 'SEMIFINAL_NACIONAL')
-        const finalNacional = faseNacional.find(j => j.fase === 'FINAL_NACIONAL')
+        const semifinaisNacionais = faseNacional.filter(j => j.fase === 'SEMIFINAL NACIONAL')
+        const finalNacional = faseNacional.find(j => j.fase === 'FINAL NACIONAL')
 
         status['NACIONAL'] = {
             semifinais: {

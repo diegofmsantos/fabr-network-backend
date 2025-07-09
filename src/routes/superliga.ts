@@ -270,7 +270,7 @@ superligaRouter.post('/:temporada/gerar-jogos-temporada', async (req: Request, r
       const jogosExistentes = await prisma.jogo.count({
         where: {
           campeonatoId: superliga.id,
-          fase: 'TEMPORADA_REGULAR'
+          fase: 'TEMPORADA REGULAR'
         }
       })
 
@@ -319,7 +319,7 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
 
       const status = {
         fase: totalJogos === 0 ? 'CONFIGURACAO' :
-          jogosFinalizados === totalJogos && totalJogos > 0 ? 'PLAYOFFS' : 'TEMPORADA_REGULAR',
+          jogosFinalizados === totalJogos && totalJogos > 0 ? 'PLAYOFFS' : 'TEMPORADA REGULAR',
         totalJogos,
         jogosFinalizados,
         jogosPlayoff,
@@ -568,7 +568,7 @@ superligaRouter.post('/:temporada/gerar-playoffs', async (req: Request, res: Res
           case 'NORDESTE':
             resultado = await gerarPlayoffsNordeste(superliga.id, conferencia.id)
             break
-          case 'CENTRO_NORTE':
+          case 'CENTRO NORTE':
             resultado = await gerarPlayoffsCentroNorte(superliga.id, conferencia.id)
             break
         }
@@ -630,7 +630,7 @@ superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Respo
       const faseNacional = await prisma.playoffJogo.findMany({
         where: {
           campeonatoId: superliga.id,
-          fase: { in: ['SEMIFINAL_NACIONAL', 'FINAL_NACIONAL'] }
+          fase: { in: ['SEMIFINAL NACIONAL', 'FINAL NACIONAL'] }
         },
         include: {
           timeClassificado1: true,
@@ -744,7 +744,7 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
     const jogos = await prisma.jogo.findMany({
       where: {
         campeonatoId: superliga.id,
-        fase: 'TEMPORADA_REGULAR',
+        fase: 'TEMPORADA REGULAR',
         status: 'FINALIZADO'
       },
       include: {

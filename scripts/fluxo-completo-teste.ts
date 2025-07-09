@@ -4,7 +4,6 @@
 import { PrismaClient } from '@prisma/client'
 import { execSync } from 'child_process'
 import * as fs from 'fs'
-import * as path from 'path'
 
 const prisma = new PrismaClient()
 
@@ -113,7 +112,6 @@ const FLUXO_TESTE: FluxoStep[] = [
 
 async function executarFluxoCompleto(): Promise<void> {
   console.log('🎯 FLUXO COMPLETO DE TESTE DA SUPERLIGA 2025\n')
-  console.log('Este script irá guiá-lo através de todo o processo de teste\n')
 
   // Verificar se estamos no diretório correto
   if (!fs.existsSync('package.json')) {
@@ -128,16 +126,6 @@ async function executarFluxoCompleto(): Promise<void> {
     console.log(`      ${step.descricao}`)
   })
 
-  console.log('\n⚠️  IMPORTANTE:')
-  console.log('   - Certifique-se que o backend está rodando (npm run dev)')
-  console.log('   - Certifique-se que o frontend admin está rodando')
-  console.log('   - Tenha as planilhas prontas na pasta raiz do projeto')
-  console.log('   - A correção na rota de importação foi aplicada (para gerar 4/4 conferências)')
-
-  console.log('\n🔧 PRÉ-REQUISITOS:')
-  console.log('   1. Backend: npm run dev (porta 3000)')
-  console.log('   2. Frontend Admin: npm run dev (porta 3001)')
-  console.log('   3. Planilhas: times_tackle_2025.xlsx, jogadores_tackle_2025.xlsx, agenda_jogos.xlsx')
 
   // Aguardar confirmação
   console.log('\n▶️  Pressione ENTER para começar ou Ctrl+C para cancelar')
@@ -203,9 +191,6 @@ async function executarEtapaManual(step: FluxoStep): Promise<void> {
     console.log('   1. Na mesma página, clique na aba "Resultados"')
     console.log('   2. Procure o arquivo gerado: resultados-fake-YYYY-MM-DD.xlsx')
     console.log('   3. Faça upload deste arquivo')
-    console.log('   4. 🎯 CRÍTICO: Deve gerar playoffs para TODAS as 4 conferências!')
-    console.log('   5. 🎯 Verifique na resposta: "4 conferências processadas"')
-    console.log('   6. 🎯 Se aparecer apenas 3/4, a correção não foi aplicada!')
   } else if (step.id === 11) {
     console.log('\n📁 Instruções detalhadas:')
     console.log('   1. Na mesma página, clique na aba "Estatísticas"')
@@ -271,7 +256,7 @@ async function gerarRelatorioFinal(): Promise<void> {
     // Verificar campeão nacional
     const campeao = await prisma.playoffJogo.findFirst({
       where: {
-        fase: 'FINAL_NACIONAL',
+        fase: 'FINAL NACIONAL',
         status: 'FINALIZADO'
       },
       include: {
@@ -286,7 +271,7 @@ async function gerarRelatorioFinal(): Promise<void> {
     // Verificar campeões de conferência
     const campeoesCon = await prisma.playoffJogo.findMany({
       where: {
-        fase: 'FINAL_CONFERENCIA',
+        fase: 'FINAL CONFERENCIA',
         status: 'FINALIZADO'
       },
       include: {
@@ -309,36 +294,10 @@ async function gerarRelatorioFinal(): Promise<void> {
     console.log('\n⚠️  Não foi possível gerar estatísticas finais')
   }
 
-  console.log('\n🌐 LINKS ÚTEIS:')
-  console.log('   📋 Temporada Regular: http://localhost:3000/superliga/2025/temporada-regular')
-  console.log('   🎯 Wild Card: http://localhost:3000/superliga/2025/wild-card')
-  console.log('   🏅 Semifinal Conferência: http://localhost:3000/superliga/2025/semifinal-conferencia')
-  console.log('   🏆 Final Conferência: http://localhost:3000/superliga/2025/final-conferencia')
-  console.log('   🥇 Semifinal Nacional: http://localhost:3000/superliga/2025/semifinal-nacional')
-  console.log('   🏆 Final Nacional: http://localhost:3000/superliga/2025/final-nacional')
-  console.log('   ⚙️  Admin: http://localhost:3001/admin/superliga')
 
   console.log('\n📁 ARQUIVOS GERADOS:')
   console.log('   Verifique a pasta planilhas-geradas/ para todos os arquivos criados')
 
-  console.log('\n🎯 VALIDAÇÕES RECOMENDADAS:')
-  console.log('   1. ✅ Navegue pelas 6 páginas da superliga')
-  console.log('   2. ✅ Verifique se todos os playoffs estão corretos')
-  console.log('   3. ✅ Confira as estatísticas dos jogadores')
-  console.log('   4. ✅ Teste a navegação entre as fases')
-  console.log('   5. ✅ Confirme que todas as 4 conferências têm campeões')
-
-  console.log('\n🔧 SE ALGO DEU ERRADO:')
-  console.log('   1. Execute: npm run validar (validação da estrutura)')
-  console.log('   2. Verifique logs do backend durante importações')
-  console.log('   3. Confirme se a correção da rota foi aplicada')
-
-  console.log('\n✨ Seu sistema está completamente testado e funcional!')
-  console.log('🚀 Pronto para demonstração!')
-  
-  console.log('\n📚 PARA PRÓXIMAS CONVERSAS:')
-  console.log('   Este script documenta o fluxo completo do projeto.')
-  console.log('   Use como referência para explicar a arquitetura.')
 }
 
 // Executar se chamado diretamente

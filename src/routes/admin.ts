@@ -13,14 +13,14 @@ export async function verificarGeracaoAutomaticaPlayoffs(campeonatoId: number) {
         const totalJogosTemporada = await prisma.jogo.count({
             where: {
                 campeonatoId,
-                fase: 'TEMPORADA_REGULAR'
+                fase: 'TEMPORADA REGULAR'
             }
         })
 
         const jogosFinalizados = await prisma.jogo.count({
             where: {
                 campeonatoId,
-                fase: 'TEMPORADA_REGULAR',
+                fase: 'TEMPORADA REGULAR',
                 status: 'FINALIZADO'
             }
         })
@@ -42,7 +42,7 @@ export async function verificarGeracaoAutomaticaPlayoffs(campeonatoId: number) {
                     data: {
                         status: 'PLAYOFFS',
                         configSuperliga: {
-                            faseAtual: 'PLAYOFFS_CONFERENCIA',
+                            faseAtual: 'PLAYOFFS CONFERENCIA',
                             playoffsGeradosEm: new Date().toISOString()
                         } as any
                     }
@@ -1029,7 +1029,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
                         timeVisitanteId: timeVisitante.id,
                         dataJogo: dataJogo,
                         rodada: parseInt(jogoData.rodada?.toString()) || 1,
-                        fase: jogoData.fase || 'TEMPORADA_REGULAR',
+                        fase: jogoData.fase || 'TEMPORADA REGULAR',
                         status: 'AGENDADO',
                         local: jogoData.local || timeMandante.estadio || `Estádio ${timeMandante.cidade}`,
                         observacoes: jogoData.observacoes || null,
@@ -2359,14 +2359,14 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
         const jogosTemporadaRegular = await prisma.jogo.count({
             where: {
                 campeonatoId: superliga.id,
-                fase: 'TEMPORADA_REGULAR'
+                fase: 'TEMPORADA REGULAR'
             }
         })
 
         const jogosFinalizados = await prisma.jogo.count({
             where: {
                 campeonatoId: superliga.id,
-                fase: 'TEMPORADA_REGULAR',
+                fase: 'TEMPORADA REGULAR',
                 status: 'FINALIZADO'
             }
         })
@@ -2397,7 +2397,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                     const jogos = await prisma.jogo.findMany({
                         where: {
                             campeonatoId: superliga.id,
-                            fase: 'TEMPORADA_REGULAR',
+                            fase: 'TEMPORADA REGULAR',
                             status: 'FINALIZADO'
                         }
                     })
@@ -2474,7 +2474,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                     for (const conferencia of superliga.conferencias) {
                         console.log(`\n🏟️  Gerando playoffs ${conferencia.nome}...`)
 
-                        if (conferencia.tipo === 'CENTRO_NORTE') {
+                        if (conferencia.tipo === 'CENTRO NORTE') {
                             // Centro-Norte: direto para semifinal (3 times por regional)
                             const cerrado = classificacaoPorRegional.get('CERRADO') || []
                             const amazonia = classificacaoPorRegional.get('AMAZONIA') || []
@@ -2485,7 +2485,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                                     data: {
                                         campeonatoId: superliga.id,
                                         conferenciaId: conferencia.id,
-                                        fase: 'SEMIFINAL_CONFERENCIA',
+                                        fase: 'SEMIFINAL CONFERENCIA',
                                         rodada: 1,
                                         nome: `Semifinal ${conferencia.nome} 1`,
                                         timeClassificado1Id: cerrado[0]?.timeId,
@@ -2499,7 +2499,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                                     data: {
                                         campeonatoId: superliga.id,
                                         conferenciaId: conferencia.id,
-                                        fase: 'SEMIFINAL_CONFERENCIA',
+                                        fase: 'SEMIFINAL CONFERENCIA',
                                         rodada: 1,
                                         nome: `Semifinal ${conferencia.nome} 2`,
                                         timeClassificado1Id: amazonia[0]?.timeId,
@@ -2513,7 +2513,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                                     data: {
                                         campeonatoId: superliga.id,
                                         conferenciaId: conferencia.id,
-                                        fase: 'FINAL_CONFERENCIA',
+                                        fase: 'FINAL CONFERENCIA',
                                         rodada: 1,
                                         nome: `Final ${conferencia.nome}`,
                                         jogoAnterior1Id: semi1.id,
@@ -2554,7 +2554,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                                     data: {
                                         campeonatoId: superliga.id,
                                         conferenciaId: conferencia.id,
-                                        fase: 'WILD_CARD',
+                                        fase: 'WILD CARD',
                                         rodada: 1,
                                         nome: `Wild Card ${conferencia.nome} 1`,
                                         timeClassificado1Id: primeirosColocados[2]?.timeId || segundosColocados[0]?.timeId,
@@ -2567,7 +2567,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                                     data: {
                                         campeonatoId: superliga.id,
                                         conferenciaId: conferencia.id,
-                                        fase: 'WILD_CARD',
+                                        fase: 'WILD CARD',
                                         rodada: 1,
                                         nome: `Wild Card ${conferencia.nome} 2`,
                                         timeClassificado1Id: segundosColocados[0]?.timeId,
@@ -2581,7 +2581,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                                     data: {
                                         campeonatoId: superliga.id,
                                         conferenciaId: conferencia.id,
-                                        fase: 'SEMIFINAL_CONFERENCIA',
+                                        fase: 'SEMIFINAL CONFERENCIA',
                                         rodada: 1,
                                         nome: `Semifinal ${conferencia.nome} 1`,
                                         timeClassificado1Id: primeirosColocados[0]?.timeId,
@@ -2594,7 +2594,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                                     data: {
                                         campeonatoId: superliga.id,
                                         conferenciaId: conferencia.id,
-                                        fase: 'SEMIFINAL_CONFERENCIA',
+                                        fase: 'SEMIFINAL CONFERENCIA',
                                         rodada: 1,
                                         nome: `Semifinal ${conferencia.nome} 2`,
                                         timeClassificado1Id: primeirosColocados[1]?.timeId,
@@ -2608,7 +2608,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                                     data: {
                                         campeonatoId: superliga.id,
                                         conferenciaId: conferencia.id,
-                                        fase: 'FINAL_CONFERENCIA',
+                                        fase: 'FINAL CONFERENCIA',
                                         rodada: 1,
                                         nome: `Final ${conferencia.nome}`,
                                         jogoAnterior1Id: semi1.id,
@@ -2627,7 +2627,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                     const semifinalNacional1 = await prisma.playoffJogo.create({
                         data: {
                             campeonatoId: superliga.id,
-                            fase: 'SEMIFINAL_NACIONAL',
+                            fase: 'SEMIFINAL NACIONAL',
                             rodada: 1,
                             nome: 'Semifinal Nacional 1',
                             status: 'AGUARDANDO'
@@ -2637,7 +2637,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                     const semifinalNacional2 = await prisma.playoffJogo.create({
                         data: {
                             campeonatoId: superliga.id,
-                            fase: 'SEMIFINAL_NACIONAL',
+                            fase: 'SEMIFINAL NACIONAL',
                             rodada: 1,
                             nome: 'Semifinal Nacional 2',
                             status: 'AGUARDANDO'
@@ -2647,7 +2647,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                     await prisma.playoffJogo.create({
                         data: {
                             campeonatoId: superliga.id,
-                            fase: 'FINAL_NACIONAL',
+                            fase: 'FINAL NACIONAL',
                             rodada: 1,
                             nome: 'Grande Decisão Nacional',
                             jogoAnterior1Id: semifinalNacional1.id,
@@ -2745,7 +2745,7 @@ async function gerarTodosPlayoffs(campeonatoId: number) {
                     totalPlayoffJogos += 4
                     break
 
-                case 'CENTRO_NORTE':
+                case 'CENTRO NORTE':
                     resultado = await gerarPlayoffsCentroNorte(campeonatoId, conf.id)
                     totalPlayoffJogos += 3
                     break
@@ -2889,7 +2889,7 @@ adminRouter.post('/gerar-playoffs-manual/:temporada', async (req: Request, res: 
             data: {
                 status: 'PLAYOFFS',
                 configSuperliga: {
-                    faseAtual: 'PLAYOFFS_CONFERENCIA',
+                    faseAtual: 'PLAYOFFS CONFERENCIA',
                     playoffsGeradosEm: new Date().toISOString(),
                     geradoManualmente: true
                 } as any
@@ -2962,7 +2962,7 @@ adminRouter.post('/simular-temporada/:temporada', async (req: Request, res: Resp
             const jogosPlayoff = await prisma.playoffJogo.findMany({
                 where: {
                     campeonatoId: superliga.id,
-                    fase: { in: ['WILD_CARD', 'SEMIFINAL_CONFERENCIA', 'FINAL_CONFERENCIA'] }
+                    fase: { in: ['WILD CARD', 'SEMIFINAL CONFERENCIA', 'FINAL CONFERENCIA'] }
                 }
             })
 

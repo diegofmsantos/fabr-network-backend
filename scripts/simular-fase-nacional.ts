@@ -12,7 +12,7 @@ async function simularFaseNacional(): Promise<void> {
     // 1. Verificar se existem finais de conferência finalizadas
     const finaisConferencia = await prisma.playoffJogo.findMany({
       where: {
-        fase: 'FINAL_CONFERENCIA',
+        fase: 'FINAL CONFERENCIA',
         status: 'FINALIZADO'
       },
       include: {
@@ -51,14 +51,14 @@ async function simularFaseNacional(): Promise<void> {
     // 3. Buscar ou criar semifinais nacionais
     let semifinal1 = await prisma.playoffJogo.findFirst({
       where: {
-        fase: 'SEMIFINAL_NACIONAL',
+        fase: 'SEMIFINAL NACIONAL',
         nome: 'Semifinal Nacional 1'
       }
     })
 
     let semifinal2 = await prisma.playoffJogo.findFirst({
       where: {
-        fase: 'SEMIFINAL_NACIONAL', 
+        fase: 'SEMIFINAL NACIONAL', 
         nome: 'Semifinal Nacional 2'
       }
     })
@@ -68,7 +68,7 @@ async function simularFaseNacional(): Promise<void> {
       semifinal1 = await prisma.playoffJogo.create({
         data: {
           campeonatoId: finaisConferencia[0].campeonatoId,
-          fase: 'SEMIFINAL_NACIONAL',
+          fase: 'SEMIFINAL NACIONAL',
           rodada: 1,
           nome: 'Semifinal Nacional 1',
           timeClassificado1Id: campeoes.sul.id,
@@ -93,7 +93,7 @@ async function simularFaseNacional(): Promise<void> {
       semifinal2 = await prisma.playoffJogo.create({
         data: {
           campeonatoId: finaisConferencia[0].campeonatoId,
-          fase: 'SEMIFINAL_NACIONAL',
+          fase: 'SEMIFINAL NACIONAL',
           rodada: 1,
           nome: 'Semifinal Nacional 2', 
           timeClassificado1Id: campeoes.nordeste.id,
@@ -152,7 +152,7 @@ async function simularFaseNacional(): Promise<void> {
     // 5. Buscar ou criar final nacional
     let finalNacional = await prisma.playoffJogo.findFirst({
       where: {
-        fase: 'FINAL_NACIONAL',
+        fase: 'FINAL NACIONAL',
         nome: 'Grande Decisão Nacional'
       }
     })
@@ -161,7 +161,7 @@ async function simularFaseNacional(): Promise<void> {
       finalNacional = await prisma.playoffJogo.create({
         data: {
           campeonatoId: finaisConferencia[0].campeonatoId,
-          fase: 'FINAL_NACIONAL',
+          fase: 'FINAL NACIONAL',
           rodada: 1,
           nome: 'Grande Decisão Nacional',
           jogoAnterior1Id: semifinal1.id,

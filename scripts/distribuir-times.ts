@@ -48,7 +48,7 @@ const DISTRIBUICAO_SUPERLIGA = {
       }
     }
   },
-  'CENTRO_NORTE': {
+  'CENTRO NORTE': {
     nome: 'Conferência Centro-Norte',
     icone: '🌲',
     regionais: {

@@ -231,7 +231,7 @@ async function validarFase1(): Promise<void> {
             take: 10
           }),
           prisma.estatisticaJogo.findMany({
-            where: { temporada: '2025', fase: 'TEMPORADA_REGULAR' },
+            where: { temporada: '2025', fase: 'TEMPORADA REGULAR' },
             take: 10
           })
         ]);

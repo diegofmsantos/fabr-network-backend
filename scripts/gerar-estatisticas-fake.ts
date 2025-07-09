@@ -208,7 +208,7 @@ async function gerarEstatisticasFake(): Promise<void> {
         // 1. Buscar todos os jogos finalizados da temporada regular
         const jogos = await prisma.jogo.findMany({
             where: {
-                fase: 'TEMPORADA_REGULAR',
+                fase: 'TEMPORADA REGULAR',
                 status: 'FINALIZADO',
                 temporada: '2025'
             },

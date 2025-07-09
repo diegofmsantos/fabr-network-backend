@@ -96,7 +96,7 @@ async function gerarJogosIntraRegionais(
           timeVisitanteId: timeVisitante.id,
           dataJogo: new Date(dataAtual),
           rodada: rodadaAtual,
-          fase: 'TEMPORADA_REGULAR',
+          fase: 'TEMPORADA REGULAR',
           status: 'AGENDADO',
           local: timeCasa.estadio || `Estádio ${timeCasa.cidade}`,
           observacoes: `Regional ${regionalTipo}`
@@ -153,7 +153,7 @@ async function gerarJogosInterRegionais(
             timeVisitanteId: timeVisitante.id,
             dataJogo: new Date(dataAtual),
             rodada: Math.floor(contadorJogo / 8) + 3, 
-            fase: 'TEMPORADA_REGULAR',
+            fase: 'TEMPORADA REGULAR',
             status: 'AGENDADO',
             local: timeCasa.estadio || `Estádio ${timeCasa.cidade}`,
             observacoes: `Interregional: ${regionalA} × ${regionalB}`
@@ -234,7 +234,7 @@ export async function validarTemporadaRegular(campeonatoId: number) {
     const jogos = await prisma.jogo.findMany({
       where: {
         campeonatoId,
-        fase: 'TEMPORADA_REGULAR'
+        fase: 'TEMPORADA REGULAR'
       },
       include: {
         timeCasa: true,

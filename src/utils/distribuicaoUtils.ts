@@ -3,13 +3,7 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-/**
- * ✅ TODAS AS FUNCIONALIDADES MANTIDAS + ERROS TYPESCRIPT CORRIGIDOS
- */
 
-/**
- * Busca a distribuição completa de times por campeonato
- */
 export async function buscarDistribuicaoCompleta(campeonatoId: number) {
   const distribuicao = await prisma.distribuicaoTime.findMany({
     where: { campeonatoId },
@@ -289,7 +283,7 @@ export async function validarDistribuicao(campeonatoId: number) {
     'SUDESTE': 12,
     'SUL': 8,
     'NORDESTE': 6,
-    'CENTRO_NORTE': 6
+    'CENTRO NORTE': 6
   };
 
   Object.entries(expectedDistribution).forEach(([conf, expectedCount]) => {
@@ -335,7 +329,7 @@ export async function obterTimesClassificadosPlayoffs(campeonatoId: number) {
   const nordeste = classificacao['NORDESTE']?.[0]?.times || [];
 
   // Processar Centro-Norte (2 regionais)
-  const centroNorte = classificacao['CENTRO_NORTE'] || [];
+  const centroNorte = classificacao['CENTRO NORTE'] || [];
   const timesCentroNorte = centroNorte.flatMap(r => r.times.slice(0, 2));
 
   return {

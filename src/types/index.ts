@@ -298,7 +298,7 @@ export type Noticia = Materia
 // ==================== CAMPEONATOS ====================
 
 export interface FormatoCampeonato {
-  tipoDisputa: 'PONTOS_CORRIDOS' | 'MATA_MATA' | 'MISTO'
+  tipoDisputa: 'PONTOS CORRIDOS' | 'MATA MATA' | 'MISTO'
   numeroRodadas: number
   temGrupos: boolean
   numeroGrupos?: number
@@ -312,7 +312,7 @@ export interface Campeonato extends BaseEntity {
   nome: string
   temporada: string
   tipo: 'REGULAR' | 'PLAYOFFS' | 'COPA'
-  status: 'NAO_INICIADO' | 'EM_ANDAMENTO' | 'FINALIZADO'
+  status: 'NÃO INICIADO' | 'EM ANDAMENTO' | 'FINALIZADO'
   dataInicio: string // ISO string
   dataFim?: string
   descricao?: string
@@ -359,7 +359,7 @@ export interface Jogo extends BaseEntity {
   local?: string
   rodada: number
   fase: string // "FASE_GRUPOS", "OITAVAS", "QUARTAS", "SEMI", "FINAL"
-  status: 'AGENDADO' | 'AO_VIVO' | 'FINALIZADO' | 'ADIADO'
+  status: 'AGENDADO' | 'AO VIVO' | 'FINALIZADO' | 'ADIADO'
   placarCasa?: number
   placarVisitante?: number
   observacoes?: string
@@ -1130,7 +1130,7 @@ export interface AdminStats {
 
   atividadesRecentes: Array<{
     id: string
-    tipo: 'campeonato_criado' | 'jogo_finalizado' | 'classificacao_atualizada'
+    tipo: 'campeonato criado' | 'jogo finalizado' | 'classificacao atualizada'
     titulo: string
     descricao: string
     data: string
@@ -1226,7 +1226,7 @@ export interface CampeonatoValidation {
   nome: string
   temporada: string
   tipo: 'REGULAR' | 'PLAYOFFS' | 'COPA'
-  status: 'NAO_INICIADO' | 'EM_ANDAMENTO' | 'FINALIZADO'
+  status: 'NAO INICIADO' | 'EM ANDAMENTO' | 'FINALIZADO'
   dataInicio: Date | string
   dataFim?: Date | string
   descricao?: string
@@ -1250,8 +1250,8 @@ export interface JogoValidation {
   dataJogo: Date | string
   local?: string
   rodada: number
-  fase: 'FASE_GRUPOS' | 'OITAVAS' | 'QUARTAS' | 'SEMI' | 'FINAL'
-  status: 'AGENDADO' | 'AO_VIVO' | 'FINALIZADO' | 'ADIADO'
+  fase: 'FASE GRUPOS' | 'OITAVAS' | 'QUARTAS' | 'SEMI' | 'FINAL'
+  status: 'AGENDADO' | 'AO VIVO' | 'FINALIZADO' | 'ADIADO'
   placarCasa?: number
   placarVisitante?: number
   observacoes?: string
@@ -1260,7 +1260,7 @@ export interface JogoValidation {
 // ==================== TYPES ESPECÍFICOS PARA PÁGINAS ====================
 
 // Tipos para página de jogos do admin
-export type FilterStatus = 'todos' | 'AGENDADO' | 'AO_VIVO' | 'FINALIZADO' | 'ADIADO'
+export type FilterStatus = 'todos' | 'AGENDADO' | 'AO VIVO' | 'FINALIZADO' | 'ADIADO'
 export type ViewMode = 'calendar' | 'list' | 'table'
 
 // Tipos para comparação de times
@@ -1280,7 +1280,7 @@ export type {
 
 // ==================== TIPOS PARA SUPERLIGA ====================
 
-export type TipoConferencia = 'SUDESTE' | 'SUL' | 'NORDESTE' | 'CENTRO_NORTE'
+export type TipoConferencia = 'SUDESTE' | 'SUL' | 'NORDESTE' | 'CENTRO NORTE'
 
 export type TipoRegional =
   | 'SERRAMAR' | 'CANASTRA' | 'CANTAREIRA' // Sudeste
@@ -1472,7 +1472,7 @@ export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
 
   // ✅ CONFERÊNCIA CENTRO-NORTE (6 times, 2 regionais)
   {
-    tipo: 'CENTRO_NORTE',
+    tipo: 'CENTRO NORTE',
     nome: 'Conferência Centro-Norte',
     icone: '🌲',
     totalTimes: 6,
@@ -1480,14 +1480,14 @@ export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
       {
         tipo: 'CERRADO',
         nome: 'Regional Cerrado',
-        conferencia: 'CENTRO_NORTE',
+        conferencia: 'CENTRO NORTE',
         timesPorRegional: 3,
         times: []
       },
       {
         tipo: 'AMAZONIA',
         nome: 'Regional Amazônia',
-        conferencia: 'CENTRO_NORTE',
+        conferencia: 'CENTRO NORTE',
         timesPorRegional: 3,
         times: []
       }
@@ -1539,7 +1539,7 @@ export interface PlayoffTeam {
   sigla: string
   regional: TipoRegional
   posicaoRegional: number
-  classificacao: 'DIRETO' | 'WILD_CARD'
+  classificacao: 'DIRETO' | 'WILD CARD'
 }
 
 // ==================== FASE NACIONAL ====================
@@ -1568,7 +1568,7 @@ export interface FinalNacional {
 
 export interface SuperligaBracket {
   temporada: string
-  status: 'CONFIGURANDO' | 'FASE_GRUPOS' | 'PLAYOFFS' | 'FINALIZADO'
+  status: 'CONFIGURANDO' | 'FASE GRUPOS' | 'PLAYOFFS' | 'FINALIZADO'
 
   // Playoffs por conferência
   playoffsSudeste: PlayoffBracket
@@ -1605,7 +1605,7 @@ export function getTimesByRegional(regional: TipoRegional): string[] {
 export interface SuperligaJogo extends Jogo {
   conferencia?: TipoConferencia
   regional?: TipoRegional
-  tipoJogo: 'TEMPORADA_REGULAR' | 'WILD_CARD' | 'SEMIFINAL_CONFERENCIA' | 'FINAL_CONFERENCIA' | 'SEMIFINAL_NACIONAL' | 'FINAL_NACIONAL'
+  tipoJogo: 'TEMPORADA REGULAR' | 'WILD CARD' | 'SEMIFINAL CONFERENCIA' | 'FINAL CONFERENCIA' | 'SEMIFINAL NACIONAL' | 'FINAL NACIONAL'
 }
 
 export interface ClassificacaoRegional {
@@ -1638,7 +1638,7 @@ export interface FaseNacional {
 
 export interface SuperligaStatus {
   campeonatoId: number
-  fase: 'CONFIGURACAO' | 'TEMPORADA_REGULAR' | 'PLAYOFFS_CONFERENCIA' | 'FASE_NACIONAL' | 'FINALIZADO'
+  fase: 'CONFIGURACAO' | 'TEMPORADA REGULAR' | 'PLAYOFFS CONFERENCIA' | 'FASE NACIONAL' | 'FINALIZADO'
   jogosTemporadaRegular: {
     total: number
     finalizados: number
@@ -1670,7 +1670,7 @@ export interface DistribuirTimesRequest {
 export interface GerarJogosRequest {
   campeonatoId: number
   rodadas: number
-  algoritmo: 'ROUND_ROBIN' | 'CUSTOM'
+  algoritmo: 'ROUND ROBIN' | 'CUSTOM'
 }
 
 export interface GerarPlayoffsRequest {

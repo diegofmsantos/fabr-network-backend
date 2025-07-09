@@ -75,7 +75,7 @@ const FLUXO_TESTE: FluxoStep[] = [
     id: 8,
     nome: 'Gerar Resultados Fake',
     descricao: 'Gerar resultados fictícios dos 64 jogos',
-    comando: 'npm run generate:resultados',
+    comando: 'npm run generate:resultados -- --complete',
     manual: false,
     concluido: false
   },

@@ -766,157 +766,137 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
     try {
         console.log('🌵 INICIANDO GERAÇÃO DE PLAYOFFS NORDESTE...')
 
-        // ✅ CORREÇÃO: Melhor validação e debug
         const classificacao = await calcularClassificacaoPorConferencia(campeonatoId);
-
-        console.log('📊 Classificação geral recebida:', Object.keys(classificacao))
-
         const nordeste = classificacao['NORDESTE'];
-        console.log('🔍 Conferência Nordeste encontrada:', !!nordeste, nordeste?.length || 0)
 
         if (!nordeste || nordeste.length === 0) {
             throw new Error('Classificação da Conferência Nordeste não encontrada');
         }
 
-        // ✅ CORREÇÃO: A conferência Nordeste tem apenas 1 regional (ATLÂNTICO) com 6 times
-        const atlantico = nordeste[0]; // Primeiro (e único) regional
-        console.log('🏖️  Regional Atlântico encontrado:', !!atlantico, atlantico?.regionalType)
-
+        // A conferência Nordeste tem apenas 1 regional (ATLÂNTICO) com 6 times
+        const atlantico = nordeste[0];
         if (!atlantico || !atlantico.times) {
             throw new Error('Regional Atlântico não encontrado ou sem times');
         }
 
         const times = atlantico.times;
-        console.log(`⚽ Times no Atlântico: ${times.length}`)
-
         if (times.length < 6) {
             throw new Error(`Regional Atlântico deve ter 6 times, encontrados ${times.length}`);
         }
 
-        // ✅ DEBUG: Listar todos os times encontrados
         console.log('📋 Times classificados no Regional Atlântico:')
-        times.forEach((time, index) => {
-            console.log(`   ${index + 1}º. ${time.time?.nome || 'Nome não encontrado'} (${time.vitorias} vitórias)`)
+        times.forEach((time: any, index: number) => {
+            console.log(`   ${index + 1}º. ${time.time.nome}`)
         })
 
-        // Os times já vêm ordenados da função calcularClassificacaoRegional
-        const primeiro = times[0];
-        const segundo = times[1];
-        const terceiro = times[2];
-        const quarto = times[3];
-        const quinto = times[4];
-        const sexto = times[5];
+        // Separar times por posição
+        const primeiro = times[0]  // 1º lugar -> Semifinal direta
+        const segundo = times[1]   // 2º lugar -> Semifinal direta  
+        const terceiro = times[2]  // 3º lugar -> Fica fora
+        const quarto = times[3]    // 4º lugar -> Wild Card
+        const quinto = times[4]    // 5º lugar -> Wild Card
+        const sexto = times[5]     // 6º lugar -> Fica fora
 
-        // ✅ VALIDAÇÃO: Verificar se todos os times têm as propriedades necessárias
-        if (!primeiro?.timeId || !segundo?.timeId || !terceiro?.timeId ||
-            !quarto?.timeId || !quinto?.timeId || !sexto?.timeId) {
-            console.error('❌ Times sem timeId válido:')
-            times.forEach((time, i) => {
-                console.error(`   ${i + 1}º: timeId=${time.timeId}, nome=${time.time?.nome}`)
-            })
-            throw new Error('Alguns times não possuem timeId válido');
-        }
+        console.log('🎯 Estrutura dos playoffs Nordeste:')
+        console.log(`   1º (${primeiro.time.nome}) -> Semifinal direta`)
+        console.log(`   2º (${segundo.time.nome}) -> Semifinal direta`)
+        console.log(`   3º (${terceiro.time.nome}) -> Eliminado`)
+        console.log(`   4º (${quarto.time.nome}) -> Wild Card`)
+        console.log(`   5º (${quinto.time.nome}) -> Wild Card`)
+        console.log(`   6º (${sexto.time.nome}) -> Eliminado`)
 
-        console.log('🎯 Configurando playoffs Nordeste:')
-        console.log(`   Direto para Semifinal: ${primeiro.time?.nome} e ${segundo.time?.nome}`)
-        console.log(`   Wild Card 1: ${terceiro.time?.nome} vs ${sexto.time?.nome}`)
-        console.log(`   Wild Card 2: ${quarto.time?.nome} vs ${quinto.time?.nome}`)
-
-        // Wild Cards: 3º vs 6º e 4º vs 5º
-        const wildCard1 = await prisma.playoffJogo.create({
+        // 1. WILD CARD: 4º vs 5º lugar
+        console.log('🃏 Criando Wild Card Nordeste: 4º vs 5º')
+        const wildCard = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
                 conferenciaId,
                 fase: 'WILD_CARD',
                 rodada: 1,
-                nome: 'Wild Card Nordeste 1',
-                timeClassificado1Id: terceiro.timeId,
-                timeClassificado2Id: sexto.timeId,
-                dataJogo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                nome: 'Wild Card Nordeste',
+                timeClassificado1Id: quarto.timeId,   // 4º lugar
+                timeClassificado2Id: quinto.timeId,   // 5º lugar
+                dataJogo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // +7 dias
                 status: 'AGUARDANDO'
             }
         });
 
-        const wildCard2 = await prisma.playoffJogo.create({
-            data: {
-                campeonatoId,
-                conferenciaId,
-                fase: 'WILD_CARD',
-                rodada: 1,
-                nome: 'Wild Card Nordeste 2',
-                timeClassificado1Id: quarto.timeId,
-                timeClassificado2Id: quinto.timeId,
-                dataJogo: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000),
-                status: 'AGUARDANDO'
-            }
-        });
-
-        // Semifinais: 1º vs Vencedor WC mais próximo, 2º vs Vencedor WC mais próximo
+        // 2. SEMIFINAL 1: 1º lugar vs Vencedor Wild Card
+        console.log('🏅 Criando Semifinal Nordeste 1: 1º vs Vencedor WC')
         const semifinal1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
                 conferenciaId,
                 fase: 'SEMIFINAL_CONFERENCIA',
-                rodada: 2,
+                rodada: 1,
                 nome: 'Semifinal Nordeste 1',
-                timeClassificado1Id: primeiro.timeId,
+                timeClassificado1Id: primeiro.timeId, // 1º lugar
                 timeClassificado2Id: null, // Será preenchido após wild card
-                jogoAnterior2Id: wildCard1.id, // Vencedor do Wild Card 1
-                dataJogo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+                jogoAnterior2Id: wildCard.id, // Vencedor do Wild Card
+                dataJogo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // +14 dias
                 status: 'AGUARDANDO'
             }
         });
 
+        // 3. SEMIFINAL 2: 2º lugar vs Bye (classificação direta para final)
+        console.log('🏅 Criando Semifinal Nordeste 2: 2º lugar (bye)')
         const semifinal2 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
                 conferenciaId,
                 fase: 'SEMIFINAL_CONFERENCIA',
-                rodada: 2,
-                nome: 'Semifinal Nordeste 2',
-                timeClassificado1Id: segundo.timeId,
-                timeClassificado2Id: null, // Será preenchido após wild card
-                jogoAnterior2Id: wildCard2.id, // Vencedor do Wild Card 2
-                dataJogo: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
-                status: 'AGUARDANDO'
+                rodada: 1,
+                nome: 'Semifinal Nordeste 2 (Bye)',
+                timeClassificado1Id: segundo.timeId, // 2º lugar
+                timeClassificado2Id: null, // Bye - vai direto para final
+                dataJogo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+                status: 'FINALIZADO' // Marcamos como finalizado pois é um bye
             }
         });
 
-        // Final de Conferência
+        // Marcar o 2º lugar como vencedor do bye
+        await prisma.playoffJogo.update({
+            where: { id: semifinal2.id },
+            data: { timeVencedorId: segundo.timeId }
+        });
+
+        // 4. FINAL DE CONFERÊNCIA: Vencedor Semifinal 1 vs 2º lugar (bye winner)
+        console.log('🏆 Criando Final Conferência Nordeste')
         const final = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
                 conferenciaId,
                 fase: 'FINAL_CONFERENCIA',
-                rodada: 3,
+                rodada: 1,
                 nome: 'Final Conferência Nordeste',
                 timeClassificado1Id: null,
-                timeClassificado2Id: null,
+                timeClassificado2Id: segundo.timeId, // 2º lugar (bye winner)
                 jogoAnterior1Id: semifinal1.id,
                 jogoAnterior2Id: semifinal2.id,
-                dataJogo: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000),
+                dataJogo: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000), // +21 dias
                 status: 'AGUARDANDO'
             }
         });
 
         console.log('✅ Playoffs Nordeste gerados com sucesso!')
-        console.log(`   Wild Cards: ${wildCard1.id}, ${wildCard2.id}`)
-        console.log(`   Semifinais: ${semifinal1.id}, ${semifinal2.id}`)
-        console.log(`   Final: ${final.id}`)
+        console.log(`   🃏 Wild Card: ${quarto.time.nome} vs ${quinto.time.nome}`)
+        console.log(`   🏅 Semifinal 1: ${primeiro.time.nome} vs Vencedor WC`)
+        console.log(`   🏅 Semifinal 2: ${segundo.time.nome} (bye - classificado direto)`)
+        console.log(`   🏆 Final: Vencedor SF1 vs ${segundo.time.nome}`)
 
         return {
-            wildcards: [wildCard1, wildCard2],
+            wildcards: [wildCard],
             semifinais: [semifinal1, semifinal2],
             final,
             timesClassificados: {
-                diretos: [primeiro, segundo], // Vão direto para semifinal
-                wildcards: [terceiro, quarto, quinto, sexto] // Disputam wild card
+                diretos: [primeiro, segundo],
+                wildcards: [quarto, quinto]
             }
-        };
+        }
 
     } catch (error) {
-        console.error('❌ Erro ao gerar playoffs Nordeste:', error);
-        throw error;
+        console.error('❌ Erro ao gerar playoffs Nordeste:', error)
+        throw error
     }
 }
 

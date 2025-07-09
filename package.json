@@ -16,7 +16,10 @@
     "generate:resultados": "npx ts-node scripts/gerar-resultados-fake.ts",
     "generate:estatisticas": "npx ts-node scripts/gerar-estatisticas-fake.ts",
     "simulate:fase-nacional": "npx ts-node scripts/simular-fase-nacional.ts",
-    "test:fluxo-completo": "npx ts-node scripts/fluxo-completo-teste.ts"
+    "test:fluxo-completo": "npx ts-node scripts/fluxo-completo-teste.ts",
+    "debug-nordeste": "npx ts-node scripts/debug-nordeste.ts",
+    "relatorio": "npx ts-node scripts/gerar-relatorio.ts",
+    "stats": "npx ts-node scripts/estatisticas.ts"
   },
   "author": "",
   "license": "ISC",

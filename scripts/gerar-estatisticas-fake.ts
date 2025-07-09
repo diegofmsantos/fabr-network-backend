@@ -188,6 +188,8 @@ function gerarEstatisticasKicker(placares: { casa: number, visitante: number }, 
     }
 }
 
+
+
 function gerarEstatisticasPunter(isTimePunter: boolean): Partial<JogadorEstatistica> {
     if (!isTimePunter) return { punts: 0, jardas_de_punt: 0 }
 
@@ -366,6 +368,8 @@ async function gerarEstatisticasFake(): Promise<void> {
         await prisma.$disconnect()
     }
 }
+
+
 
 // Executar se chamado diretamente
 if (require.main === module) {

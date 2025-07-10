@@ -9,7 +9,7 @@ export const jogadorRouter = express.Router()
 jogadorRouter.get('/jogadores', async (req, res) => {
     try {
         const {
-            temporada = '2024',
+            temporada = '2025',
             timeId,
             includeAllTemporadas = false
         } = req.query;
@@ -138,7 +138,7 @@ jogadorRouter.get('/jogador/:id/temporada/:ano', async (req: Request, res: Respo
 
 jogadorRouter.post('/jogador', async (req, res) => {
     try {
-        const { temporada = '2024', ...jogadorRawData } = req.body;
+        const { temporada = '2025', ...jogadorRawData } = req.body;
         const jogadorData = JogadorSchema.parse(jogadorRawData);
 
         const estatisticas = jogadorData.estatisticas ?? {};
@@ -285,3 +285,132 @@ jogadorRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Resp
         res.status(500).json({ error: "Erro ao atualizar o jogador" });
     }
 });
+
+jogadorRouter.get('/jogador/:jogadorId/por-jogo', async (req: Request, res: Response) => {
+    try {
+        const { jogadorId } = req.params
+        const { temporada = '2025' } = req.query
+
+        console.log(`🎯 Buscando estatísticas por jogo para jogador: ${jogadorId}, temporada: ${temporada}`)
+
+        const estatisticas = await prisma.estatisticaJogo.findMany({
+            where: {
+                jogadorId: parseInt(jogadorId),
+                temporada: temporada as string
+            },
+            include: {
+                jogo: {
+                    include: {
+                        timeCasa: { select: { nome: true, sigla: true, logo: true } },
+                        timeVisitante: { select: { nome: true, sigla: true, logo: true } }
+                    }
+                },
+                time: { select: { nome: true, sigla: true } }
+            },
+            orderBy: {
+                jogo: { dataJogo: 'desc' }
+            }
+        })
+
+        // Processar dados para o formato esperado pelo frontend
+        const estatisticasProcessadas = estatisticas.map(est => {
+            const jogo = est.jogo
+            const isTimeCasa = est.timeId === jogo.timeCasaId
+            const adversario = isTimeCasa ? jogo.timeVisitante : jogo.timeCasa
+
+            const stats = est.estatisticas as any
+
+            return {
+                dataJogo: jogo.dataJogo,
+                adversario,
+                local: isTimeCasa ? 'Casa' : 'Visitante',
+                resultado: jogo.status === 'FINALIZADO' ? {
+                    placarCasa: jogo.placarCasa,
+                    placarVisitante: jogo.placarVisitante,
+                    vitoria: (isTimeCasa && (jogo.placarCasa || 0) > (jogo.placarVisitante || 0)) ||
+                        (!isTimeCasa && (jogo.placarVisitante || 0) > (jogo.placarCasa || 0))
+                } : null,
+                passes: {
+                    completos: stats.passe?.passes_completos || 0,
+                    tentados: stats.passe?.passes_tentados || 0,
+                    jardas: stats.passe?.jardas_de_passe || 0,
+                    touchdowns: stats.passe?.td_passados || 0,
+                    interceptacoes: stats.passe?.interceptacoes_sofridas || 0,
+                    sacks: stats.passe?.sacks_sofridos || 0,
+                    fumbles: stats.passe?.fumble_de_passador || 0,
+                    percentual: stats.passe?.passes_tentados > 0
+                        ? (stats.passe?.passes_completos / stats.passe?.passes_tentados) * 100
+                        : 0,
+                    media: stats.passe?.passes_tentados > 0
+                        ? stats.passe?.jardas_de_passe / stats.passe?.passes_tentados
+                        : 0
+                },
+                corrida: {
+                    tentativas: stats.corrida?.corridas || 0,
+                    jardas: stats.corrida?.jardas_corridas || 0,
+                    touchdowns: stats.corrida?.tds_corridos || 0,
+                    fumbles: stats.corrida?.fumble_de_corredor || 0,
+                    media: stats.corrida?.corridas > 0
+                        ? stats.corrida?.jardas_corridas / stats.corrida?.corridas
+                        : 0
+                },
+                recepcao: {
+                    recepcoes: stats.recepcao?.recepcoes || 0,
+                    alvos: stats.recepcao?.alvo || 0,
+                    jardas: stats.recepcao?.jardas_recebidas || 0,
+                    touchdowns: stats.recepcao?.tds_recebidos || 0,
+                    media: stats.recepcao?.recepcoes > 0
+                        ? stats.recepcao?.jardas_recebidas / stats.recepcao?.recepcoes
+                        : 0
+                },
+                defesa: {
+                    tackles: stats.defesa?.tackles_totais || 0,
+                    tacklesForLoss: stats.defesa?.tackles_for_loss || 0,
+                    sacks: stats.defesa?.sacks_forcado || 0,
+                    fumbles: stats.defesa?.fumble_forcado || 0,
+                    interceptacoes: stats.defesa?.interceptacao_forcada || 0,
+                    passesDesviados: stats.defesa?.passe_desviado || 0,
+                    touchdowns: stats.defesa?.td_defensivo || 0
+                },
+                retorno: {
+                    retornos: stats.retorno?.retornos || 0,
+                    jardas: stats.retorno?.jardas_retornadas || 0,
+                    touchdowns: stats.retorno?.td_retornados || 0,
+                    media: stats.retorno?.retornos > 0
+                        ? stats.retorno?.jardas_retornadas / stats.retorno?.retornos
+                        : 0
+                },
+                kicker: {
+                    fgBons: stats.kicker?.fg_bons || 0,
+                    fgTentativas: stats.kicker?.tentativas_de_fg || 0,
+                    fgMaisLongo: stats.kicker?.fg_mais_longo || 0,
+                    xpBons: stats.kicker?.xp_bons || 0,
+                    xpTentativas: stats.kicker?.tentativas_de_xp || 0,
+                    fgPercentual: stats.kicker?.tentativas_de_fg > 0
+                        ? (stats.kicker?.fg_bons / stats.kicker?.tentativas_de_fg) * 100
+                        : 0,
+                    xpPercentual: stats.kicker?.tentativas_de_xp > 0
+                        ? (stats.kicker?.xp_bons / stats.kicker?.tentativas_de_xp) * 100
+                        : 0
+                },
+                punter: {
+                    punts: stats.punter?.punts || 0,
+                    jardas: stats.punter?.jardas_de_punt || 0,
+                    media: stats.punter?.punts > 0
+                        ? stats.punter?.jardas_de_punt / stats.punter?.punts
+                        : 0
+                }
+            }
+        })
+
+        console.log(`✅ Retornando ${estatisticasProcessadas.length} jogos`)
+
+        res.json(estatisticasProcessadas)
+    } catch (error) {
+        console.error('❌ Erro ao buscar estatísticas por jogo:', error)
+        res.status(500).json({
+            error: 'Erro ao buscar estatísticas por jogo',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+    }
+})

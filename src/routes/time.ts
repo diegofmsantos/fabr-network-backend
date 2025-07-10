@@ -11,7 +11,7 @@ timeRouter.get('/times', async (req, res) => {
     console.log('Rota /api/times chamada')
     try {
         const { temporada } = req.query
-        const temporadaFiltro = temporada ? String(temporada) : '2024'
+        const temporadaFiltro = temporada ? String(temporada) : '2025'
 
         const times = await prisma.time.findMany({
             where: { temporada: temporadaFiltro },
@@ -78,7 +78,7 @@ timeRouter.post('/time', async (req, res) => {
                 coord_ofen: teamData.coord_ofen || '',
                 coord_defen: teamData.coord_defen || '',
                 titulos: teamData.titulos || [],
-                temporada: teamData.temporada || '2024', 
+                temporada: teamData.temporada || '2025', 
             },
         })
 
@@ -105,7 +105,7 @@ timeRouter.post('/time', async (req, res) => {
                     data: {
                         jogadorId: jogadorCriado.id,
                         timeId: createdTeam.id,
-                        temporada: teamData.temporada || '2024',
+                        temporada: teamData.temporada || '2025',
                         numero: player.numero || 0,
                         camisa: player.camisa || '',
                         estatisticas: player.estatisticas || {},
@@ -182,7 +182,7 @@ timeRouter.get('/comparar-times', async function (req: Request, res: Response) {
     try {
         const time1Id = req.query.time1Id as string;
         const time2Id = req.query.time2Id as string;
-        const temporada = (req.query.temporada as string) || '2024';
+        const temporada = (req.query.temporada as string) || '2025';
 
         if (!time1Id || !time2Id) {
             res.status(400).json({ error: 'É necessário fornecer IDs de dois times diferentes' });

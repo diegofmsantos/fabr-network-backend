@@ -30,34 +30,91 @@ async function buscarSuperligaPorTemporada(temporada: string) {
   })
 }
 
-superligaRouter.get('/temporadas', async (req: Request, res: Response) => {
+superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
   try {
-    const temporadas = await prisma.campeonato.findMany({
-      where: { isSuperliga: true },
-      select: {
-        temporada: true,
-        status: true,
-        dataInicio: true,
-        dataFim: true,
-        _count: {
+    const { temporada, conferencia } = req.query
+
+    if (!temporada) {
+      res.status(400).json({ error: 'Temporada é obrigatória' })
+      return
+    }
+
+    console.log(`🎯 Buscando rodadas para temporada: ${temporada}, conferencia: ${conferencia || 'todas'}`)
+
+    const whereClause: any = {
+      temporada: temporada as string,
+      fase: 'TEMPORADA REGULAR'
+    }
+
+    if (conferencia) {
+      whereClause.conferencia = conferencia as string
+    }
+
+    const jogos = await prisma.jogo.findMany({
+      where: whereClause,
+      include: {
+        timeCasa: {
           select: {
-            jogos: true,
-            conferencias: true
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            logo: true
+          }
+        },
+        timeVisitante: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            logo: true
           }
         }
       },
-      orderBy: { temporada: 'desc' }
+      orderBy: [
+        { conferencia: 'asc' },
+        { rodada: 'asc' },
+        { dataJogo: 'asc' }
+      ]
     })
 
-    res.json(temporadas)
+    console.log(`📊 Encontrados ${jogos.length} jogos`)
+
+    // Agrupar por conferência e rodada
+    const rodadasPorConferencia = jogos.reduce((acc: any, jogo) => {
+      const conf = jogo.conferencia || 'GERAL'
+      if (!acc[conf]) acc[conf] = {}
+      if (!acc[conf][jogo.rodada]) acc[conf][jogo.rodada] = []
+
+      acc[conf][jogo.rodada].push({
+        id: jogo.id,
+        timeCasa: jogo.timeCasa,
+        timeVisitante: jogo.timeVisitante,
+        dataJogo: jogo.dataJogo,
+        status: jogo.status,
+        placarCasa: jogo.placarCasa,
+        placarVisitante: jogo.placarVisitante,
+        local: jogo.local,
+        rodada: jogo.rodada
+      })
+
+      return acc
+    }, {})
+
+    console.log(`✅ Agrupados em ${Object.keys(rodadasPorConferencia).length} conferências`)
+
+    res.json(rodadasPorConferencia)
   } catch (error) {
-    console.error('Erro ao buscar temporadas:', error)
+    console.error('❌ Erro ao buscar rodadas:', error)
     res.status(500).json({
-      error: 'Erro ao buscar temporadas',
+      error: 'Erro ao buscar rodadas',
       details: error instanceof Error ? error.message : 'Erro desconhecido'
     })
   }
 })
+
+
 
 superligaRouter.get('/atual', async (req: Request, res: Response) => {
   try {
@@ -80,30 +137,6 @@ superligaRouter.get('/atual', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Erro ao buscar temporada atual:', error)
     res.status(500).json({ error: 'Erro ao buscar temporada atual' })
-  }
-})
-
-superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
-  try {
-    const { temporada } = req.params
-
-    const superliga = await buscarSuperligaPorTemporada(temporada)
-
-    if (!superliga) {
-      res.status(404).json({
-        error: `Superliga ${temporada} não encontrada`,
-        temporada,
-        message: 'Esta temporada ainda não foi criada'
-      })
-    } else {
-      res.json(superliga)
-    }
-  } catch (error) {
-    console.error('Erro ao buscar Superliga:', error)
-    res.status(500).json({
-      error: 'Erro interno do servidor',
-      details: error instanceof Error ? error.message : 'Erro desconhecido'
-    })
   }
 })
 
@@ -541,6 +574,59 @@ superligaRouter.get('/:temporada/jogos/rodada/:rodada', async (req: Request, res
   }
 })
 
+superligaRouter.get('/temporadas', async (req: Request, res: Response) => {
+  try {
+    const temporadas = await prisma.campeonato.findMany({
+      where: { isSuperliga: true },
+      select: {
+        temporada: true,
+        status: true,
+        dataInicio: true,
+        dataFim: true,
+        _count: {
+          select: {
+            jogos: true,
+            conferencias: true
+          }
+        }
+      },
+      orderBy: { temporada: 'desc' }
+    })
+
+    res.json(temporadas)
+  } catch (error) {
+    console.error('Erro ao buscar temporadas:', error)
+    res.status(500).json({
+      error: 'Erro ao buscar temporadas',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
+  }
+})
+
+superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
+  try {
+    const { temporada } = req.params
+
+    const superliga = await buscarSuperligaPorTemporada(temporada)
+
+    if (!superliga) {
+      res.status(404).json({
+        error: `Superliga ${temporada} não encontrada`,
+        temporada,
+        message: 'Esta temporada ainda não foi criada'
+      })
+    } else {
+      res.json(superliga)
+    }
+  } catch (error) {
+    console.error('Erro ao buscar Superliga:', error)
+    res.status(500).json({
+      error: 'Erro interno do servidor',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
+  }
+})
+
 superligaRouter.post('/:temporada/gerar-playoffs', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
@@ -760,7 +846,7 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
 
     // Calcular estatísticas por time
     const estatisticasTimes = new Map()
-    
+
     times.forEach(time => {
       estatisticasTimes.set(time.id, {
         timeId: time.id,
@@ -783,10 +869,10 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
       if (statsCasa && statsVisitante) {
         statsCasa.jogos++
         statsVisitante.jogos++
-        
+
         statsCasa.pontosPro += jogo.placarCasa || 0
         statsCasa.pontosContra += jogo.placarVisitante || 0
-        
+
         statsVisitante.pontosPro += jogo.placarVisitante || 0
         statsVisitante.pontosContra += jogo.placarCasa || 0
 
@@ -854,6 +940,86 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
     res.status(500).json({ error: 'Erro ao buscar classificação' })
   }
 })
+
+superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
+  try {
+    const { temporada, conferencia } = req.query
+
+    if (!temporada) {
+      res.status(400).json({ error: 'Temporada é obrigatória' })
+      return
+    }
+
+    const whereClause: any = {
+      temporada: temporada as string,
+      fase: 'TEMPORADA REGULAR'
+    }
+
+    if (conferencia) {
+      whereClause.conferencia = conferencia as string
+    }
+
+    const jogos = await prisma.jogo.findMany({
+      where: whereClause,
+      include: {
+        timeCasa: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            logo: true
+          }
+        },
+        timeVisitante: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            logo: true
+          }
+        }
+      },
+      orderBy: [
+        { conferencia: 'asc' },
+        { rodada: 'asc' },
+        { dataJogo: 'asc' }
+      ]
+    })
+
+    // Agrupar por conferência e rodada
+    const rodadasPorConferencia = jogos.reduce((acc: any, jogo) => {
+      const conf = jogo.conferencia || 'GERAL'
+      if (!acc[conf]) acc[conf] = {}
+      if (!acc[conf][jogo.rodada]) acc[conf][jogo.rodada] = []
+
+      acc[conf][jogo.rodada].push({
+        id: jogo.id,
+        timeCasa: jogo.timeCasa,
+        timeVisitante: jogo.timeVisitante,
+        dataJogo: jogo.dataJogo,
+        status: jogo.status,
+        placarCasa: jogo.placarCasa,
+        placarVisitante: jogo.placarVisitante,
+        local: jogo.local,
+        rodada: jogo.rodada
+      })
+
+      return acc
+    }, {})
+
+    res.json(rodadasPorConferencia)
+  } catch (error) {
+    console.error('Erro ao buscar rodadas:', error)
+    res.status(500).json({
+      error: 'Erro ao buscar rodadas',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
+  }
+})
+
+
 
 // ==================== FUNÇÃO AUXILIAR - CORRIGIDA ====================
 

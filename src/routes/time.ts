@@ -29,10 +29,8 @@ timeRouter.get('/times', async (req, res) => {
             if (typeof time.titulos === 'string') {
                 try {
                     titulosParsed = JSON.parse(time.titulos);
-                    console.log(`Títulos parseados para ${time.nome}:`, titulosParsed);
                 } catch (error) {
                     console.error(`Erro ao fazer parse dos títulos para ${time.nome}:`, error);
-                    titulosParsed = [{ nacionais: "0", conferencias: "0", estaduais: "0" }];
                 }
             }
             

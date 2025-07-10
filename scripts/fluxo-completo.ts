@@ -225,7 +225,7 @@ async function gerarPlayoffsCompleto(campeonatoId: number) {
                 case 'NORDESTE':
                     resultado = await gerarPlayoffsNordeste(campeonatoId, conf.id) // ✅ INCLUI NORDESTE!
                     break
-                case 'CENTRO_NORTE':
+                case 'CENTRO NORTE':
                     resultado = await gerarPlayoffsCentroNorte(campeonatoId, conf.id)
                     break
                 default:
@@ -254,7 +254,7 @@ async function gerarFaseNacionalCompleta(campeonatoId: number) {
     const finaisConferencia = await prisma.playoffJogo.findMany({
         where: {
             campeonatoId,
-            fase: 'FINAL_CONFERENCIA'
+            fase: 'FINAL CONFERENCIA'
         }
     })
 
@@ -282,7 +282,7 @@ async function gerarFaseNacionalCompleta(campeonatoId: number) {
     const campeoes = await prisma.playoffJogo.findMany({
         where: {
             campeonatoId,
-            fase: 'FINAL_CONFERENCIA',
+            fase: 'FINAL CONFERENCIA',
             status: 'FINALIZADO'
         },
         include: {
@@ -305,13 +305,13 @@ async function gerarFaseNacionalCompleta(campeonatoId: number) {
     const sudeste = campeoes.find(c => c.conferencia?.tipo === 'SUDESTE')
     const sul = campeoes.find(c => c.conferencia?.tipo === 'SUL')
     const nordeste = campeoes.find(c => c.conferencia?.tipo === 'NORDESTE')
-    const centroNorte = campeoes.find(c => c.conferencia?.tipo === 'CENTRO_NORTE')
+    const centroNorte = campeoes.find(c => c.conferencia?.tipo === 'CENTRO NORTE')
 
     // Semifinal Nacional 1: Sudeste vs Nordeste
     const sf1 = await prisma.playoffJogo.create({
         data: {
             campeonatoId,
-            fase: 'SEMIFINAL_NACIONAL',
+            fase: 'SEMIFINAL NACIONAL',
             rodada: 1,
             nome: 'Semifinal Nacional 1',
             timeClassificado1Id: sudeste?.timeVencedorId,
@@ -325,7 +325,7 @@ async function gerarFaseNacionalCompleta(campeonatoId: number) {
     const sf2 = await prisma.playoffJogo.create({
         data: {
             campeonatoId,
-            fase: 'SEMIFINAL_NACIONAL',
+            fase: 'SEMIFINAL NACIONAL',
             rodada: 1,
             nome: 'Semifinal Nacional 2',
             timeClassificado1Id: sul?.timeVencedorId,
@@ -339,7 +339,7 @@ async function gerarFaseNacionalCompleta(campeonatoId: number) {
     const finalNacional = await prisma.playoffJogo.create({
         data: {
             campeonatoId,
-            fase: 'FINAL_NACIONAL',
+            fase: 'FINAL NACIONAL',
             rodada: 1,
             nome: 'Final Nacional - Brasil Bowl',
             jogoAnterior1Id: sf1.id,
@@ -353,7 +353,7 @@ async function gerarFaseNacionalCompleta(campeonatoId: number) {
     const terceiroLugar = await prisma.playoffJogo.create({
         data: {
             campeonatoId,
-            fase: 'TERCEIRO_LUGAR',
+            fase: 'TERCEIRO LUGAR',
             rodada: 1,
             nome: 'Disputa do 3º Lugar',
             jogoAnterior1Id: sf1.id, // Perdedor SF1

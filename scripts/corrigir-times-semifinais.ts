@@ -280,9 +280,7 @@ async function gerarSemifinaisNacionais(campeonatoId: number) {
   const campeoes: { [key: string]: any } = {}
   finalsConferencia.forEach(final => {
     if (final.conferencia && final.timeVencedor) {
-      // Corrigir o tipo da conferência Centro-Norte
-      const tipoConferencia = final.conferencia.tipo === 'CENTRO NORTE' ? 'CENTRO NORTE' : final.conferencia.tipo
-      campeoes[tipoConferencia] = final.timeVencedor
+      campeoes[final.conferencia.tipo] = final.timeVencedor
     }
   })
 
@@ -290,25 +288,6 @@ async function gerarSemifinaisNacionais(campeonatoId: number) {
   Object.entries(campeoes).forEach(([conf, time]) => {
     console.log(`   ${conf}: ${time.nome}`)
   })
-
-  // Verificar se temos todos os 4 campeões
-  const confsEsperadas = ['SUDESTE', 'SUL', 'NORDESTE', 'CENTRO NORTE']
-  const confsFaltando = confsEsperadas.filter(conf => !campeoes[conf])
-  
-  if (confsFaltando.length > 0) {
-    console.log('⚠️  Conferências sem campeão:', confsFaltando)
-    
-    // Tentar encontrar pelo nome da conferência
-    finalsConferencia.forEach(final => {
-      if (final.conferencia && final.timeVencedor) {
-        const nomeConf = final.conferencia.nome.toLowerCase()
-        if (nomeConf.includes('centro') || nomeConf.includes('norte')) {
-          campeoes['CENTRO NORTE'] = final.timeVencedor
-          console.log(`   🔧 Corrigido CENTRO NORTE: ${final.timeVencedor.nome}`)
-        }
-      }
-    })
-  }
 
   // Criar Semifinal Nacional 1: Sudeste × Sul
   const semifinal1 = await prisma.playoffJogo.create({
@@ -329,7 +308,7 @@ async function gerarSemifinaisNacionais(campeonatoId: number) {
     data: {
       campeonatoId,
       timeClassificado1Id: campeoes['NORDESTE']?.id,
-      timeClassificado2Id: campeoes['CENTRO NORTE']?.id,
+      timeClassificado2Id: campeoes['CENTRO_NORTE']?.id,
       fase: 'SEMIFINAL NACIONAL',
       rodada: 2,
       nome: 'Semifinal Nacional 2: Nordeste × Centro-Norte',
@@ -340,14 +319,7 @@ async function gerarSemifinaisNacionais(campeonatoId: number) {
 
   console.log('✅ Semifinais Nacionais criadas:')
   console.log(`   Semifinal 1: ${campeoes['SUDESTE']?.sigla} × ${campeoes['SUL']?.sigla}`)
-  console.log(`   Semifinal 2: ${campeoes['NORDESTE']?.sigla} × ${campeoes['CENTRO NORTE']?.sigla}`)
-
-  // Verificar se ambas as semifinais têm times válidos
-  if (!campeoes['SUDESTE'] || !campeoes['SUL'] || !campeoes['NORDESTE'] || !campeoes['CENTRO NORTE']) {
-    console.log('❌ ERRO: Nem todos os campeões foram encontrados!')
-    console.log('Campeões disponíveis:', Object.keys(campeoes))
-    throw new Error('Campeões de conferência incompletos')
-  }
+  console.log(`   Semifinal 2: ${campeoes['NORDESTE']?.sigla} × ${campeoes['CENTRO_NORTE']?.sigla}`)
 
   return [semifinal1, semifinal2]
 }
@@ -473,55 +445,6 @@ async function simularPlayoffsCompletos(): Promise<void> {
     // FASE 4: SIMULAR FINAIS DE CONFERÊNCIA
     // ===============================
     console.log('\n🏆 FASE 3: SIMULANDO FINAIS DE CONFERÊNCIA...')
-    
-    // Primeiro, atualizar finais com vencedores das semifinais
-    const semifinaisFinalizadas = await prisma.playoffJogo.findMany({
-      where: {
-        campeonatoId: superliga.id,
-        fase: 'SEMIFINAL CONFERENCIA',
-        status: 'FINALIZADO'
-      },
-      include: {
-        timeVencedor: true,
-        conferencia: true
-      }
-    })
-
-    // Agrupar vencedores por conferência
-    const vencedoresPorConferencia: { [key: string]: any[] } = {}
-    semifinaisFinalizadas.forEach(semifinal => {
-      const confTipo = semifinal.conferencia?.tipo
-      if (confTipo && semifinal.timeVencedor) {
-        if (!vencedoresPorConferencia[confTipo]) {
-          vencedoresPorConferencia[confTipo] = []
-        }
-        vencedoresPorConferencia[confTipo].push(semifinal.timeVencedor)
-      }
-    })
-
-    // Atualizar finais de conferência com os times corretos
-    for (const [confTipo, vencedores] of Object.entries(vencedoresPorConferencia)) {
-      if (vencedores.length >= 2) {
-        const finalConferencia = await prisma.playoffJogo.findFirst({
-          where: {
-            campeonatoId: superliga.id,
-            fase: 'FINAL CONFERENCIA',
-            conferencia: { tipo: confTipo }
-          }
-        })
-
-        if (finalConferencia) {
-          await prisma.playoffJogo.update({
-            where: { id: finalConferencia.id },
-            data: {
-              timeClassificado1Id: vencedores[0].id,
-              timeClassificado2Id: vencedores[1].id
-            }
-          })
-          console.log(`   🔧 Final ${confTipo}: ${vencedores[0].sigla} × ${vencedores[1].sigla}`)
-        }
-      }
-    }
     
     const finaisConferencia = await prisma.playoffJogo.findMany({
       where: {

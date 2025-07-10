@@ -34,7 +34,7 @@ async function simularFaseNacional(): Promise<void> {
       sul: finaisConferencia.find(f => f.conferencia?.tipo === 'SUL')?.timeVencedor,
       sudeste: finaisConferencia.find(f => f.conferencia?.tipo === 'SUDESTE')?.timeVencedor,
       nordeste: finaisConferencia.find(f => f.conferencia?.tipo === 'NORDESTE')?.timeVencedor,
-      centroNorte: finaisConferencia.find(f => f.conferencia?.tipo === 'CENTRO_NORTE')?.timeVencedor
+      centroNorte: finaisConferencia.find(f => f.conferencia?.tipo === 'CENTRO NORTE')?.timeVencedor
     }
 
     console.log('🏅 CAMPEÕES DE CONFERÊNCIA:')

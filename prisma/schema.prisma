@@ -168,7 +168,7 @@ model DistribuicaoTime {
   temporada    String
   
   // Campos para facilitar consultas
-  conferenciaType String // SUDESTE, SUL, NORDESTE, CENTRO_NORTE
+  conferenciaType String // SUDESTE, SUL, NORDESTE, CENTRO NORTE
   regionalType    String // SERRAMAR, CANASTRA, etc.
   
   createdAt DateTime @default(now())

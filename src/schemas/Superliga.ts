@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 // ==================== ENUMS ====================
 
-export const TipoConferenciaEnum = z.enum(['SUDESTE', 'SUL', 'NORDESTE', 'CENTRO_NORTE'])
+export const TipoConferenciaEnum = z.enum(['SUDESTE', 'SUL', 'NORDESTE', 'CENTRO NORTE'])
 export const TipoRegionalEnum = z.enum([
   'SERRAMAR', 'CANASTRA', 'CANTAREIRA',
   'ARAUCARIA', 'PAMPA',
@@ -12,19 +12,19 @@ export const TipoRegionalEnum = z.enum([
 
 export const FaseSuperligaEnum = z.enum([
   'CONFIGURACAO',
-  'TEMPORADA_REGULAR', 
-  'PLAYOFFS_CONFERENCIA',
-  'FASE_NACIONAL',
+  'TEMPORADA REGULAR', 
+  'PLAYOFFS CONFERENCIA',
+  'FASE NACIONAL',
   'FINALIZADO'
 ])
 
 export const TipoJogoSuperligaEnum = z.enum([
-  'TEMPORADA_REGULAR',
-  'WILD_CARD',
-  'SEMIFINAL_CONFERENCIA',
-  'FINAL_CONFERENCIA',
-  'SEMIFINAL_NACIONAL',
-  'FINAL_NACIONAL'
+  'TEMPORADA REGULAR',
+  'WILD CARD',
+  'SEMIFINAL CONFERENCIA',
+  'FINAL CONFERENCIA',
+  'SEMIFINAL NACIONAL',
+  'FINAL NACIONAL'
 ])
 
 // ==================== SCHEMAS DE CRIAÇÃO ====================

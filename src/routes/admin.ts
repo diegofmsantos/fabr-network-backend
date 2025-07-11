@@ -6,7 +6,7 @@ import xlsx from 'xlsx'
 import multer from 'multer'
 import { TimeClassificado } from '../types';
 import { calcularClassificacaoPorConferencia } from '../utils/distribuicaoUtils';
-import { gerarPlayoffsCentroNorte, gerarPlayoffsNordeste, gerarPlayoffsSudeste, gerarPlayoffsSul } from '../utils/superligaUtils';
+import { distribuirTimesAutomaticamente, gerarPlayoffsCentroNorte, gerarPlayoffsNordeste, gerarPlayoffsSudeste, gerarPlayoffsSul } from '../utils/superligaUtils';
 
 export async function verificarGeracaoAutomaticaPlayoffs(campeonatoId: number) {
     try {
@@ -3099,6 +3099,57 @@ adminRouter.post('/importar-resultados-incremental', upload.single('arquivo'), a
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
         return
+    }
+})
+
+adminRouter.post('/superliga/:temporada/distribuir-times', async (req: Request, res: Response) => {
+    try {
+        const { temporada } = req.params
+
+        console.log(`🎯 Iniciando distribuição de times para temporada ${temporada}`)
+
+        // Buscar a superliga
+        const superliga = await prisma.campeonato.findFirst({
+            where: {
+                temporada,
+                isSuperliga: true
+            }
+        })
+
+        if (!superliga) {
+            res.status(404).json({ error: 'Superliga não encontrada para esta temporada' })
+            return
+        }
+
+        // Verificar se já existe distribuição
+        const distribuicaoExistente = await prisma.distribuicaoTime.count({
+            where: { campeonatoId: superliga.id }
+        })
+
+        if (distribuicaoExistente > 0) {
+            res.status(409).json({
+                error: 'Times já foram distribuídos para esta temporada',
+                distribuidos: distribuicaoExistente
+            })
+            return
+        }
+
+        // Executar distribuição automática
+        const timesDistribuidos = await distribuirTimesAutomaticamente(superliga.id, temporada)
+
+        console.log(`✅ Distribuição concluída: ${timesDistribuidos} times`)
+
+        res.json({
+            message: 'Times distribuídos com sucesso',
+            distribuidos: timesDistribuidos
+        })
+
+    } catch (error) {
+        console.error('❌ Erro na distribuição de times:', error)
+        res.status(500).json({
+            error: 'Erro interno na distribuição de times',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
     }
 })
 

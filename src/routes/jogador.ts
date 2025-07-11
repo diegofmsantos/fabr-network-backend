@@ -286,26 +286,27 @@ jogadorRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Resp
     }
 });
 
-// ADICIONAR esta rota em src/routes/jogador.ts
+
 
 // Rota para buscar estatísticas jogo a jogo de um jogador
-jogadorRouter.get('/jogador/:id/estatisticas-jogo', async (req: Request, res: Response) => {
+jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
+        const { temporada } = req.query
         const jogadorId = parseInt(id, 10)
+
+        console.log(`🔍 [ROTA] Buscando estatísticas para jogador ${jogadorId}, temporada: ${temporada}`)
 
         if (isNaN(jogadorId)) {
             res.status(400).json({ error: 'ID do jogador inválido' })
             return
         }
 
-        console.log(`🔍 Buscando estatísticas jogo a jogo para jogador ID: ${jogadorId}`)
-
         // Buscar todas as estatísticas de jogo do jogador
         const estatisticasJogo = await prisma.estatisticaJogo.findMany({
             where: {
                 jogadorId: jogadorId,
-                temporada: '2025' // ou pegar da query string
+                temporada: temporada as string || '2025'
             },
             include: {
                 jogo: {
@@ -315,7 +316,8 @@ jogadorRouter.get('/jogador/:id/estatisticas-jogo', async (req: Request, res: Re
                                 id: true,
                                 nome: true,
                                 sigla: true,
-                                cor: true
+                                cor: true,
+                                logo: true
                             }
                         },
                         timeVisitante: {
@@ -323,7 +325,8 @@ jogadorRouter.get('/jogador/:id/estatisticas-jogo', async (req: Request, res: Re
                                 id: true,
                                 nome: true,
                                 sigla: true,
-                                cor: true
+                                cor: true,
+                                logo: true
                             }
                         }
                     }
@@ -346,12 +349,12 @@ jogadorRouter.get('/jogador/:id/estatisticas-jogo', async (req: Request, res: Re
             },
             orderBy: {
                 jogo: {
-                    dataJogo: 'desc' // Mais recentes primeiro
+                    dataJogo: 'desc'
                 }
             }
         })
 
-        console.log(`✅ Encontradas ${estatisticasJogo.length} estatísticas de jogo`)
+        console.log(`✅ [ROTA] Encontradas ${estatisticasJogo.length} estatísticas`)
 
         // Formatar dados para o frontend
         const estatisticasFormatadas = estatisticasJogo.map(stat => ({
@@ -372,6 +375,8 @@ jogadorRouter.get('/jogador/:id/estatisticas-jogo', async (req: Request, res: Re
                 rodada: stat.jogo.rodada,
                 fase: stat.jogo.fase,
                 local: stat.jogo.local,
+                timeCasaId: stat.jogo.timeCasaId,
+                timeVisitanteId: stat.jogo.timeVisitanteId,
                 timeCasa: stat.jogo.timeCasa,
                 timeVisitante: stat.jogo.timeVisitante
             },
@@ -386,10 +391,12 @@ jogadorRouter.get('/jogador/:id/estatisticas-jogo', async (req: Request, res: Re
         res.json(estatisticasFormatadas)
 
     } catch (error) {
-        console.error('❌ Erro ao buscar estatísticas jogo a jogo:', error)
+        console.error('❌ [ROTA] Erro ao buscar estatísticas:', error)
         res.status(500).json({
             error: 'Erro ao buscar estatísticas jogo a jogo',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
     }
 })
+
+export default jogadorRouter

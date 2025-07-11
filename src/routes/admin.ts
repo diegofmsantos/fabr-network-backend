@@ -1185,6 +1185,8 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req,
     }
 });
 
+// SUBSTITUIR A ROTA adminRouter.post('/atualizar-estatisticas') em src/routes/admin.ts
+
 adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req, res) => {
     try {
         if (!req.file) {
@@ -1199,6 +1201,9 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
             return;
         }
 
+        console.log('📊 INICIANDO DUPLA INSERÇÃO DE ESTATÍSTICAS...');
+        console.log(`🎯 Jogo: ${id_jogo}, Data: ${data_jogo}`);
+
         const workbook = xlsx.readFile(req.file.path);
         const sheetName = workbook.SheetNames[0];
         const statsSheet = workbook.Sheets[sheetName];
@@ -1207,9 +1212,12 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
 
         const resultados = {
             sucesso: 0,
+            sucessoConsolidado: 0,
+            sucessoJogoAJogo: 0,
             erros: [] as any[]
         };
 
+        // 🔄 PROCESSAR CADA LINHA DE ESTATÍSTICA
         for (const stat of estatisticasJogo) {
             try {
                 if (!stat.jogador_id && !stat.jogador_nome) {
@@ -1225,6 +1233,7 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                 let jogador;
                 let jogadorTime;
 
+                // 🔍 BUSCAR JOGADOR POR ID OU NOME
                 if (stat.jogador_id) {
                     const jogadorId = Number(stat.jogador_id);
 
@@ -1248,43 +1257,66 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                     }
 
                     jogadorTime = jogadorTimes[0];
+
+                } else if (stat.jogador_nome) {
+                    // Buscar por nome
+                    jogador = await prisma.jogador.findFirst({
+                        where: {
+                            nome: {
+                                contains: stat.jogador_nome,
+                                mode: 'insensitive'
+                            }
+                        }
+                    });
+
+                    if (!jogador) {
+                        throw new Error(`Jogador "${stat.jogador_nome}" não encontrado`);
+                    }
+
+                    const jogadorTimes = await prisma.jogadorTime.findMany({
+                        where: {
+                            jogadorId: jogador.id,
+                            temporada: temporada
+                        }
+                    });
+
+                    if (jogadorTimes.length === 0) {
+                        throw new Error(`Jogador "${stat.jogador_nome}" não tem relação com time na temporada ${temporada}`);
+                    }
+
+                    jogadorTime = jogadorTimes[0];
                 }
 
                 if (!jogador || !jogadorTime) {
-                    resultados.erros.push({
-                        jogador: stat.jogador_nome || stat.jogador_id,
-                        erro: 'Jogador não encontrado ou não relacionado a nenhum time'
-                    });
-                    continue;
+                    throw new Error('Não foi possível identificar jogador ou time');
                 }
 
-                const estatisticasAtuais = jogadorTime.estatisticas as any || {};
-
-                const estatisticasDoJogo = {
+                // 📊 PREPARAR ESTATÍSTICAS ESTRUTURADAS
+                const estatisticasEstruturadas = {
                     passe: {
+                        jardas_de_passe: Number(stat.jardas_de_passe || 0),
                         passes_completos: Number(stat.passes_completos || 0),
                         passes_tentados: Number(stat.passes_tentados || 0),
-                        jardas_de_passe: Number(stat.jardas_de_passe || 0),
                         td_passados: Number(stat.td_passados || 0),
                         interceptacoes_sofridas: Number(stat.interceptacoes_sofridas || 0),
                         sacks_sofridos: Number(stat.sacks_sofridos || 0),
                         fumble_de_passador: Number(stat.fumble_de_passador || 0)
                     },
                     corrida: {
-                        corridas: Number(stat.corridas || 0),
                         jardas_corridas: Number(stat.jardas_corridas || 0),
+                        corridas: Number(stat.corridas || 0),
                         tds_corridos: Number(stat.tds_corridos || 0),
                         fumble_de_corredor: Number(stat.fumble_de_corredor || 0)
                     },
                     recepcao: {
+                        jardas_recebidas: Number(stat.jardas_recebidas || 0),
                         recepcoes: Number(stat.recepcoes || 0),
                         alvo: Number(stat.alvo || 0),
-                        jardas_recebidas: Number(stat.jardas_recebidas || 0),
                         tds_recebidos: Number(stat.tds_recebidos || 0)
                     },
                     retorno: {
-                        retornos: Number(stat.retornos || 0),
                         jardas_retornadas: Number(stat.jardas_retornadas || 0),
+                        retornos: Number(stat.retornos || 0),
                         td_retornados: Number(stat.td_retornados || 0)
                     },
                     defesa: {
@@ -1310,89 +1342,149 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                     }
                 };
 
-                const novasEstatisticas = {
-                    passe: {
-                        passes_completos: (estatisticasAtuais.passe?.passes_completos || 0) + estatisticasDoJogo.passe.passes_completos,
-                        passes_tentados: (estatisticasAtuais.passe?.passes_tentados || 0) + estatisticasDoJogo.passe.passes_tentados,
-                        jardas_de_passe: (estatisticasAtuais.passe?.jardas_de_passe || 0) + estatisticasDoJogo.passe.jardas_de_passe,
-                        td_passados: (estatisticasAtuais.passe?.td_passados || 0) + estatisticasDoJogo.passe.td_passados,
-                        interceptacoes_sofridas: (estatisticasAtuais.passe?.interceptacoes_sofridas || 0) + estatisticasDoJogo.passe.interceptacoes_sofridas,
-                        sacks_sofridos: (estatisticasAtuais.passe?.sacks_sofridos || 0) + estatisticasDoJogo.passe.sacks_sofridos,
-                        fumble_de_passador: (estatisticasAtuais.passe?.fumble_de_passador || 0) + estatisticasDoJogo.passe.fumble_de_passador
-                    },
-                    corrida: {
-                        corridas: (estatisticasAtuais.corrida?.corridas || 0) + estatisticasDoJogo.corrida.corridas,
-                        jardas_corridas: (estatisticasAtuais.corrida?.jardas_corridas || 0) + estatisticasDoJogo.corrida.jardas_corridas,
-                        tds_corridos: (estatisticasAtuais.corrida?.tds_corridos || 0) + estatisticasDoJogo.corrida.tds_corridos,
-                        fumble_de_corredor: (estatisticasAtuais.corrida?.fumble_de_corredor || 0) + estatisticasDoJogo.corrida.fumble_de_corredor
-                    },
-                    recepcao: {
-                        recepcoes: (estatisticasAtuais.recepcao?.recepcoes || 0) + estatisticasDoJogo.recepcao.recepcoes,
-                        alvo: (estatisticasAtuais.recepcao?.alvo || 0) + estatisticasDoJogo.recepcao.alvo,
-                        jardas_recebidas: (estatisticasAtuais.recepcao?.jardas_recebidas || 0) + estatisticasDoJogo.recepcao.jardas_recebidas,
-                        tds_recebidos: (estatisticasAtuais.recepcao?.tds_recebidos || 0) + estatisticasDoJogo.recepcao.tds_recebidos
-                    },
-                    retorno: {
-                        retornos: (estatisticasAtuais.retorno?.retornos || 0) + estatisticasDoJogo.retorno.retornos,
-                        jardas_retornadas: (estatisticasAtuais.retorno?.jardas_retornadas || 0) + estatisticasDoJogo.retorno.jardas_retornadas,
-                        td_retornados: (estatisticasAtuais.retorno?.td_retornados || 0) + estatisticasDoJogo.retorno.td_retornados
-                    },
-                    defesa: {
-                        tackles_totais: (estatisticasAtuais.defesa?.tackles_totais || 0) + estatisticasDoJogo.defesa.tackles_totais,
-                        tackles_for_loss: (estatisticasAtuais.defesa?.tackles_for_loss || 0) + estatisticasDoJogo.defesa.tackles_for_loss,
-                        sacks_forcado: (estatisticasAtuais.defesa?.sacks_forcado || 0) + estatisticasDoJogo.defesa.sacks_forcado,
-                        fumble_forcado: (estatisticasAtuais.defesa?.fumble_forcado || 0) + estatisticasDoJogo.defesa.fumble_forcado,
-                        interceptacao_forcada: (estatisticasAtuais.defesa?.interceptacao_forcada || 0) + estatisticasDoJogo.defesa.interceptacao_forcada,
-                        passe_desviado: (estatisticasAtuais.defesa?.passe_desviado || 0) + estatisticasDoJogo.defesa.passe_desviado,
-                        safety: (estatisticasAtuais.defesa?.safety || 0) + estatisticasDoJogo.defesa.safety,
-                        td_defensivo: (estatisticasAtuais.defesa?.td_defensivo || 0) + estatisticasDoJogo.defesa.td_defensivo
-                    },
-                    kicker: {
-                        xp_bons: (estatisticasAtuais.kicker?.xp_bons || 0) + estatisticasDoJogo.kicker.xp_bons,
-                        tentativas_de_xp: (estatisticasAtuais.kicker?.tentativas_de_xp || 0) + estatisticasDoJogo.kicker.tentativas_de_xp,
-                        fg_bons: (estatisticasAtuais.kicker?.fg_bons || 0) + estatisticasDoJogo.kicker.fg_bons,
-                        tentativas_de_fg: (estatisticasAtuais.kicker?.tentativas_de_fg || 0) + estatisticasDoJogo.kicker.tentativas_de_fg,
-                        fg_mais_longo: Math.max(estatisticasAtuais.kicker?.fg_mais_longo || 0, estatisticasDoJogo.kicker.fg_mais_longo)
-                    },
-                    punter: {
-                        punts: (estatisticasAtuais.punter?.punts || 0) + estatisticasDoJogo.punter.punts,
-                        jardas_de_punt: (estatisticasAtuais.punter?.jardas_de_punt || 0) + estatisticasDoJogo.punter.jardas_de_punt
-                    }
-                };
+                // 🎯 INSERÇÃO 1: TABELA EstatisticaJogo (JOGO A JOGO)
+                try {
+                    await prisma.estatisticaJogo.upsert({
+                        where: {
+                            jogoId_jogadorId: {
+                                jogoId: Number(id_jogo),
+                                jogadorId: jogador.id
+                            }
+                        },
+                        update: {
+                            estatisticas: estatisticasEstruturadas,
+                            temporada: temporada,
+                            rodada: Number(stat.rodada || 1),
+                            fase: stat.fase || 'TEMPORADA_REGULAR'
+                        },
+                        create: {
+                            jogoId: Number(id_jogo),
+                            jogadorId: jogador.id,
+                            timeId: jogadorTime.timeId,
+                            estatisticas: estatisticasEstruturadas,
+                            temporada: temporada,
+                            rodada: Number(stat.rodada || 1),
+                            fase: stat.fase || 'TEMPORADA_REGULAR'
+                        }
+                    });
 
-                await prisma.jogadorTime.update({
-                    where: { id: jogadorTime.id },
-                    data: {
-                        estatisticas: novasEstatisticas
-                    }
-                });
+                    resultados.sucessoJogoAJogo++;
+                    console.log(`✅ [JOGO A JOGO] ${jogador.nome} - Jogo ${id_jogo}`);
+
+                } catch (error) {
+                    console.error(`❌ [JOGO A JOGO] Erro para ${jogador.nome}:`, error);
+                    resultados.erros.push({
+                        jogador: jogador.nome,
+                        tipo: 'jogo_a_jogo',
+                        erro: error instanceof Error ? error.message : 'Erro desconhecido'
+                    });
+                }
+
+                // 🎯 INSERÇÃO 2: JogadorTime.estatisticas (CONSOLIDADO)
+                try {
+                    // Buscar estatísticas atuais do jogador
+                    const estatisticasAtuais = jogadorTime.estatisticas as any || {};
+
+                    // Consolidar as novas estatísticas com as existentes
+                    const estatisticasConsolidadas = {
+                        passe: {
+                            jardas_de_passe: (estatisticasAtuais.passe?.jardas_de_passe || 0) + estatisticasEstruturadas.passe.jardas_de_passe,
+                            passes_completos: (estatisticasAtuais.passe?.passes_completos || 0) + estatisticasEstruturadas.passe.passes_completos,
+                            passes_tentados: (estatisticasAtuais.passe?.passes_tentados || 0) + estatisticasEstruturadas.passe.passes_tentados,
+                            td_passados: (estatisticasAtuais.passe?.td_passados || 0) + estatisticasEstruturadas.passe.td_passados,
+                            interceptacoes_sofridas: (estatisticasAtuais.passe?.interceptacoes_sofridas || 0) + estatisticasEstruturadas.passe.interceptacoes_sofridas,
+                            sacks_sofridos: (estatisticasAtuais.passe?.sacks_sofridos || 0) + estatisticasEstruturadas.passe.sacks_sofridos,
+                            fumble_de_passador: (estatisticasAtuais.passe?.fumble_de_passador || 0) + estatisticasEstruturadas.passe.fumble_de_passador
+                        },
+                        corrida: {
+                            jardas_corridas: (estatisticasAtuais.corrida?.jardas_corridas || 0) + estatisticasEstruturadas.corrida.jardas_corridas,
+                            corridas: (estatisticasAtuais.corrida?.corridas || 0) + estatisticasEstruturadas.corrida.corridas,
+                            tds_corridos: (estatisticasAtuais.corrida?.tds_corridos || 0) + estatisticasEstruturadas.corrida.tds_corridos,
+                            fumble_de_corredor: (estatisticasAtuais.corrida?.fumble_de_corredor || 0) + estatisticasEstruturadas.corrida.fumble_de_corredor
+                        },
+                        recepcao: {
+                            jardas_recebidas: (estatisticasAtuais.recepcao?.jardas_recebidas || 0) + estatisticasEstruturadas.recepcao.jardas_recebidas,
+                            recepcoes: (estatisticasAtuais.recepcao?.recepcoes || 0) + estatisticasEstruturadas.recepcao.recepcoes,
+                            alvo: (estatisticasAtuais.recepcao?.alvo || 0) + estatisticasEstruturadas.recepcao.alvo,
+                            tds_recebidos: (estatisticasAtuais.recepcao?.tds_recebidos || 0) + estatisticasEstruturadas.recepcao.tds_recebidos
+                        },
+                        retorno: {
+                            jardas_retornadas: (estatisticasAtuais.retorno?.jardas_retornadas || 0) + estatisticasEstruturadas.retorno.jardas_retornadas,
+                            retornos: (estatisticasAtuais.retorno?.retornos || 0) + estatisticasEstruturadas.retorno.retornos,
+                            td_retornados: (estatisticasAtuais.retorno?.td_retornados || 0) + estatisticasEstruturadas.retorno.td_retornados
+                        },
+                        defesa: {
+                            tackles_totais: (estatisticasAtuais.defesa?.tackles_totais || 0) + estatisticasEstruturadas.defesa.tackles_totais,
+                            tackles_for_loss: (estatisticasAtuais.defesa?.tackles_for_loss || 0) + estatisticasEstruturadas.defesa.tackles_for_loss,
+                            sacks_forcado: (estatisticasAtuais.defesa?.sacks_forcado || 0) + estatisticasEstruturadas.defesa.sacks_forcado,
+                            fumble_forcado: (estatisticasAtuais.defesa?.fumble_forcado || 0) + estatisticasEstruturadas.defesa.fumble_forcado,
+                            interceptacao_forcada: (estatisticasAtuais.defesa?.interceptacao_forcada || 0) + estatisticasEstruturadas.defesa.interceptacao_forcada,
+                            passe_desviado: (estatisticasAtuais.defesa?.passe_desviado || 0) + estatisticasEstruturadas.defesa.passe_desviado,
+                            safety: (estatisticasAtuais.defesa?.safety || 0) + estatisticasEstruturadas.defesa.safety,
+                            td_defensivo: (estatisticasAtuais.defesa?.td_defensivo || 0) + estatisticasEstruturadas.defesa.td_defensivo
+                        },
+                        kicker: {
+                            xp_bons: (estatisticasAtuais.kicker?.xp_bons || 0) + estatisticasEstruturadas.kicker.xp_bons,
+                            tentativas_de_xp: (estatisticasAtuais.kicker?.tentativas_de_xp || 0) + estatisticasEstruturadas.kicker.tentativas_de_xp,
+                            fg_bons: (estatisticasAtuais.kicker?.fg_bons || 0) + estatisticasEstruturadas.kicker.fg_bons,
+                            tentativas_de_fg: (estatisticasAtuais.kicker?.tentativas_de_fg || 0) + estatisticasEstruturadas.kicker.tentativas_de_fg,
+                            fg_mais_longo: Math.max((estatisticasAtuais.kicker?.fg_mais_longo || 0), estatisticasEstruturadas.kicker.fg_mais_longo)
+                        },
+                        punter: {
+                            punts: (estatisticasAtuais.punter?.punts || 0) + estatisticasEstruturadas.punter.punts,
+                            jardas_de_punt: (estatisticasAtuais.punter?.jardas_de_punt || 0) + estatisticasEstruturadas.punter.jardas_de_punt
+                        }
+                    };
+
+                    // Atualizar estatísticas consolidadas
+                    await prisma.jogadorTime.update({
+                        where: { id: jogadorTime.id },
+                        data: {
+                            estatisticas: estatisticasConsolidadas
+                        }
+                    });
+
+                    resultados.sucessoConsolidado++;
+                    console.log(`✅ [CONSOLIDADO] ${jogador.nome} - Total acumulado`);
+
+                } catch (error) {
+                    console.error(`❌ [CONSOLIDADO] Erro para ${jogador.nome}:`, error);
+                    resultados.erros.push({
+                        jogador: jogador.nome,
+                        tipo: 'consolidado',
+                        erro: error instanceof Error ? error.message : 'Erro desconhecido'
+                    });
+                }
 
                 resultados.sucesso++;
+
             } catch (error) {
-                console.error(`Erro ao processar estatísticas para jogador:`, error);
                 resultados.erros.push({
-                    jogador: stat.jogador_nome || stat.jogador_id || 'Desconhecido',
+                    linha: JSON.stringify(stat),
                     erro: error instanceof Error ? error.message : 'Erro desconhecido'
                 });
+                console.error('❌ Erro ao processar estatística:', error);
             }
         }
 
-        fs.unlinkSync(req.file.path);
+        // 📊 RELATÓRIO FINAL
+        console.log('\n📊 RELATÓRIO DA DUPLA INSERÇÃO:');
+        console.log(`✅ Total processado: ${resultados.sucesso}`);
+        console.log(`📝 Jogo a jogo: ${resultados.sucessoJogoAJogo}`);
+        console.log(`🔄 Consolidado: ${resultados.sucessoConsolidado}`);
+        console.log(`❌ Erros: ${resultados.erros.length}`);
 
-        res.status(200).json({
-            mensagem: `Estatísticas do jogo ${id_jogo} processadas com sucesso para ${resultados.sucesso} jogadores`,
-            data_jogo,
-            erros: resultados.erros.length > 0 ? resultados.erros : null
+        res.json({
+            message: 'Estatísticas importadas com dupla inserção',
+            tipo: 'dupla_insercao',
+            detalhes: resultados,
+            arquivo: req.file.originalname
         });
+
     } catch (error) {
-        console.error('Erro ao processar estatísticas do jogo:', error);
-
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-
+        console.error('❌ Erro na importação de estatísticas:', error);
         res.status(500).json({
-            error: 'Erro ao processar estatísticas do jogo',
+            error: 'Erro ao importar estatísticas',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         });
     }

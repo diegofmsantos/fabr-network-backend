@@ -6,7 +6,7 @@ import xlsx from 'xlsx'
 import multer from 'multer'
 import { TimeClassificado } from '../types';
 import { calcularClassificacaoPorConferencia } from '../utils/distribuicaoUtils';
-import { distribuirTimesAutomaticamente, gerarPlayoffsCentroNorte, gerarPlayoffsNordeste, gerarPlayoffsSudeste, gerarPlayoffsSul } from '../utils/superligaUtils';
+import { gerarPlayoffsCentroNorte, gerarPlayoffsNordeste, gerarPlayoffsSudeste, gerarPlayoffsSul } from '../utils/superligaUtils';
 
 export async function verificarGeracaoAutomaticaPlayoffs(campeonatoId: number) {
     try {
@@ -1210,7 +1210,7 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                             estatisticas: estatisticasEstruturadas,
                             temporada: temporada,
                             rodada: Number(stat.rodada || 1),
-                            fase: stat.fase || 'TEMPORADA_REGULAR'
+                            fase: stat.fase || 'TEMPORADA REGULAR'
                         },
                         create: {
                             jogoId: Number(id_jogo),
@@ -1219,7 +1219,7 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                             estatisticas: estatisticasEstruturadas,
                             temporada: temporada,
                             rodada: Number(stat.rodada || 1),
-                            fase: stat.fase || 'TEMPORADA_REGULAR'
+                            fase: stat.fase || 'TEMPORADA REGULAR'
                         }
                     });
 

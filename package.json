@@ -6,7 +6,7 @@
     "node": "22"
   },
   "scripts": {
-     "dev": "tsx src/server.ts",
+    "dev": "tsx src/server.ts",
     "build": "tsup src",
     "start": "node dist/server.js",
     "postinstall": "prisma generate",
@@ -21,7 +21,9 @@
     "relatorio": "npx ts-node scripts/gerar-relatorio.ts",
     "stats": "npx ts-node scripts/estatisticas.ts",
     "generate:resultados": "npx ts-node scripts/gerar-resultados-fake.ts",
-    "verificar-distribuicao": "npx ts-node scripts/verificar-distribuicao.ts"
+    "verificar-distribuicao": "npx ts-node scripts/verificar-distribuicao.ts",
+    "generate:resultados-fins-de-semana": "npx ts-node scripts/gerar-resultados-por-fim-de-semana.ts",
+    "generate:estatisticas-fins-de-semana": "npx ts-node scripts/gerar-estatisticas-por-fim-de-semana.ts"
   },
   "author": "",
   "license": "ISC",

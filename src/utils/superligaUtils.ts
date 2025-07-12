@@ -449,6 +449,24 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
     try {
         console.log('🧊 INICIANDO GERAÇÃO DE PLAYOFFS SUL...')
 
+        // ✅ VERIFICAR SE JÁ EXISTEM PLAYOFFS PARA EVITAR DUPLICAÇÃO
+        const playoffsExistentes = await prisma.playoffJogo.findMany({
+            where: {
+                campeonatoId,
+                conferenciaId
+            }
+        })
+
+        if (playoffsExistentes.length > 0) {
+            console.log(`⚠️  Playoffs Sul já existem (${playoffsExistentes.length} jogos)`)
+            return {
+                wildcards: playoffsExistentes.filter(j => j.fase === 'WILD CARD'),
+                semifinais: playoffsExistentes.filter(j => j.fase === 'SEMIFINAL CONFERENCIA'),
+                final: playoffsExistentes.find(j => j.fase === 'FINAL CONFERENCIA'),
+                timesClassificados: { diretos: [], wildcards: [] }
+            }
+        }
+
         const classificacao = await calcularClassificacaoPorConferencia(campeonatoId);
         const sul = classificacao['SUL'];
 
@@ -457,27 +475,31 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
         }
 
         // Sul tem 2 regionais: ARAUCÁRIA e PAMPA
-        const [araucaria, pampa] = sul
+        const [araucaria, pampa] = sul;
 
-        const primeiroAraucaria = araucaria.times[0];  // 1º Araucária
-        const segundoAraucaria = araucaria.times[1];   // 2º Araucária
-        const terceiroAraucaria = araucaria.times[2];  // 3º Araucária
+        if (!araucaria || !pampa) {
+            throw new Error('Regionais Araucária ou Pampa não encontradas');
+        }
 
-        const primeiroPampa = pampa.times[0];    // 1º Pampa
-        const segundoPampa = pampa.times[1];     // 2º Pampa
-        const terceiroPampa = pampa.times[2];    // 3º Pampa
+        const primeiroAraucaria = araucaria.times[0];
+        const segundoAraucaria = araucaria.times[1];
+        const terceiroAraucaria = araucaria.times[2];
+
+        const primeiroPampa = pampa.times[0];
+        const segundoPampa = pampa.times[1];
+        const terceiroPampa = pampa.times[2];
 
         console.log('📋 Classificação Sul:')
-        console.log(`1º Araucária: ${primeiroAraucaria.time.nome}`)
-        console.log(`1º Pampa: ${primeiroPampa.time.nome}`)
+        console.log(`   🏆 Araucária: 1º ${primeiroAraucaria?.time.nome}, 2º ${segundoAraucaria?.time.nome}, 3º ${terceiroAraucaria?.time.nome}`)
+        console.log(`   🏆 Pampa: 1º ${primeiroPampa?.time.nome}, 2º ${segundoPampa?.time.nome}, 3º ${terceiroPampa?.time.nome}`)
 
-        // WILD CARDS (conforme Figma):
+        // ✅ WILD CARDS - CORRIGIDOS PARA SEREM DIFERENTES
         const wildcard1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
                 conferenciaId,
-                timeClassificado1Id: segundoAraucaria.time.id,
-                timeClassificado2Id: terceiroPampa.time.id,
+                timeClassificado1Id: segundoAraucaria.time.id,  // 2º Araucária
+                timeClassificado2Id: terceiroPampa.time.id,     // 3º Pampa
                 fase: 'WILD CARD',
                 rodada: 1,
                 dataJogo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -490,17 +512,27 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             data: {
                 campeonatoId,
                 conferenciaId,
-                timeClassificado1Id: segundoPampa.time.id,
-                timeClassificado2Id: terceiroAraucaria.time.id,
+                timeClassificado1Id: segundoPampa.time.id,      // 2º Pampa  
+                timeClassificado2Id: terceiroAraucaria.time.id, // 3º Araucária
                 fase: 'WILD CARD',
-                rodada: 2,
+                rodada: 2, // ✅ RODADA DIFERENTE
                 dataJogo: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
                 status: 'AGUARDANDO',
                 nome: '2º Pampa × 3º Araucária'
             }
         });
 
-        // SEMIFINAIS (conforme Figma):
+        console.log(`✅ Wild Card 1: ${segundoAraucaria.time.nome} × ${terceiroPampa.time.nome}`)
+        console.log(`✅ Wild Card 2: ${segundoPampa.time.nome} × ${terceiroAraucaria.time.nome}`)
+
+        // ✅ VERIFICAR SE OS JOGOS SÃO REALMENTE DIFERENTES
+        if (wildcard1.timeClassificado1Id === wildcard2.timeClassificado1Id && 
+            wildcard1.timeClassificado2Id === wildcard2.timeClassificado2Id) {
+            console.error('❌ ERRO: Wild Cards são idênticos!')
+            throw new Error('Wild Cards duplicados detectados')
+        }
+
+        // ✅ SEMIFINAIS (1º colocados pegam vencedores mais próximos)
         const semifinal1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -511,7 +543,7 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
                 rodada: 1,
                 dataJogo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
                 status: 'AGUARDANDO',
-                nome: '1º Araucária × Wildcard'
+                nome: '1º Araucária × Vencedor Wild Card'
             }
         });
 
@@ -525,11 +557,14 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
                 rodada: 2,
                 dataJogo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
                 status: 'AGUARDANDO',
-                nome: '1º Pampa × Wildcard'
+                nome: '1º Pampa × Vencedor Wild Card'
             }
         });
 
-        // FINAL
+        console.log(`✅ Semifinal 1: ${primeiroAraucaria.time.nome} × Vencedor Wild Card`)
+        console.log(`✅ Semifinal 2: ${primeiroPampa.time.nome} × Vencedor Wild Card`)
+
+        // ✅ FINAL
         const final = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -544,7 +579,9 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
             }
         });
 
-        console.log('✅ Playoffs Sul gerados conforme Figma!')
+        console.log('✅ Final da Conferência Sul criada')
+        console.log('✅ Playoffs Sul gerados com sucesso!')
+
         return {
             wildcards: [wildcard1, wildcard2],
             semifinais: [semifinal1, semifinal2],
@@ -556,7 +593,7 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
         }
 
     } catch (error) {
-        console.error('Erro ao gerar playoffs Sul:', error)
+        console.error('❌ Erro ao gerar playoffs Sul:', error)
         throw error
     }
 }
@@ -649,23 +686,73 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
     }
 }
 
-// SUBSTITUIR a função gerarPlayoffsNordeste no arquivo src/utils/superligaUtils.ts
+
 
 export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId: number) {
     try {
         console.log('🌵 INICIANDO GERAÇÃO DE PLAYOFFS NORDESTE...')
+        console.log(`   📋 CampeonatoId: ${campeonatoId}`)
+        console.log(`   📋 ConferenciaId: ${conferenciaId}`)
 
+        // ✅ VERIFICAR SE JÁ EXISTEM PLAYOFFS PARA EVITAR DUPLICAÇÃO
+        const playoffsExistentes = await prisma.playoffJogo.findMany({
+            where: {
+                campeonatoId,
+                conferenciaId
+            }
+        })
+
+        console.log(`   📊 Playoffs existentes: ${playoffsExistentes.length}`)
+
+        if (playoffsExistentes.length > 0) {
+            console.log(`⚠️  Playoffs Nordeste já existem (${playoffsExistentes.length} jogos)`)
+            return {
+                wildcards: playoffsExistentes.filter(j => j.fase === 'WILD CARD'),
+                semifinais: playoffsExistentes.filter(j => j.fase === 'SEMIFINAL CONFERENCIA'),
+                final: playoffsExistentes.find(j => j.fase === 'FINAL CONFERENCIA'),
+                timesClassificados: { diretos: [], wildcards: [] }
+            }
+        }
+
+        console.log('   📈 Calculando classificação...')
         const classificacao = await calcularClassificacaoPorConferencia(campeonatoId);
-        const nordeste = classificacao['NORDESTE'];
-        if (!nordeste || !Array.isArray(nordeste)) {
+        console.log(`   📊 Classificação calculada:`, Object.keys(classificacao))
+        
+        // ✅ BUSCAR NORDESTE (testar diferentes nomenclaturas)
+        let nordeste = classificacao['NORDESTE'];
+        console.log(`   🔍 Nordeste direto:`, nordeste ? 'ENCONTRADO' : 'NÃO ENCONTRADO')
+        
+        if (!nordeste) {
+            console.log('   ⚠️  Tentando nomenclatura alternativa para Nordeste...')
+            nordeste = classificacao['Nordeste'];
+            console.log(`   🔍 Nordeste alternativo:`, nordeste ? 'ENCONTRADO' : 'NÃO ENCONTRADO')
+        }
+        
+        if (!nordeste || !Array.isArray(nordeste) || nordeste.length === 0) {
+            console.error('❌ Classificação da Conferência Nordeste não encontrada')
+            console.log('📋 Conferências disponíveis:', Object.keys(classificacao))
+            console.log('📋 Valores das conferências:', classificacao)
             throw new Error('Classificação da Conferência Nordeste não encontrada');
         }
 
+        console.log(`✅ Nordeste encontrado com ${nordeste.length} regionais`)
+        console.log(`   📊 Estrutura do Nordeste:`, nordeste)
+
         // Nordeste tem 1 regional: ATLÂNTICO com 6 times
         const atlantico = nordeste[0];
+        console.log(`   🔍 Regional Atlântico:`, atlantico)
+        
+        if (!atlantico || !atlantico.times) {
+            console.error('❌ Regional Atlântico não encontrado:', atlantico)
+            throw new Error('Regional Atlântico não encontrado na classificação');
+        }
+
         const times = atlantico.times;
+        console.log(`   📊 Times no Atlântico: ${times.length}`)
 
         if (times.length < 6) {
+            console.error(`❌ Regional Atlântico deve ter 6 times, encontrados ${times.length}`)
+            console.log('📋 Times encontrados:', times.map((t: any) => t.time?.nome || 'Nome não disponível'))
             throw new Error(`Regional Atlântico deve ter 6 times, encontrados ${times.length}`);
         }
 
@@ -678,10 +765,11 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
 
         console.log('📋 Classificação Nordeste:')
         times.forEach((time: any, index: number) => {
-            console.log(`   ${index + 1}º. ${time.time.nome}`)
+            console.log(`   ${index + 1}º. ${time.time?.nome || 'Nome não disponível'} (${time.vitorias}V-${time.derrotas}D)`)
         });
 
-        // WILD CARD (conforme Figma):
+        console.log('   🃏 Criando Wild Card...')
+        // ✅ WILD CARD (conforme briefing: 4º vs 5º)
         const wildcard = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -696,18 +784,21 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             }
         });
 
-        // SEMIFINAIS (conforme Figma):
+        console.log(`✅ Wild Card criado: ${quarto.time.nome} × ${quinto.time.nome}`)
+
+        console.log('   🏅 Criando Semifinais...')
+        // ✅ SEMIFINAIS (conforme briefing)
         const semifinal1 = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
                 conferenciaId,
                 timeClassificado1Id: primeiro.time.id,
-                timeClassificado2Id: terceiro.time.id, // 3º pode ir direto ou vencedor WC
+                timeClassificado2Id: terceiro.time.id, // 3º lugar vai direto para semifinal
                 fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 1,
                 dataJogo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
                 status: 'AGUARDANDO',
-                nome: '1º Atlântico × 3º ou Wildcard'
+                nome: '1º Atlântico × 3º Atlântico'
             }
         });
 
@@ -716,16 +807,20 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
                 campeonatoId,
                 conferenciaId,
                 timeClassificado1Id: segundo.time.id,
-                timeClassificado2Id: null, // Será definido baseado no wild card
+                timeClassificado2Id: null, // Vencedor do Wild Card
                 fase: 'SEMIFINAL CONFERENCIA',
                 rodada: 2,
                 dataJogo: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
                 status: 'AGUARDANDO',
-                nome: '2º Atlântico × 3º ou Wildcard'
+                nome: '2º Atlântico × Vencedor Wild Card'
             }
         });
 
-        // FINAL
+        console.log(`✅ Semifinal 1: ${primeiro.time.nome} × ${terceiro.time.nome}`)
+        console.log(`✅ Semifinal 2: ${segundo.time.nome} × Vencedor Wild Card`)
+
+        console.log('   🏆 Criando Final...')
+        // ✅ FINAL
         const final = await prisma.playoffJogo.create({
             data: {
                 campeonatoId,
@@ -740,19 +835,34 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             }
         });
 
-        console.log('✅ Playoffs Nordeste gerados conforme Figma!')
-        return {
+        console.log('✅ Final da Conferência Nordeste criada')
+        console.log('✅ Playoffs Nordeste gerados com sucesso!')
+
+        const resultado = {
             wildcards: [wildcard],
             semifinais: [semifinal1, semifinal2],
             final,
             timesClassificados: {
-                diretos: [primeiro, segundo],
-                wildcards: [terceiro, quarto, quinto]
+                diretos: [primeiro, segundo, terceiro],
+                wildcards: [quarto, quinto]
             }
         }
 
+        console.log('   📊 Resultado final:', {
+            wildcards: resultado.wildcards.length,
+            semifinais: resultado.semifinais.length,
+            final: !!resultado.final
+        })
+
+        return resultado
+
     } catch (error) {
-        console.error('Erro ao gerar playoffs Nordeste:', error)
+        console.error('❌ ERRO DETALHADO na geração de playoffs Nordeste:')
+        console.error('   🔴 Tipo do erro:', error instanceof Error ? error.constructor.name : typeof error)
+        console.error('   🔴 Mensagem:', error instanceof Error ? error.message : String(error))
+        console.error('   🔴 Stack:', error instanceof Error ? error.stack : 'Sem stack trace')
+        console.error('   🔴 CampeonatoId:', campeonatoId)
+        console.error('   🔴 ConferenciaId:', conferenciaId)
         throw error
     }
 }

@@ -2661,54 +2661,106 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
 })
 
 
-
 async function gerarTodosPlayoffs(campeonatoId: number) {
-    const conferencias = await prisma.conferencia.findMany({
-        where: { campeonatoId },
-        include: { regionais: true }
-    })
+    try {
+        console.log('🏆 DEBUG: INICIANDO GERAÇÃO DE TODOS OS PLAYOFFS...')
 
-    let totalPlayoffJogos = 0
+        const conferencias = await prisma.conferencia.findMany({
+            where: { campeonatoId },
+            include: { regionais: true },
+            orderBy: { ordem: 'asc' }
+        })
 
-    for (const conf of conferencias) {
-        console.log(`   📋 ${conf.nome}: ${conf.regionais.length} regionais`)
+        console.log(`📋 DEBUG: Encontradas ${conferencias.length} conferências`)
 
-        try {
-            let resultado
+        let totalPlayoffJogos = 0
 
-            switch (conf.tipo) {
-                case 'SUDESTE':
-                    resultado = await gerarPlayoffsSudeste(campeonatoId, conf.id)
-                    totalPlayoffJogos += 5
-                    break
+        for (const conf of conferencias) {
+            console.log(`\n🎯 DEBUG: Processando ${conf.tipo}...`)
+            console.log(`   📋 ID da conferência: ${conf.id}`)
 
-                case 'SUL':
-                    resultado = await gerarPlayoffsSul(campeonatoId, conf.id)
-                    totalPlayoffJogos += 5
-                    break
+            try {
+                // ✅ VERIFICAR SE JÁ EXISTEM PLAYOFFS
+                const playoffsExistentes = await prisma.playoffJogo.findMany({
+                    where: {
+                        campeonatoId,
+                        conferenciaId: conf.id
+                    }
+                })
 
-                case 'NORDESTE':
-                    resultado = await gerarPlayoffsNordeste(campeonatoId, conf.id)
-                    totalPlayoffJogos += 4
-                    break
+                if (playoffsExistentes.length > 0) {
+                    console.log(`   ⚠️  ${conf.tipo} já tem ${playoffsExistentes.length} playoffs - PULANDO`)
+                    continue
+                }
 
-                case 'CENTRO NORTE':
-                    resultado = await gerarPlayoffsCentroNorte(campeonatoId, conf.id)
-                    totalPlayoffJogos += 3
-                    break
+                let resultado
+
+                switch (conf.tipo) {
+                    case 'SUDESTE':
+                        console.log('   🏭 Gerando Sudeste...')
+                        resultado = await gerarPlayoffsSudeste(campeonatoId, conf.id)
+                        break
+
+                    case 'SUL':
+                        console.log('   🧊 Gerando Sul...')
+                        resultado = await gerarPlayoffsSul(campeonatoId, conf.id)
+                        break
+
+                    case 'NORDESTE':
+                        console.log('   🌵 DEBUG: Gerando Nordeste...')
+                        console.log(`   🌵 DEBUG: Parâmetros - campeonatoId: ${campeonatoId}, conferenciaId: ${conf.id}`)
+                        resultado = await gerarPlayoffsNordeste(campeonatoId, conf.id)
+                        console.log(`   🌵 DEBUG: Resultado Nordeste:`, resultado ? 'SUCESSO' : 'FALHOU')
+                        break
+
+                    case 'CENTRO NORTE':
+                        console.log('   🌲 Gerando Centro-Norte...')
+                        resultado = await gerarPlayoffsCentroNorte(campeonatoId, conf.id)
+                        break
+
+                    default:
+                        console.log(`   ⚠️  Tipo desconhecido: ${conf.tipo}`)
+                        continue
+                }
+
+                if (resultado) {
+                    const jogos = resultado.wildcards.length + resultado.semifinais.length + (resultado.final ? 1 : 0)
+                    totalPlayoffJogos += jogos
+                    console.log(`   ✅ ${conf.tipo}: ${jogos} jogos gerados`)
+                } else {
+                    console.log(`   ❌ ${conf.tipo}: FALHOU - resultado nulo`)
+                }
+
+            } catch (error) {
+                console.error(`   ❌ ERRO em ${conf.tipo}:`, error)
             }
-
-            if (resultado) {
-                console.log(`     ✅ ${resultado.wildcards.length} WC + ${resultado.semifinais.length} SF + 1 F`)
-            }
-
-        } catch (error) {
-            console.error(`     ❌ Erro ao gerar playoffs ${conf.nome}:`, error)
         }
-    }
 
-    console.log(`🎉 PLAYOFFS GERADOS AUTOMATICAMENTE!`)
-    console.log(`📊 Total de jogos de playoff: ${totalPlayoffJogos}`)
+        console.log(`\n🎉 DEBUG: Total de playoffs gerados: ${totalPlayoffJogos}`)
+
+        // ✅ VERIFICAR STATUS FINAL
+        const playoffsFinais = await prisma.playoffJogo.findMany({
+            where: { campeonatoId },
+            include: { conferencia: true }
+        })
+
+        const playoffsPorConferencia: Record<string, number> = {}
+        playoffsFinais.forEach(p => {
+            const conf = p.conferencia?.tipo || 'SEM_CONFERENCIA'
+            playoffsPorConferencia[conf] = (playoffsPorConferencia[conf] || 0) + 1
+        })
+
+        console.log(`📊 DEBUG: Status final por conferência:`)
+        Object.entries(playoffsPorConferencia).forEach(([conf, count]) => {
+            console.log(`   ${conf}: ${count} jogos`)
+        })
+
+        return totalPlayoffJogos
+
+    } catch (error) {
+        console.error('❌ DEBUG: Erro geral:', error)
+        throw error
+    }
 }
 
 // ========== ROTAS CORRIGIDAS ==========
@@ -2783,7 +2835,7 @@ adminRouter.get('/status-superliga/:temporada', async (req: Request, res: Respon
                 porStatus: {
                     agendados: jogosStats.find(s => s.status === 'AGENDADO')?._count.id || 0,
                     finalizados: jogosStats.find(s => s.status === 'FINALIZADO')?._count.id || 0,
-                    aoVivo: jogosStats.find(s => s.status === 'AO_VIVO')?._count.id || 0
+                    aoVivo: jogosStats.find(s => s.status === 'AO VIVO')?._count.id || 0
                 }
             },
             proximosJogos,
@@ -2799,63 +2851,6 @@ adminRouter.get('/status-superliga/:temporada', async (req: Request, res: Respon
 
     } catch (error) {
         console.error('Erro ao buscar status:', error)
-        res.status(500).json({ error: 'Erro interno do servidor' })
-        return
-    }
-})
-
-adminRouter.post('/gerar-playoffs-manual/:temporada', async (req: Request, res: Response): Promise<void> => {
-    try {
-        const { temporada } = req.params
-
-        const superliga = await prisma.campeonato.findFirst({
-            where: { temporada, isSuperliga: true }
-        })
-
-        if (!superliga) {
-            res.status(404).json({ error: 'Superliga não encontrada' })
-            return
-        }
-
-        const playoffsExistentes = await prisma.playoffJogo.count({
-            where: { campeonatoId: superliga.id }
-        })
-
-        if (playoffsExistentes > 0) {
-            res.status(400).json({
-                error: 'Playoffs já foram gerados',
-                total: playoffsExistentes
-            })
-            return
-        }
-
-        await gerarTodosPlayoffs(superliga.id)
-
-        await prisma.campeonato.update({
-            where: { id: superliga.id },
-            data: {
-                status: 'PLAYOFFS',
-                configSuperliga: {
-                    faseAtual: 'PLAYOFFS CONFERENCIA',
-                    playoffsGeradosEm: new Date().toISOString(),
-                    geradoManualmente: true
-                } as any
-            }
-        })
-
-        const totalPlayoffs = await prisma.playoffJogo.count({
-            where: { campeonatoId: superliga.id }
-        })
-
-        res.json({
-            message: 'Playoffs gerados com sucesso!',
-            totalJogos: totalPlayoffs,
-            status: 'PLAYOFFS'
-        })
-        return
-
-    } catch (error) {
-        console.error('Erro ao gerar playoffs:', error)
         res.status(500).json({ error: 'Erro interno do servidor' })
         return
     }

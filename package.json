@@ -23,7 +23,8 @@
     "generate:resultados": "npx ts-node scripts/gerar-resultados-fake.ts",
     "verificar-distribuicao": "npx ts-node scripts/verificar-distribuicao.ts",
     "generate:resultados-fins-de-semana": "npx ts-node scripts/gerar-resultados-por-fim-de-semana.ts",
-    "generate:estatisticas-fins-de-semana": "npx ts-node scripts/gerar-estatisticas-por-fim-de-semana.ts"
+    "generate:estatisticas-fins-de-semana": "npx ts-node scripts/gerar-estatisticas-por-fim-de-semana.ts",
+    "generate:gerar-playoffs-nordeste": "npx ts-node scripts/gerar-playoffs-nordeste.ts"
   },
   "author": "",
   "license": "ISC",

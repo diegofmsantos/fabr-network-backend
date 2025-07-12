@@ -758,54 +758,6 @@ superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
   }
 })
 
-superligaRouter.post('/:temporada/gerar-playoffs', async (req: Request, res: Response) => {
-  try {
-    const { temporada } = req.params
-
-    const superliga = await buscarSuperligaPorTemporada(temporada)
-    if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
-    } else {
-      const resultados = []
-
-      const conferencias = await prisma.conferencia.findMany({
-        where: { campeonatoId: superliga.id },
-        orderBy: { ordem: 'asc' }
-      })
-
-      for (const conferencia of conferencias) {
-        let resultado
-        switch (conferencia.tipo) {
-          case 'SUDESTE':
-            resultado = await gerarPlayoffsSudeste(superliga.id, conferencia.id)
-            break
-          case 'SUL':
-            resultado = await gerarPlayoffsSul(superliga.id, conferencia.id)
-            break
-          case 'NORDESTE':
-            resultado = await gerarPlayoffsNordeste(superliga.id, conferencia.id)
-            break
-          case 'CENTRO NORTE':
-            resultado = await gerarPlayoffsCentroNorte(superliga.id, conferencia.id)
-            break
-        }
-        if (resultado) resultados.push(resultado)
-      }
-
-      res.status(201).json({
-        message: 'Playoffs gerados com sucesso!',
-        conferencias: resultados.length,
-        proximoPasso: 'Acompanhe os resultados dos playoffs'
-      })
-    }
-  } catch (error) {
-    console.error('Erro ao gerar playoffs:', error)
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Erro ao gerar playoffs'
-    })
-  }
-})
-
 superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params

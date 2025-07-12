@@ -30,9 +30,9 @@ export async function buscarDistribuicaoCompleta(campeonatoId: number) {
  */
 export async function buscarTimesPorConferencia(campeonatoId: number, conferenciaType: string) {
   const distribuicao = await prisma.distribuicaoTime.findMany({
-    where: { 
+    where: {
       campeonatoId,
-      conferenciaType 
+      conferenciaType
     },
     include: {
       time: true,
@@ -57,9 +57,9 @@ export async function buscarTimesPorConferencia(campeonatoId: number, conferenci
  */
 export async function buscarTimesPorRegional(campeonatoId: number, regionalType: string) {
   const distribuicao = await prisma.distribuicaoTime.findMany({
-    where: { 
+    where: {
       campeonatoId,
-      regionalType 
+      regionalType
     },
     include: {
       time: true,
@@ -85,10 +85,10 @@ export async function buscarTimesPorRegional(campeonatoId: number, regionalType:
 export async function calcularClassificacaoRegional(campeonatoId: number, regionalType: string) {
   // 1. Buscar times do regional
   const timesRegional = await buscarTimesPorRegional(campeonatoId, regionalType);
-  
+
   // 2. Buscar jogos finalizados envolvendo estes times
   const timeIds = timesRegional.map(t => t.timeId);
-  
+
   const jogos = await prisma.jogo.findMany({
     where: {
       campeonatoId,
@@ -135,7 +135,7 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
       stats.jogos++;
       stats.pontosPro += placarCasa;
       stats.pontosContra += placarVisitante;
-      
+
       if (placarCasa > placarVisitante) {
         stats.vitorias++;
       } else {
@@ -149,7 +149,7 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
       stats.jogos++;
       stats.pontosPro += placarVisitante;
       stats.pontosContra += placarCasa;
-      
+
       if (placarVisitante > placarCasa) {
         stats.vitorias++;
       } else {
@@ -203,7 +203,6 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
  * Calcula classificação completa por conferência
  */
 export async function calcularClassificacaoPorConferencia(campeonatoId: number) {
-  // ✅ CORRIGIDO: Tipagem explícita para evitar erro 7053
   const resultado: Record<string, any[]> = {};
 
   // Buscar todas as conferências e regionais
@@ -214,12 +213,20 @@ export async function calcularClassificacaoPorConferencia(campeonatoId: number) 
     }
   });
 
+  console.log('🔍 DEBUG: Conferências encontradas:', conferencias.map(c => ({ id: c.id, tipo: c.tipo, nome: c.nome })))
+
   for (const conferencia of conferencias) {
     const regionaisClassificacao = [];
 
+    console.log(`🔍 Processando conferência: ${conferencia.tipo}`)
+
     for (const regional of conferencia.regionais) {
+      console.log(`  🔍 Processando regional: ${regional.tipo}`)
+
       const classificacao = await calcularClassificacaoRegional(campeonatoId, regional.tipo);
-      
+
+      console.log(`  ✅ Regional ${regional.tipo}: ${classificacao.length} times`)
+
       regionaisClassificacao.push({
         regionalId: regional.id,
         regionalNome: regional.nome,
@@ -228,8 +235,11 @@ export async function calcularClassificacaoPorConferencia(campeonatoId: number) 
       });
     }
 
+    // ✅ USAR SEMPRE A NOMENCLATURA DO BANCO
     resultado[conferencia.tipo] = regionaisClassificacao;
   }
+
+  console.log('✅ Resultado final calcularClassificacaoPorConferencia:', Object.keys(resultado))
 
   return resultado;
 }
@@ -239,9 +249,9 @@ export async function calcularClassificacaoPorConferencia(campeonatoId: number) 
  */
 export async function buscarDistribuicaoTime(campeonatoId: number, timeId: number) {
   const distribuicao = await prisma.distribuicaoTime.findFirst({
-    where: { 
+    where: {
       campeonatoId,
-      timeId 
+      timeId
     },
     include: {
       time: true,
@@ -268,10 +278,10 @@ export async function buscarDistribuicaoTime(campeonatoId: number, timeId: numbe
  */
 export async function validarDistribuicao(campeonatoId: number) {
   const errors: string[] = [];
-  
+
   // Buscar distribuição completa
   const distribuicao = await buscarDistribuicaoCompleta(campeonatoId);
-  
+
   // ✅ CORRIGIDO: Tipagem explícita para evitar erro 7053
   const timesPorConferencia: Record<string, number> = {};
   distribuicao.forEach(d => {
@@ -366,7 +376,7 @@ export async function verificarTimeNoRegional(campeonatoId: number, timeId: numb
  */
 export async function obterEstatisticasDistribuicao(campeonatoId: number) {
   const distribuicao = await buscarDistribuicaoCompleta(campeonatoId);
-  
+
   const estatisticas = {
     totalTimes: distribuicao.length,
     timesPorConferencia: {} as Record<string, number>,
@@ -377,13 +387,13 @@ export async function obterEstatisticasDistribuicao(campeonatoId: number) {
 
   distribuicao.forEach(d => {
     // Contar por conferência
-    estatisticas.timesPorConferencia[d.conferenciaType] = 
+    estatisticas.timesPorConferencia[d.conferenciaType] =
       (estatisticas.timesPorConferencia[d.conferenciaType] || 0) + 1;
-    
+
     // Contar por regional
-    estatisticas.timesPorRegional[d.regionalType] = 
+    estatisticas.timesPorRegional[d.regionalType] =
       (estatisticas.timesPorRegional[d.regionalType] || 0) + 1;
-    
+
     // Adicionar aos sets
     estatisticas.conferencias.add(d.conferenciaType);
     estatisticas.regionais.add(d.regionalType);

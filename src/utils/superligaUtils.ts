@@ -25,7 +25,23 @@ export async function distribuirTimesAutomaticamente(campeonatoId: number, tempo
     try {
         console.log(`Iniciando distribuição automática de times para a temporada ${temporada}`)
 
-        // Buscar todos os times da temporada
+        // ✅ 1. BUSCAR SUPERLIGA COM RELACIONAMENTOS
+        const superliga = await prisma.campeonato.findUnique({
+            where: { id: campeonatoId },
+            include: {
+                conferencias: {
+                    include: {
+                        regionais: true
+                    }
+                }
+            }
+        })
+
+        if (!superliga) {
+            throw new Error('Superliga não encontrada')
+        }
+
+        // ✅ 2. BUSCAR TODOS OS TIMES DA TEMPORADA
         const todosTimes = await prisma.time.findMany({
             where: { temporada }
         })
@@ -36,32 +52,115 @@ export async function distribuirTimesAutomaticamente(campeonatoId: number, tempo
             throw new Error(`Esperados 32 times, encontrados ${todosTimes.length}`)
         }
 
-        // Verificar se os times estão corretos conforme a configuração
+        // ✅ 3. LIMPAR DISTRIBUIÇÃO EXISTENTE (SE HOUVER)
+        await prisma.distribuicaoTime.deleteMany({
+            where: { campeonatoId }
+        })
+
+        // ✅ 4. CONFIGURAÇÃO DA DISTRIBUIÇÃO
+        const DISTRIBUICAO_CONFIG = {
+            'SUDESTE': {
+                regionais: {
+                    'SERRAMAR': ['Vasco Almirantes', 'Flamengo Imperadores', 'Locomotiva FA', 'Tritões FA'],
+                    'CANASTRA': ['Galo FA', 'Moura Lacerda Dragons', 'Rio Preto Weilers', 'Spartans FA'],
+                    'CANTAREIRA': ['Corinthians Steamrollers', 'Cruzeiro FA', 'Guarulhos Rhynos', 'Ocelots FA']
+                }
+            },
+            'SUL': {
+                regionais: {
+                    'ARAUCARIA': ['Timbó Rex', 'Coritiba Crocodiles', 'Calvary Cavaliers', 'Brown Spiders'],
+                    'PAMPA': ['Santa Maria Soldiers', 'Juventude FA', 'Bravos FA', 'Istepôs FA']
+                }
+            },
+            'NORDESTE': {
+                regionais: {
+                    'ATLANTICO': ['Fortaleza Tritões', 'Ceará Sabres', 'João Pessoa Espectros', 'Recife Mariners', 'Cavalaria 2 de Julho', 'Caruaru Wolves']
+                }
+            },
+            'CENTRO NORTE': {
+                regionais: {
+                    'CERRADO': ['Rondonópolis Hawks', 'Cuiabá Arsenal', 'Tubarões do Cerrado'],
+                    'AMAZONIA': ['Porto Velho Miners', 'Manaus FA', 'Manaus Cavaliers']
+                }
+            }
+        }
+
         let timesDistribuidos = 0
+        const erros: string[] = []
 
-        for (const [regionalTipo, timesEsperados] of Object.entries(TIMES_SUPERLIGA)) {
-            const timesEncontrados = todosTimes.filter(time =>
-                timesEsperados.includes(time.nome)
-            )
+        // ✅ 5. DISTRIBUIR TIMES POR CONFERÊNCIA/REGIONAL
+        for (const [confTipo, confConfig] of Object.entries(DISTRIBUICAO_CONFIG)) {
+            console.log(`🏆 Processando Conferência ${confTipo}...`)
 
-            if (timesEncontrados.length !== timesEsperados.length) {
-                throw new Error(`Regional ${regionalTipo}: esperados ${timesEsperados.length} times, encontrados ${timesEncontrados.length}`)
+            // Buscar conferência no banco
+            const conferencia = superliga.conferencias.find(c => c.tipo === confTipo)
+            if (!conferencia) {
+                erros.push(`Conferência ${confTipo} não encontrada`)
+                continue
             }
 
-            timesDistribuidos += timesEncontrados.length
-            console.log(`Regional ${regionalTipo}: ${timesEncontrados.length} times validados`)
+            // Processar regionais
+            for (const [regTipo, timesEsperados] of Object.entries(confConfig.regionais)) {
+                console.log(`  📍 Processando Regional ${regTipo}...`)
+
+                // Buscar regional no banco
+                const regional = conferencia.regionais.find(r => r.tipo === regTipo)
+                if (!regional) {
+                    erros.push(`Regional ${regTipo} não encontrado na conferência ${confTipo}`)
+                    continue
+                }
+
+                // Distribuir times do regional
+                for (const nomeTime of timesEsperados) {
+                    const time = todosTimes.find(t => t.nome === nomeTime)
+                    if (!time) {
+                        erros.push(`Time "${nomeTime}" não encontrado no banco`)
+                        continue
+                    }
+
+                    // ✅ SALVAR DISTRIBUIÇÃO NO BANCO!
+                    await prisma.distribuicaoTime.create({
+                        data: {
+                            campeonatoId: superliga.id,
+                            conferenciaId: conferencia.id,
+                            regionalId: regional.id,
+                            timeId: time.id,
+                            temporada: temporada,
+                            conferenciaType: confTipo,
+                            regionalType: regTipo
+                        }
+                    })
+
+                    console.log(`    ✅ ${time.nome} -> ${regTipo}`)
+                    timesDistribuidos++
+                }
+
+                console.log(`Regional ${regTipo}: ${timesEsperados.length} times validados`)
+            }
+        }
+
+        // ✅ 6. VERIFICAR SE TODOS OS TIMES FORAM DISTRIBUÍDOS
+        if (erros.length > 0) {
+            console.error('❌ Erros encontrados:', erros)
+            throw new Error(`Erros na distribuição: ${erros.join(', ')}`)
+        }
+
+        if (timesDistribuidos !== 32) {
+            throw new Error(`Distribuição incompleta: ${timesDistribuidos}/32 times`)
         }
 
         console.log(`Distribuição automática concluída: ${timesDistribuidos} times distribuídos`)
 
+        // ✅ 7. RETORNAR RESULTADO
         return {
             timesDistribuidos,
-            regionaisConfigurados: Object.keys(TIMES_SUPERLIGA).length,
-            status: 'SUCESSO'
+            conferencias: Object.keys(DISTRIBUICAO_CONFIG).length,
+            regionais: Object.values(DISTRIBUICAO_CONFIG).reduce((acc, conf) => acc + Object.keys(conf.regionais).length, 0),
+            sucesso: true
         }
 
     } catch (error) {
-        console.error('Erro na distribuição automática:', error)
+        console.error('❌ Erro na distribuição automática:', error)
         throw error
     }
 }

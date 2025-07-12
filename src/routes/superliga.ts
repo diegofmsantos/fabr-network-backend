@@ -334,36 +334,115 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
-    } else {
-      const totalJogos = await prisma.jogo.count({
-        where: { campeonatoId: superliga.id }
-      })
-
-      const jogosFinalizados = await prisma.jogo.count({
-        where: {
-          campeonatoId: superliga.id,
-          status: 'FINALIZADO'
-        }
-      })
-
-      const jogosPlayoff = await prisma.playoffJogo.count({
-        where: { campeonatoId: superliga.id }
-      })
-
-      const status = {
-        fase: totalJogos === 0 ? 'CONFIGURACAO' :
-          jogosFinalizados === totalJogos && totalJogos > 0 ? 'PLAYOFFS' : 'TEMPORADA REGULAR',
-        totalJogos,
-        jogosFinalizados,
-        jogosPlayoff,
-        temporada
-      }
-
-      res.json(status)
+      return
     }
+
+    // ✅ BUSCAR TOTAL DE JOGOS
+    const totalJogos = await prisma.jogo.count({
+      where: { campeonatoId: superliga.id }
+    })
+
+    // ✅ BUSCAR JOGOS FINALIZADOS
+    const jogosFinalizados = await prisma.jogo.count({
+      where: {
+        campeonatoId: superliga.id,
+        status: 'FINALIZADO'
+      }
+    })
+
+    // ✅ BUSCAR JOGOS DE PLAYOFF
+    const jogosPlayoff = await prisma.playoffJogo.count({
+      where: { campeonatoId: superliga.id }
+    })
+
+    // 🎯 BUSCAR TIMES DISTRIBUÍDOS (ESTAVA FALTANDO!)
+    const timesDistribuidos = await prisma.distribuicaoTime.count({
+      where: {
+        campeonatoId: superliga.id,
+        temporada: temporada
+      }
+    })
+
+    // ✅ BUSCAR PRÓXIMOS JOGOS
+    const proximosJogos = await prisma.jogo.findMany({
+      where: {
+        campeonatoId: superliga.id,
+        status: 'AGENDADO',
+        dataJogo: {
+          gte: new Date()
+        }
+      },
+      include: {
+        timeCasa: { select: { nome: true, sigla: true } },
+        timeVisitante: { select: { nome: true, sigla: true } }
+      },
+      orderBy: { dataJogo: 'asc' },
+      take: 3
+    })
+
+    // ✅ DETERMINAR FASE ATUAL
+    let faseAtual = 'CONFIGURACAO'
+    if (timesDistribuidos === 0) {
+      faseAtual = 'AGUARDANDO_DISTRIBUICAO'
+    } else if (totalJogos === 0) {
+      faseAtual = 'AGUARDANDO_AGENDA'
+    } else if (jogosFinalizados < totalJogos) {
+      faseAtual = 'TEMPORADA_REGULAR'
+    } else if (jogosPlayoff === 0) {
+      faseAtual = 'GERANDO_PLAYOFFS'
+    } else {
+      faseAtual = 'PLAYOFFS'
+    }
+
+    const status = {
+      superliga: {
+        id: superliga.id,
+        nome: superliga.nome,
+        temporada: superliga.temporada,
+        status: superliga.status
+      },
+      fase: faseAtual,
+
+      // 🎯 DADOS ESSENCIAIS PARA O FRONTEND
+      timesDistribuidos, // ← ESTAVA FALTANDO!
+      totalJogos,
+      jogosFinalizados,
+      jogosAgendados: totalJogos - jogosFinalizados,
+      jogosPlayoff,
+
+      // ✅ PRÓXIMOS JOGOS
+      proximosJogos: proximosJogos.map(jogo => ({
+        id: jogo.id,
+        timeCasa: jogo.timeCasa,
+        timeVisitante: jogo.timeVisitante,
+        dataJogo: jogo.dataJogo,
+        local: jogo.local,
+        rodada: jogo.rodada
+      })),
+
+      // ✅ ESTATÍSTICAS ADICIONAIS
+      estrutura: {
+        conferencias: 4,
+        regionais: 8,
+        timesEsperados: 32
+      },
+
+      // ✅ INDICADORES DE PROGRESSO
+      progresso: {
+        distribuicaoCompleta: timesDistribuidos >= 32,
+        agendaCompleta: totalJogos >= 64,
+        temporadaRegularCompleta: jogosFinalizados >= 64,
+        playoffsGerados: jogosPlayoff > 0
+      }
+    }
+
+    res.json(status)
   } catch (error) {
-    console.error('Erro ao buscar status:', error)
-    res.status(500).json({ error: 'Erro ao buscar status da Superliga' })
+    console.error('❌ Erro ao buscar status:', error)
+    res.status(500).json({
+      error: 'Erro ao buscar status da Superliga',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
   }
 })
 
@@ -447,39 +526,91 @@ superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, re
 superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    const { conferencia, fase, rodada, status, limit } = req.query
+    const { status, fase, rodada, limite } = req.query
+
+    console.log(`🔍 Buscando jogos para temporada ${temporada}:`, {
+      status,
+      fase,
+      rodada,
+      limite
+    })
 
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
-    } else {
-      const whereClause: any = {
-        campeonatoId: superliga.id
-      }
-
-      if (conferencia) whereClause.conferencia = conferencia
-      if (fase) whereClause.fase = fase
-      if (rodada) whereClause.rodada = parseInt(rodada as string)
-      if (status) whereClause.status = status
-
-      const jogos = await prisma.jogo.findMany({
-        where: whereClause,
-        include: {
-          timeCasa: true,
-          timeVisitante: true
-        },
-        orderBy: [
-          { rodada: 'asc' },
-          { dataJogo: 'asc' }
-        ],
-        take: limit ? parseInt(limit as string) : undefined
-      })
-
-      res.json(jogos)
+      return
     }
+
+    // ✅ CONSTRUIR FILTROS DE BUSCA
+    const whereClause: any = {
+      campeonatoId: superliga.id,
+      temporada: temporada
+    }
+
+    if (status) whereClause.status = status
+    if (fase) whereClause.fase = fase
+    if (rodada) whereClause.rodada = parseInt(rodada as string)
+
+    console.log(`🎯 Filtros aplicados:`, whereClause)
+
+    // ✅ BUSCAR JOGOS COM RELACIONAMENTOS
+    const jogos = await prisma.jogo.findMany({
+      where: whereClause,
+      include: {
+        timeCasa: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            cidade: true,
+            logo: true
+          }
+        },
+        timeVisitante: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            cidade: true,
+            logo: true
+          }
+        }
+      },
+      orderBy: [
+        { rodada: 'asc' },
+        { dataJogo: 'asc' }
+      ],
+      take: limite ? parseInt(limite as string) : undefined
+    })
+
+    console.log(`✅ Encontrados ${jogos.length} jogos`)
+
+    // ✅ FORMATAR RESPOSTA
+    const jogosFormatados = jogos.map(jogo => ({
+      id: jogo.id,
+      timeCasa: jogo.timeCasa,
+      timeVisitante: jogo.timeVisitante,
+      dataJogo: jogo.dataJogo,
+      local: jogo.local,
+      rodada: jogo.rodada,
+      fase: jogo.fase,
+      status: jogo.status,
+      placarCasa: jogo.placarCasa,
+      placarVisitante: jogo.placarVisitante,
+      observacoes: jogo.observacoes,
+      conferencia: jogo.conferencia,
+      regional: jogo.regional
+    }))
+
+    res.json(jogosFormatados)
   } catch (error) {
-    console.error('Erro ao buscar jogos:', error)
-    res.status(500).json({ error: 'Erro ao buscar jogos' })
+    console.error('❌ Erro ao buscar jogos:', error)
+    res.status(500).json({ 
+      error: 'Erro ao buscar jogos',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
   }
 })
 

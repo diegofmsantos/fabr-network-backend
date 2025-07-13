@@ -1,4 +1,3 @@
-// src/utils/distribuicaoUtils.ts
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -25,9 +24,6 @@ export async function buscarDistribuicaoCompleta(campeonatoId: number) {
   }));
 }
 
-/**
- * Busca times de uma conferência específica
- */
 export async function buscarTimesPorConferencia(campeonatoId: number, conferenciaType: string) {
   const distribuicao = await prisma.distribuicaoTime.findMany({
     where: {
@@ -52,9 +48,6 @@ export async function buscarTimesPorConferencia(campeonatoId: number, conferenci
   }));
 }
 
-/**
- * Busca times de um regional específico
- */
 export async function buscarTimesPorRegional(campeonatoId: number, regionalType: string) {
   const distribuicao = await prisma.distribuicaoTime.findMany({
     where: {
@@ -79,14 +72,9 @@ export async function buscarTimesPorRegional(campeonatoId: number, regionalType:
   }));
 }
 
-/**
- * Calcula classificação de um regional específico
- */
 export async function calcularClassificacaoRegional(campeonatoId: number, regionalType: string) {
-  // 1. Buscar times do regional
   const timesRegional = await buscarTimesPorRegional(campeonatoId, regionalType);
 
-  // 2. Buscar jogos finalizados envolvendo estes times
   const timeIds = timesRegional.map(t => t.timeId);
 
   const jogos = await prisma.jogo.findMany({
@@ -104,7 +92,6 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
     }
   });
 
-  // 3. Calcular estatísticas por time
   const estatisticas = new Map<number, {
     jogos: number;
     vitorias: number;
@@ -113,7 +100,6 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
     pontosContra: number;
   }>();
 
-  // Inicializar estatísticas
   timesRegional.forEach(time => {
     estatisticas.set(time.timeId, {
       jogos: 0,
@@ -124,12 +110,10 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
     });
   });
 
-  // Processar jogos
   jogos.forEach(jogo => {
     const placarCasa = jogo.placarCasa || 0;
     const placarVisitante = jogo.placarVisitante || 0;
 
-    // Processar time da casa se estiver no regional
     if (timeIds.includes(jogo.timeCasaId)) {
       const stats = estatisticas.get(jogo.timeCasaId)!;
       stats.jogos++;
@@ -143,7 +127,6 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
       }
     }
 
-    // Processar time visitante se estiver no regional
     if (timeIds.includes(jogo.timeVisitanteId)) {
       const stats = estatisticas.get(jogo.timeVisitanteId)!;
       stats.jogos++;
@@ -158,7 +141,6 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
     }
   });
 
-  // 4. Criar classificação
   const classificacao = timesRegional.map(time => {
     const stats = estatisticas.get(time.timeId)!;
     const saldo = stats.pontosPro - stats.pontosContra;
@@ -185,7 +167,6 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
     };
   });
 
-  // 5. Ordenar e definir posições
   classificacao.sort((a, b) => {
     if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
     if (b.saldo !== a.saldo) return b.saldo - a.saldo;
@@ -199,13 +180,9 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
   return classificacao;
 }
 
-/**
- * Calcula classificação completa por conferência
- */
 export async function calcularClassificacaoPorConferencia(campeonatoId: number) {
   const resultado: Record<string, any[]> = {};
 
-  // Buscar todas as conferências e regionais
   const conferencias = await prisma.conferencia.findMany({
     where: { campeonatoId },
     include: {
@@ -235,7 +212,6 @@ export async function calcularClassificacaoPorConferencia(campeonatoId: number) 
       });
     }
 
-    // ✅ USAR SEMPRE A NOMENCLATURA DO BANCO
     resultado[conferencia.tipo] = regionaisClassificacao;
   }
 
@@ -244,9 +220,6 @@ export async function calcularClassificacaoPorConferencia(campeonatoId: number) 
   return resultado;
 }
 
-/**
- * Busca informações de distribuição de um time específico
- */
 export async function buscarDistribuicaoTime(campeonatoId: number, timeId: number) {
   const distribuicao = await prisma.distribuicaoTime.findFirst({
     where: {
@@ -273,22 +246,16 @@ export async function buscarDistribuicaoTime(campeonatoId: number, timeId: numbe
   };
 }
 
-/**
- * Valida se a distribuição está completa e correta
- */
 export async function validarDistribuicao(campeonatoId: number) {
   const errors: string[] = [];
 
-  // Buscar distribuição completa
   const distribuicao = await buscarDistribuicaoCompleta(campeonatoId);
 
-  // ✅ CORRIGIDO: Tipagem explícita para evitar erro 7053
   const timesPorConferencia: Record<string, number> = {};
   distribuicao.forEach(d => {
     timesPorConferencia[d.conferenciaType] = (timesPorConferencia[d.conferenciaType] || 0) + 1;
   });
 
-  // Validações baseadas no briefing
   const expectedDistribution = {
     'SUDESTE': 12,
     'SUL': 8,
@@ -303,7 +270,6 @@ export async function validarDistribuicao(campeonatoId: number) {
     }
   });
 
-  // Verificar total
   const totalExpected = Object.values(expectedDistribution).reduce((a, b) => a + b, 0);
   if (distribuicao.length !== totalExpected) {
     errors.push(`Total de times: esperado ${totalExpected}, encontrado ${distribuicao.length}`);
@@ -319,26 +285,19 @@ export async function validarDistribuicao(campeonatoId: number) {
   };
 }
 
-/**
- * Helper para obter times classificados para playoffs
- */
 export async function obterTimesClassificadosPlayoffs(campeonatoId: number) {
   const classificacao = await calcularClassificacaoPorConferencia(campeonatoId);
 
-  // Processar Sudeste (3 regionais)
   const sudeste = classificacao['SUDESTE'] || [];
   const primeirosSudeste = sudeste.map(r => r.times[0]).filter(Boolean);
   const segundosSudeste = sudeste.map(r => r.times[1]).filter(Boolean);
 
-  // Processar Sul (2 regionais)
   const sul = classificacao['SUL'] || [];
   const primeirosSul = sul.map(r => r.times[0]).filter(Boolean);
   const segundosSul = sul.map(r => r.times[1]).filter(Boolean);
 
-  // Processar Nordeste (1 regional, 6 times)
   const nordeste = classificacao['NORDESTE']?.[0]?.times || [];
 
-  // Processar Centro-Norte (2 regionais)
   const centroNorte = classificacao['CENTRO NORTE'] || [];
   const timesCentroNorte = centroNorte.flatMap(r => r.times.slice(0, 2));
 
@@ -356,9 +315,6 @@ export async function obterTimesClassificadosPlayoffs(campeonatoId: number) {
   };
 }
 
-/**
- * Verifica se um time está em determinado regional (usado em outras funções)
- */
 export async function verificarTimeNoRegional(campeonatoId: number, timeId: number, regionalType: string): Promise<boolean> {
   const distribuicao = await prisma.distribuicaoTime.findFirst({
     where: {
@@ -371,9 +327,6 @@ export async function verificarTimeNoRegional(campeonatoId: number, timeId: numb
   return !!distribuicao;
 }
 
-/**
- * Busca estatísticas consolidadas da distribuição
- */
 export async function obterEstatisticasDistribuicao(campeonatoId: number) {
   const distribuicao = await buscarDistribuicaoCompleta(campeonatoId);
 
@@ -386,15 +339,12 @@ export async function obterEstatisticasDistribuicao(campeonatoId: number) {
   };
 
   distribuicao.forEach(d => {
-    // Contar por conferência
     estatisticas.timesPorConferencia[d.conferenciaType] =
       (estatisticas.timesPorConferencia[d.conferenciaType] || 0) + 1;
 
-    // Contar por regional
     estatisticas.timesPorRegional[d.regionalType] =
       (estatisticas.timesPorRegional[d.regionalType] || 0) + 1;
 
-    // Adicionar aos sets
     estatisticas.conferencias.add(d.conferenciaType);
     estatisticas.regionais.add(d.regionalType);
   });
@@ -406,16 +356,11 @@ export async function obterEstatisticasDistribuicao(campeonatoId: number) {
   };
 }
 
-/**
- * Busca times disponíveis para distribuição (ainda não distribuídos)
- */
 export async function buscarTimesDisponiveis(campeonatoId: number, temporada: string) {
-  // Buscar todos os times da temporada
   const todosTimes = await prisma.time.findMany({
     where: { temporada }
   });
 
-  // Buscar times já distribuídos
   const timesDistribuidos = await prisma.distribuicaoTime.findMany({
     where: { campeonatoId },
     select: { timeId: true }
@@ -423,7 +368,6 @@ export async function buscarTimesDisponiveis(campeonatoId: number, temporada: st
 
   const idsDistribuidos = timesDistribuidos.map(d => d.timeId);
 
-  // Filtrar times ainda não distribuídos
   return todosTimes.filter(time => !idsDistribuidos.includes(time.id));
 }
 

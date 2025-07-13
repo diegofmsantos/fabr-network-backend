@@ -1,4 +1,3 @@
-// src/routes/ranking.ts (substituir completamente)
 import { Router, Request, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 
@@ -75,7 +74,6 @@ interface EstatisticaConsolidada {
     }
 }
 
-// Endpoint principal de ranking por categoria
 rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
     try {
         const { categoria } = req.params
@@ -83,7 +81,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
 
         console.log(`🎯 Buscando ranking para: ${categoria}, temporada: ${temporada}`)
 
-        // Buscar estatísticas consolidadas por jogador na temporada
         const estatisticas = await prisma.estatisticaJogo.findMany({
             where: { temporada: temporada as string },
             include: {
@@ -112,7 +109,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
 
         console.log(`📊 Encontradas ${estatisticas.length} estatísticas`)
 
-        // Consolidar estatísticas por jogador
         const jogadoresMap = new Map<string, EstatisticaConsolidada>()
 
         estatisticas.forEach(est => {
@@ -179,7 +175,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
 
             const jogadorData = jogadoresMap.get(key)!
 
-            // Somar estatísticas
             if (stats.passe) {
                 jogadorData.estatisticas.passe.jardas_de_passe += stats.passe.jardas_de_passe || 0
                 jogadorData.estatisticas.passe.passes_completos += stats.passe.passes_completos || 0
@@ -238,14 +233,11 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
             }
         })
 
-        // Converter para array
         const jogadoresArray = Array.from(jogadoresMap.values())
 
         let ranking: EstatisticaConsolidada[] = []
 
-        // Ordenar por categoria específica
         switch (categoria) {
-            // ==================== PASSE ====================
             case 'jardas_de_passe':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.passe.jardas_de_passe > 0)
@@ -269,21 +261,21 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
             case 'interceptacoes_sofridas':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.passe.interceptacoes_sofridas > 0)
-                    .sort((a, b) => a.estatisticas.passe.interceptacoes_sofridas - b.estatisticas.passe.interceptacoes_sofridas) // Menor é melhor
+                    .sort((a, b) => a.estatisticas.passe.interceptacoes_sofridas - b.estatisticas.passe.interceptacoes_sofridas) 
                 break
             case 'sacks_sofridos':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.passe.sacks_sofridos > 0)
-                    .sort((a, b) => a.estatisticas.passe.sacks_sofridos - b.estatisticas.passe.sacks_sofridos) // Menor é melhor
+                    .sort((a, b) => a.estatisticas.passe.sacks_sofridos - b.estatisticas.passe.sacks_sofridos) 
                 break
             case 'fumble_de_passador':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.passe.fumble_de_passador > 0)
-                    .sort((a, b) => a.estatisticas.passe.fumble_de_passador - b.estatisticas.passe.fumble_de_passador) // Menor é melhor
+                    .sort((a, b) => a.estatisticas.passe.fumble_de_passador - b.estatisticas.passe.fumble_de_passador) 
                 break
             case 'passes_percentual':
                 ranking = jogadoresArray
-                    .filter(j => j.estatisticas.passe.passes_tentados >= 10) // Mínimo de tentativas
+                    .filter(j => j.estatisticas.passe.passes_tentados >= 10) 
                     .map(j => ({
                         ...j,
                         percentual: (j.estatisticas.passe.passes_completos / j.estatisticas.passe.passes_tentados) * 100
@@ -292,7 +284,7 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                 break
             case 'jardas_media':
                 ranking = jogadoresArray
-                    .filter(j => j.estatisticas.passe.passes_tentados >= 10) // Mínimo de tentativas
+                    .filter(j => j.estatisticas.passe.passes_tentados >= 10) 
                     .map(j => ({
                         ...j,
                         media: j.estatisticas.passe.jardas_de_passe / j.estatisticas.passe.passes_tentados
@@ -300,7 +292,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                     .sort((a: any, b: any) => b.media - a.media)
                 break
 
-            // ==================== CORRIDA ====================
             case 'jardas_corridas':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.corrida.jardas_corridas > 0)
@@ -319,11 +310,11 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
             case 'fumble_de_corredor':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.corrida.fumble_de_corredor > 0)
-                    .sort((a, b) => a.estatisticas.corrida.fumble_de_corredor - b.estatisticas.corrida.fumble_de_corredor) // Menor é melhor
+                    .sort((a, b) => a.estatisticas.corrida.fumble_de_corredor - b.estatisticas.corrida.fumble_de_corredor) 
                 break
             case 'jardas_corridas_media':
                 ranking = jogadoresArray
-                    .filter(j => j.estatisticas.corrida.corridas >= 5) // Mínimo de corridas
+                    .filter(j => j.estatisticas.corrida.corridas >= 5) 
                     .map(j => ({
                         ...j,
                         media: j.estatisticas.corrida.jardas_corridas / j.estatisticas.corrida.corridas
@@ -331,7 +322,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                     .sort((a: any, b: any) => b.media - a.media)
                 break
 
-            // ==================== RECEPÇÃO ====================
             case 'jardas_recebidas':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.recepcao.jardas_recebidas > 0)
@@ -354,7 +344,7 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                 break
             case 'jardas_recebidas_media':
                 ranking = jogadoresArray
-                    .filter(j => j.estatisticas.recepcao.recepcoes >= 3) // Mínimo de recepções
+                    .filter(j => j.estatisticas.recepcao.recepcoes >= 3) 
                     .map(j => ({
                         ...j,
                         media: j.estatisticas.recepcao.jardas_recebidas / j.estatisticas.recepcao.recepcoes
@@ -362,7 +352,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                     .sort((a: any, b: any) => b.media - a.media)
                 break
 
-            // ==================== RETORNO ====================
             case 'jardas_retornadas':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.retorno.jardas_retornadas > 0)
@@ -380,7 +369,7 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                 break
             case 'jardas_retornadas_media':
                 ranking = jogadoresArray
-                    .filter(j => j.estatisticas.retorno.retornos >= 3) // Mínimo de retornos
+                    .filter(j => j.estatisticas.retorno.retornos >= 3) 
                     .map(j => ({
                         ...j,
                         media: j.estatisticas.retorno.jardas_retornadas / j.estatisticas.retorno.retornos
@@ -388,7 +377,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                     .sort((a: any, b: any) => b.media - a.media)
                 break
 
-            // ==================== DEFESA ====================
             case 'tackles_totais':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.defesa.tackles_totais > 0)
@@ -430,7 +418,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                     .sort((a, b) => b.estatisticas.defesa.td_defensivo - a.estatisticas.defesa.td_defensivo)
                 break
 
-            // ==================== KICKER ====================
             case 'fg_bons':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.kicker.fg_bons > 0)
@@ -458,7 +445,7 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                 break
             case 'field_goals':
                 ranking = jogadoresArray
-                    .filter(j => j.estatisticas.kicker.tentativas_de_fg >= 3) // Mínimo de tentativas
+                    .filter(j => j.estatisticas.kicker.tentativas_de_fg >= 3) 
                     .map(j => ({
                         ...j,
                         percentual: (j.estatisticas.kicker.fg_bons / j.estatisticas.kicker.tentativas_de_fg) * 100
@@ -467,7 +454,7 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                 break
             case 'extra_points':
                 ranking = jogadoresArray
-                    .filter(j => j.estatisticas.kicker.tentativas_de_xp >= 3) // Mínimo de tentativas
+                    .filter(j => j.estatisticas.kicker.tentativas_de_xp >= 3) 
                     .map(j => ({
                         ...j,
                         percentual: (j.estatisticas.kicker.xp_bons / j.estatisticas.kicker.tentativas_de_xp) * 100
@@ -475,7 +462,6 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                     .sort((a: any, b: any) => b.percentual - a.percentual)
                 break
 
-            // ==================== PUNTER ====================
             case 'punts':
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.punter.punts > 0)
@@ -488,7 +474,7 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                 break
             case 'jardas_punt_media':
                 ranking = jogadoresArray
-                    .filter(j => j.estatisticas.punter.punts >= 3) // Mínimo de punts
+                    .filter(j => j.estatisticas.punter.punts >= 3) 
                     .map(j => ({
                         ...j,
                         media: j.estatisticas.punter.jardas_de_punt / j.estatisticas.punter.punts
@@ -496,10 +482,8 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                     .sort((a: any, b: any) => b.media - a.media)
                 break
 
-            // ==================== DEFAULT ====================
             default:
                 console.log(`⚠️  Categoria não reconhecida: ${categoria}`)
-                // Se categoria não for reconhecida, retornar primeiros jogadores por jardas de passe
                 ranking = jogadoresArray
                     .filter(j => j.estatisticas.passe.jardas_de_passe > 0)
                     .sort((a, b) => b.estatisticas.passe.jardas_de_passe - a.estatisticas.passe.jardas_de_passe)
@@ -521,13 +505,11 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
     }
 })
 
-// Endpoint para ranking de times
 rankingRouter.get('/times/:categoria', async (req: Request, res: Response) => {
     try {
         const { categoria } = req.params
         const { temporada = '2025' } = req.query
 
-        // Implementar ranking de times aqui
         res.json([])
     } catch (error) {
         console.error('Erro ao buscar ranking de times:', error)

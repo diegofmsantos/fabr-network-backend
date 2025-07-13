@@ -286,9 +286,6 @@ jogadorRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Resp
     }
 });
 
-
-
-// Rota para buscar estatísticas jogo a jogo de um jogador
 jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
@@ -302,7 +299,6 @@ jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) 
             return
         }
 
-        // Buscar todas as estatísticas de jogo do jogador
         const estatisticasJogo = await prisma.estatisticaJogo.findMany({
             where: {
                 jogadorId: jogadorId,
@@ -356,7 +352,6 @@ jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) 
 
         console.log(`✅ [ROTA] Encontradas ${estatisticasJogo.length} estatísticas`)
 
-        // Formatar dados para o frontend
         const estatisticasFormatadas = estatisticasJogo.map(stat => ({
             id: stat.id,
             jogoId: stat.jogoId,
@@ -365,7 +360,6 @@ jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) 
             temporada: stat.temporada,
             estatisticas: stat.estatisticas,
 
-            // Dados do jogo
             jogo: {
                 id: stat.jogo.id,
                 dataJogo: stat.jogo.dataJogo,
@@ -381,10 +375,8 @@ jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) 
                 timeVisitante: stat.jogo.timeVisitante
             },
 
-            // Dados do jogador
             jogador: stat.jogador,
 
-            // Dados do time
             time: stat.time
         }))
 

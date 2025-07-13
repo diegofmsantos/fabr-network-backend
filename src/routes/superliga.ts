@@ -2,7 +2,7 @@ import express, { Request, Response } from 'express'
 import { prisma } from '../libs/prisma'
 import { gerarFinalNacional } from '../utils/superligaRanking'
 import { SUPERLIGA_CONFIG } from '../types'
-import { distribuirTimesAutomaticamente, gerarPlayoffsCentroNorte, gerarPlayoffsNordeste, gerarPlayoffsSudeste, gerarPlayoffsSul, simularResultadosPlayoffs } from '../utils/superligaUtils'
+import { distribuirTimesAutomaticamente, simularResultadosPlayoffs } from '../utils/superligaUtils'
 import { gerarJogosTemporadaRegular } from '../utils/superligaJogosUtils'
 
 const superligaRouter = express.Router()
@@ -81,7 +81,6 @@ superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
 
     console.log(`📊 Encontrados ${jogos.length} jogos`)
 
-    // Agrupar por conferência e rodada
     const rodadasPorConferencia = jogos.reduce((acc: any, jogo) => {
       const conf = jogo.conferencia || 'GERAL'
       if (!acc[conf]) acc[conf] = {}
@@ -113,8 +112,6 @@ superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
     })
   }
 })
-
-
 
 superligaRouter.get('/atual', async (req: Request, res: Response) => {
   try {
@@ -266,7 +263,6 @@ superligaRouter.post('/:temporada/distribuir-times-automatico', async (req: Requ
         const timesDistribuidos = await prisma.time.count({
           where: {
             temporada: superliga.temporada,
-            // Verificar se times estão associados à superliga
           }
         })
 
@@ -337,12 +333,10 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
       return
     }
 
-    // ✅ BUSCAR TOTAL DE JOGOS
     const totalJogos = await prisma.jogo.count({
       where: { campeonatoId: superliga.id }
     })
 
-    // ✅ BUSCAR JOGOS FINALIZADOS
     const jogosFinalizados = await prisma.jogo.count({
       where: {
         campeonatoId: superliga.id,
@@ -350,12 +344,10 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
       }
     })
 
-    // ✅ BUSCAR JOGOS DE PLAYOFF
     const jogosPlayoff = await prisma.playoffJogo.count({
       where: { campeonatoId: superliga.id }
     })
 
-    // 🎯 BUSCAR TIMES DISTRIBUÍDOS (ESTAVA FALTANDO!)
     const timesDistribuidos = await prisma.distribuicaoTime.count({
       where: {
         campeonatoId: superliga.id,
@@ -363,7 +355,6 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
       }
     })
 
-    // ✅ BUSCAR PRÓXIMOS JOGOS
     const proximosJogos = await prisma.jogo.findMany({
       where: {
         campeonatoId: superliga.id,
@@ -380,7 +371,6 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
       take: 3
     })
 
-    // ✅ DETERMINAR FASE ATUAL
     let faseAtual = 'CONFIGURACAO'
     if (timesDistribuidos === 0) {
       faseAtual = 'AGUARDANDO_DISTRIBUICAO'
@@ -403,14 +393,12 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
       },
       fase: faseAtual,
 
-      // 🎯 DADOS ESSENCIAIS PARA O FRONTEND
-      timesDistribuidos, // ← ESTAVA FALTANDO!
+      timesDistribuidos,
       totalJogos,
       jogosFinalizados,
       jogosAgendados: totalJogos - jogosFinalizados,
       jogosPlayoff,
 
-      // ✅ PRÓXIMOS JOGOS
       proximosJogos: proximosJogos.map(jogo => ({
         id: jogo.id,
         timeCasa: jogo.timeCasa,
@@ -420,14 +408,12 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
         rodada: jogo.rodada
       })),
 
-      // ✅ ESTATÍSTICAS ADICIONAIS
       estrutura: {
         conferencias: 4,
         regionais: 8,
         timesEsperados: 32
       },
 
-      // ✅ INDICADORES DE PROGRESSO
       progresso: {
         distribuicaoCompleta: timesDistribuidos >= 32,
         agendaCompleta: totalJogos >= 64,
@@ -487,7 +473,6 @@ superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, re
         }
       })
 
-      // Buscar times baseado na estrutura TIMES_SUPERLIGA
       const { TIMES_SUPERLIGA } = require('../types/index')
 
       const resultado = await Promise.all(
@@ -541,7 +526,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
       return
     }
 
-    // ✅ CONSTRUIR FILTROS DE BUSCA
     const whereClause: any = {
       campeonatoId: superliga.id,
       temporada: temporada
@@ -553,7 +537,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
 
     console.log(`🎯 Filtros aplicados:`, whereClause)
 
-    // ✅ BUSCAR JOGOS COM RELACIONAMENTOS
     const jogos = await prisma.jogo.findMany({
       where: whereClause,
       include: {
@@ -587,7 +570,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
 
     console.log(`✅ Encontrados ${jogos.length} jogos`)
 
-    // ✅ FORMATAR RESPOSTA
     const jogosFormatados = jogos.map(jogo => ({
       id: jogo.id,
       timeCasa: jogo.timeCasa,
@@ -898,7 +880,6 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
       return
     }
 
-    // Buscar conferências com regionais
     const conferencias = await prisma.conferencia.findMany({
       where: { campeonatoId: superliga.id },
       include: {
@@ -909,7 +890,6 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
       orderBy: { ordem: 'asc' }
     })
 
-    // Buscar todos os jogos da temporada regular finalizados
     const jogos = await prisma.jogo.findMany({
       where: {
         campeonatoId: superliga.id,
@@ -922,12 +902,10 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
       }
     })
 
-    // Buscar todos os times
     const times = await prisma.time.findMany({
       where: { temporada }
     })
 
-    // Calcular estatísticas por time
     const estatisticasTimes = new Map()
 
     times.forEach(time => {
@@ -944,7 +922,6 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
       })
     })
 
-    // Processar jogos
     jogos.forEach(jogo => {
       const statsCasa = estatisticasTimes.get(jogo.timeCasaId)
       const statsVisitante = estatisticasTimes.get(jogo.timeVisitanteId)
@@ -969,23 +946,18 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
       }
     })
 
-    // Calcular saldo e aproveitamento
     estatisticasTimes.forEach(stats => {
       stats.saldo = stats.pontosPro - stats.pontosContra
       stats.aproveitamento = stats.jogos > 0 ? (stats.vitorias / stats.jogos) * 100 : 0
     })
 
-    // Organizar por conferência e regional - CORRIGIDO O TIPO
     const classificacaoPorConferencia: any = {}
 
     for (const conferencia of conferencias) {
       const regionaisClassificacao = []
 
       for (const regional of conferencia.regionais) {
-        // Buscar times deste regional (isso precisa ser implementado na tabela de distribuição)
-        // Por ora, vamos usar uma lógica temporária baseada no nome
         const timesRegional = times.filter(time => {
-          // LÓGICA TEMPORÁRIA - deve ser substituída por tabela de distribuição
           return isTimeNoRegional(time.nome, regional.tipo)
         })
 
@@ -1071,7 +1043,6 @@ superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
       ]
     })
 
-    // Agrupar por conferência e rodada
     const rodadasPorConferencia = jogos.reduce((acc: any, jogo) => {
       const conf = jogo.conferencia || 'GERAL'
       if (!acc[conf]) acc[conf] = {}
@@ -1102,12 +1073,7 @@ superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
   }
 })
 
-
-
-// ==================== FUNÇÃO AUXILIAR - CORRIGIDA ====================
-
 function isTimeNoRegional(nomeTime: string, tipoRegional: string): boolean {
-  // LÓGICA TEMPORÁRIA - deve ser substituída por tabela de distribuição
   const distribuicaoTimes: { [key: string]: string[] } = {
     'SERRAMAR': ['Vasco Almirantes', 'Flamengo Imperadores', 'Locomotiva FA', 'Tritões FA'],
     'CANASTRA': ['Galo FA', 'Moura Lacerda Dragons', 'Rio Preto Weilers', 'Spartans FA'],

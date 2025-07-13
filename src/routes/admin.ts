@@ -6,7 +6,7 @@ import xlsx from 'xlsx'
 import multer from 'multer'
 import { TimeClassificado } from '../types';
 import { calcularClassificacaoPorConferencia } from '../utils/distribuicaoUtils';
-import { gerarPlayoffsCentroNorte, gerarPlayoffsNordeste, gerarPlayoffsSudeste, gerarPlayoffsSul } from '../utils/superligaUtils';
+import { gerarPlayoffsCentroNorte, gerarPlayoffsNordeste, gerarPlayoffsSudeste, gerarPlayoffsSul, gerarTodosPlayoffs } from '../utils/superligaUtils';
 
 export async function verificarGeracaoAutomaticaPlayoffs(campeonatoId: number) {
     try {
@@ -2659,109 +2659,6 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
         })
     }
 })
-
-
-async function gerarTodosPlayoffs(campeonatoId: number) {
-    try {
-        console.log('🏆 DEBUG: INICIANDO GERAÇÃO DE TODOS OS PLAYOFFS...')
-
-        const conferencias = await prisma.conferencia.findMany({
-            where: { campeonatoId },
-            include: { regionais: true },
-            orderBy: { ordem: 'asc' }
-        })
-
-        console.log(`📋 DEBUG: Encontradas ${conferencias.length} conferências`)
-
-        let totalPlayoffJogos = 0
-
-        for (const conf of conferencias) {
-            console.log(`\n🎯 DEBUG: Processando ${conf.tipo}...`)
-            console.log(`   📋 ID da conferência: ${conf.id}`)
-
-            try {
-                // ✅ VERIFICAR SE JÁ EXISTEM PLAYOFFS
-                const playoffsExistentes = await prisma.playoffJogo.findMany({
-                    where: {
-                        campeonatoId,
-                        conferenciaId: conf.id
-                    }
-                })
-
-                if (playoffsExistentes.length > 0) {
-                    console.log(`   ⚠️  ${conf.tipo} já tem ${playoffsExistentes.length} playoffs - PULANDO`)
-                    continue
-                }
-
-                let resultado
-
-                switch (conf.tipo) {
-                    case 'SUDESTE':
-                        console.log('   🏭 Gerando Sudeste...')
-                        resultado = await gerarPlayoffsSudeste(campeonatoId, conf.id)
-                        break
-
-                    case 'SUL':
-                        console.log('   🧊 Gerando Sul...')
-                        resultado = await gerarPlayoffsSul(campeonatoId, conf.id)
-                        break
-
-                    case 'NORDESTE':
-                        console.log('   🌵 DEBUG: Gerando Nordeste...')
-                        console.log(`   🌵 DEBUG: Parâmetros - campeonatoId: ${campeonatoId}, conferenciaId: ${conf.id}`)
-                        resultado = await gerarPlayoffsNordeste(campeonatoId, conf.id)
-                        console.log(`   🌵 DEBUG: Resultado Nordeste:`, resultado ? 'SUCESSO' : 'FALHOU')
-                        break
-
-                    case 'CENTRO NORTE':
-                        console.log('   🌲 Gerando Centro-Norte...')
-                        resultado = await gerarPlayoffsCentroNorte(campeonatoId, conf.id)
-                        break
-
-                    default:
-                        console.log(`   ⚠️  Tipo desconhecido: ${conf.tipo}`)
-                        continue
-                }
-
-                if (resultado) {
-                    const jogos = resultado.wildcards.length + resultado.semifinais.length + (resultado.final ? 1 : 0)
-                    totalPlayoffJogos += jogos
-                    console.log(`   ✅ ${conf.tipo}: ${jogos} jogos gerados`)
-                } else {
-                    console.log(`   ❌ ${conf.tipo}: FALHOU - resultado nulo`)
-                }
-
-            } catch (error) {
-                console.error(`   ❌ ERRO em ${conf.tipo}:`, error)
-            }
-        }
-
-        console.log(`\n🎉 DEBUG: Total de playoffs gerados: ${totalPlayoffJogos}`)
-
-        // ✅ VERIFICAR STATUS FINAL
-        const playoffsFinais = await prisma.playoffJogo.findMany({
-            where: { campeonatoId },
-            include: { conferencia: true }
-        })
-
-        const playoffsPorConferencia: Record<string, number> = {}
-        playoffsFinais.forEach(p => {
-            const conf = p.conferencia?.tipo || 'SEM_CONFERENCIA'
-            playoffsPorConferencia[conf] = (playoffsPorConferencia[conf] || 0) + 1
-        })
-
-        console.log(`📊 DEBUG: Status final por conferência:`)
-        Object.entries(playoffsPorConferencia).forEach(([conf, count]) => {
-            console.log(`   ${conf}: ${count} jogos`)
-        })
-
-        return totalPlayoffJogos
-
-    } catch (error) {
-        console.error('❌ DEBUG: Erro geral:', error)
-        throw error
-    }
-}
 
 // ========== ROTAS CORRIGIDAS ==========
 

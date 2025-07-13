@@ -718,54 +718,62 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
         const classificacao = await calcularClassificacaoPorConferencia(campeonatoId);
         console.log(`   📊 Classificação calculada:`, Object.keys(classificacao))
         
-        // ✅ BUSCAR NORDESTE (testar diferentes nomenclaturas)
-        let nordeste = classificacao['NORDESTE'];
-        console.log(`   🔍 Nordeste direto:`, nordeste ? 'ENCONTRADO' : 'NÃO ENCONTRADO')
+        // ✅ CORREÇÃO PRINCIPAL: Buscar por múltiplas nomenclaturas possíveis
+        let nordeste = classificacao['NORDESTE'] || classificacao['Nordeste'] || classificacao['nordeste'];
+        
+        console.log(`   🔍 Nordeste encontrado:`, nordeste ? 'SIM' : 'NÃO')
         
         if (!nordeste) {
-            console.log('   ⚠️  Tentando nomenclatura alternativa para Nordeste...')
-            nordeste = classificacao['Nordeste'];
-            console.log(`   🔍 Nordeste alternativo:`, nordeste ? 'ENCONTRADO' : 'NÃO ENCONTRADO')
+            console.log('   ❌ Tentando buscar na estrutura completa...')
+            console.log('   📊 Chaves disponíveis:', Object.keys(classificacao))
+            
+            // Buscar por qualquer chave que contenha "nordeste" (case insensitive)
+            const chaveNordeste = Object.keys(classificacao).find(key => 
+                key.toLowerCase().includes('nordeste')
+            );
+            
+            if (chaveNordeste) {
+                nordeste = classificacao[chaveNordeste];
+                console.log(`   ✅ Nordeste encontrado com chave: "${chaveNordeste}"`)
+            }
         }
-        
+
         if (!nordeste || !Array.isArray(nordeste) || nordeste.length === 0) {
-            console.error('❌ Classificação da Conferência Nordeste não encontrada')
-            console.log('📋 Conferências disponíveis:', Object.keys(classificacao))
-            console.log('📋 Valores das conferências:', classificacao)
-            throw new Error('Classificação da Conferência Nordeste não encontrada');
+            console.error('   ❌ ERRO: Classificação do Nordeste não encontrada')
+            console.error('   📊 Classificação disponível:', Object.keys(classificacao))
+            throw new Error('Classificação da Conferência Nordeste não encontrada ou vazia')
         }
 
-        console.log(`✅ Nordeste encontrado com ${nordeste.length} regionais`)
-        console.log(`   📊 Estrutura do Nordeste:`, nordeste)
-
-        // Nordeste tem 1 regional: ATLÂNTICO com 6 times
+        // ✅ CORRIGIR: Nordeste tem 1 regional com 6 times
         const atlantico = nordeste[0];
-        console.log(`   🔍 Regional Atlântico:`, atlantico)
-        
         if (!atlantico || !atlantico.times) {
-            console.error('❌ Regional Atlântico não encontrado:', atlantico)
-            throw new Error('Regional Atlântico não encontrado na classificação');
+            throw new Error('Regional Atlântico não encontrado na classificação do Nordeste')
         }
 
         const times = atlantico.times;
-        console.log(`   📊 Times no Atlântico: ${times.length}`)
 
         if (times.length < 6) {
-            console.error(`❌ Regional Atlântico deve ter 6 times, encontrados ${times.length}`)
-            console.log('📋 Times encontrados:', times.map((t: any) => t.time?.nome || 'Nome não disponível'))
-            throw new Error(`Regional Atlântico deve ter 6 times, encontrados ${times.length}`);
+            console.error(`   ❌ Regional Atlântico tem apenas ${times.length} times, esperado 6`)
+            throw new Error(`Regional Atlântico deve ter 6 times, encontrados ${times.length}`)
         }
 
+        console.log('📋 Classificação Final Regional Atlântico:')
+        times.slice(0, 6).forEach((time: any, index: number) => {
+            console.log(`   ${index + 1}º. ${time.time?.nome || 'Nome não disponível'} (${time.vitorias}V-${time.derrotas}D)`)
+        });
+
         const primeiro = times[0];   // 1º lugar -> Semifinal direta
-        const segundo = times[1];    // 2º lugar -> Semifinal direta
-        const terceiro = times[2];   // 3º lugar -> Semifinal (pode jogar com 1º ou 2º)
+        const segundo = times[1];    // 2º lugar -> Semifinal direta  
+        const terceiro = times[2];   // 3º lugar -> Semifinal direta
         const quarto = times[3];     // 4º lugar -> Wild Card
         const quinto = times[4];     // 5º lugar -> Wild Card
-        // 6º lugar está eliminado
+        // 6º lugar eliminado
 
-        console.log('📋 Classificação Nordeste:')
-        times.forEach((time: any, index: number) => {
-            console.log(`   ${index + 1}º. ${time.time?.nome || 'Nome não disponível'} (${time.vitorias}V-${time.derrotas}D)`)
+        // ✅ VERIFICAR SE TODOS OS TIMES EXISTEM
+        [primeiro, segundo, terceiro, quarto, quinto].forEach((time, index) => {
+            if (!time?.time?.id) {
+                throw new Error(`Time na posição ${index + 1} não tem ID válido`)
+            }
         });
 
         console.log('   🃏 Criando Wild Card...')
@@ -836,7 +844,6 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
         });
 
         console.log('✅ Final da Conferência Nordeste criada')
-        console.log('✅ Playoffs Nordeste gerados com sucesso!')
 
         const resultado = {
             wildcards: [wildcard],
@@ -854,6 +861,7 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             final: !!resultado.final
         })
 
+        console.log('✅ Playoffs Nordeste gerados com sucesso!')
         return resultado
 
     } catch (error) {
@@ -938,6 +946,108 @@ export async function obterStatusPlayoffs(campeonatoId: number) {
         return status
     } catch (error) {
         console.error('Erro ao obter status dos playoffs:', error)
+        throw error
+    }
+}
+
+export async function gerarTodosPlayoffs(campeonatoId: number) {
+    try {
+        console.log('🏆 DEBUG: INICIANDO GERAÇÃO DE TODOS OS PLAYOFFS...')
+
+        const conferencias = await prisma.conferencia.findMany({
+            where: { campeonatoId },
+            include: { regionais: true },
+            orderBy: { ordem: 'asc' }
+        })
+
+        console.log(`📋 DEBUG: Encontradas ${conferencias.length} conferências`)
+
+        let totalPlayoffJogos = 0
+
+        for (const conf of conferencias) {
+            console.log(`\n🎯 DEBUG: Processando ${conf.tipo}...`)
+            console.log(`   📋 ID da conferência: ${conf.id}`)
+
+            try {
+                // ✅ VERIFICAR SE JÁ EXISTEM PLAYOFFS
+                const playoffsExistentes = await prisma.playoffJogo.findMany({
+                    where: {
+                        campeonatoId,
+                        conferenciaId: conf.id
+                    }
+                })
+
+                if (playoffsExistentes.length > 0) {
+                    console.log(`   ⚠️  ${conf.tipo} já tem ${playoffsExistentes.length} playoffs - PULANDO`)
+                    continue
+                }
+
+                let resultado
+
+                switch (conf.tipo) {
+                    case 'SUDESTE':
+                        console.log('   🏭 Gerando Sudeste...')
+                        resultado = await gerarPlayoffsSudeste(campeonatoId, conf.id)
+                        break
+
+                    case 'SUL':
+                        console.log('   🧊 Gerando Sul...')
+                        resultado = await gerarPlayoffsSul(campeonatoId, conf.id)
+                        break
+
+                    case 'NORDESTE':
+                        console.log('   🌵 DEBUG: Gerando Nordeste...')
+                        console.log(`   🌵 DEBUG: Parâmetros - campeonatoId: ${campeonatoId}, conferenciaId: ${conf.id}`)
+                        resultado = await gerarPlayoffsNordeste(campeonatoId, conf.id)
+                        console.log(`   🌵 DEBUG: Resultado Nordeste:`, resultado ? 'SUCESSO' : 'FALHOU')
+                        break
+
+                    case 'CENTRO NORTE':
+                        console.log('   🌲 Gerando Centro-Norte...')
+                        resultado = await gerarPlayoffsCentroNorte(campeonatoId, conf.id)
+                        break
+
+                    default:
+                        console.log(`   ⚠️  Tipo desconhecido: ${conf.tipo}`)
+                        continue
+                }
+
+                if (resultado) {
+                    const jogos = resultado.wildcards.length + resultado.semifinais.length + (resultado.final ? 1 : 0)
+                    totalPlayoffJogos += jogos
+                    console.log(`   ✅ ${conf.tipo}: ${jogos} jogos gerados`)
+                } else {
+                    console.log(`   ❌ ${conf.tipo}: FALHOU - resultado nulo`)
+                }
+
+            } catch (error) {
+                console.error(`   ❌ ERRO em ${conf.tipo}:`, error)
+            }
+        }
+
+        console.log(`\n🎉 DEBUG: Total de playoffs gerados: ${totalPlayoffJogos}`)
+
+        // ✅ VERIFICAR STATUS FINAL
+        const playoffsFinais = await prisma.playoffJogo.findMany({
+            where: { campeonatoId },
+            include: { conferencia: true }
+        })
+
+        const playoffsPorConferencia: Record<string, number> = {}
+        playoffsFinais.forEach(p => {
+            const conf = p.conferencia?.tipo || 'SEM_CONFERENCIA'
+            playoffsPorConferencia[conf] = (playoffsPorConferencia[conf] || 0) + 1
+        })
+
+        console.log(`📊 DEBUG: Status final por conferência:`)
+        Object.entries(playoffsPorConferencia).forEach(([conf, count]) => {
+            console.log(`   ${conf}: ${count} jogos`)
+        })
+
+        return totalPlayoffJogos
+
+    } catch (error) {
+        console.error('❌ DEBUG: Erro geral:', error)
         throw error
     }
 }

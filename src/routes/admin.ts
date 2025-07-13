@@ -35,7 +35,15 @@ export async function verificarGeracaoAutomaticaPlayoffs(campeonatoId: number) {
             })
 
             if (playoffsExistentes === 0) {
-                await gerarTodosPlayoffs(campeonatoId)
+                console.log('🔥 PATCH: Chamando gerarTodosPlayoffs com campeonatoId:', campeonatoId)
+
+                try {
+                    const resultado = await gerarTodosPlayoffs(campeonatoId)
+                    console.log('🔥 PATCH: gerarTodosPlayoffs retornou:', resultado)
+                } catch (errorPlayoffs) {
+                    console.error('🔥 PATCH: ERRO em gerarTodosPlayoffs:', errorPlayoffs)
+                    throw errorPlayoffs
+                }
 
                 await prisma.campeonato.update({
                     where: { id: campeonatoId },
@@ -815,7 +823,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
         // ✅ VERIFICAR SE TIMES FORAM DISTRIBUÍDOS - CORRIGINDO A VALIDAÇÃO!
         const timesDistribuidos = await prisma.distribuicaoTime.count({
-            where: { 
+            where: {
                 campeonatoId: superliga.id,
                 temporada: '2025'
             }
@@ -824,7 +832,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
         console.log(`🎯 Verificação: ${timesDistribuidos} times distribuídos para a Superliga`)
 
         if (timesDistribuidos === 0) {
-            res.status(400).json({ 
+            res.status(400).json({
                 error: 'Execute o script de distribuição dos times antes de importar a agenda',
                 detalhes: 'Nenhum time foi encontrado na distribuição das conferências'
             })
@@ -895,9 +903,9 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
             try {
                 // Buscar time mandante (casa)
-                const nomeTimeCasa = jogoData.time_mandante?.toString().toLowerCase().trim() || 
-                                   jogoData.time_casa?.toString().toLowerCase().trim()
-                
+                const nomeTimeCasa = jogoData.time_mandante?.toString().toLowerCase().trim() ||
+                    jogoData.time_casa?.toString().toLowerCase().trim()
+
                 if (!nomeTimeCasa) {
                     resultados.erros.push({
                         linha,
@@ -985,7 +993,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                         fase: jogoData.fase || 'TEMPORADA REGULAR',
                         status: 'AGENDADO',
                         observacoes: jogoData.observacoes || null,
-                        
+
                         // ✅ CAMPOS ADICIONAIS
                         conferencia: conferenciaJogo,
                         regional: regionalJogo,
@@ -994,7 +1002,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                 })
 
                 resultados.sucesso++
-                
+
                 if (i % 10 === 0) {
                     console.log(`📊 Processando: ${i + 1}/${jogosRaw.length}`)
                 }
@@ -2219,6 +2227,8 @@ adminRouter.get('/jogos/stats/:temporada', async (req, res) => {
 })
 
 
+// SUBSTITUIR TODA A ROTA em src/routes/admin.ts:
+
 adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (req, res) => {
     try {
         if (!req.file) {
@@ -2275,7 +2285,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
         fs.unlinkSync(req.file.path)
         console.log(`🎉 Importação concluída: ${resultados.sucesso} jogos atualizados`)
 
-        // ✅ 3. LÓGICA AUTOMÁTICA DE GERAÇÃO DE PLAYOFFS
+        // ✅ 3. VERIFICAÇÃO AUTOMÁTICA DE GERAÇÃO DE PLAYOFFS
         console.log('\n🔍 Verificando se deve gerar playoffs automaticamente...')
 
         // Buscar superliga
@@ -2283,13 +2293,6 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
             where: {
                 temporada: '2025',
                 isSuperliga: true
-            },
-            include: {
-                conferencias: {
-                    include: {
-                        regionais: true
-                    }
-                }
             }
         })
 
@@ -2331,291 +2334,26 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                 console.log('🏆 TODOS OS JOGOS FINALIZADOS! Gerando playoffs automaticamente...')
 
                 try {
-                    // ✅ 5. CALCULAR CLASSIFICAÇÃO
-                    const distribuicao = await prisma.distribuicaoTime.findMany({
-                        where: { campeonatoId: superliga.id },
-                        include: {
-                            time: true,
-                            conferencia: true,
-                            regional: true
-                        }
-                    })
+                    // ✅ USAR A FUNÇÃO CORRETA gerarTodosPlayoffs
+                    const totalPlayoffJogos = await gerarTodosPlayoffs(superliga.id)
 
-                    const jogos = await prisma.jogo.findMany({
-                        where: {
-                            campeonatoId: superliga.id,
-                            fase: 'TEMPORADA REGULAR',
-                            status: 'FINALIZADO'
-                        }
-                    })
-
-                    // Calcular classificação por regional
-                    const classificacaoPorRegional = new Map()
-
-                    // Agrupar times por regional
-                    const timesPorRegional = new Map()
-                    distribuicao.forEach(dist => {
-                        const key = dist.regionalType
-                        if (!timesPorRegional.has(key)) {
-                            timesPorRegional.set(key, [])
-                        }
-                        timesPorRegional.get(key).push(dist)
-                    })
-
-                    // Calcular estatísticas para cada regional
-                    for (const [regionalTipo, timesRegional] of timesPorRegional) {
-                        const classificacao = []
-
-                        for (const dist of timesRegional) {
-                            const jogosTime = jogos.filter(j =>
-                                j.timeCasaId === dist.timeId || j.timeVisitanteId === dist.timeId
-                            )
-
-                            let vitorias = 0, derrotas = 0, pontosPro = 0, pontosContra = 0
-
-                            jogosTime.forEach(jogo => {
-                                const isTimeCasa = jogo.timeCasaId === dist.timeId
-                                const pontosFeitos = isTimeCasa ? (jogo.placarCasa || 0) : (jogo.placarVisitante || 0)
-                                const pontosSofridos = isTimeCasa ? (jogo.placarVisitante || 0) : (jogo.placarCasa || 0)
-
-                                pontosPro += pontosFeitos
-                                pontosContra += pontosSofridos
-
-                                if (pontosFeitos > pontosSofridos) {
-                                    vitorias++
-                                } else if (pontosSofridos > pontosFeitos) {
-                                    derrotas++
-                                }
-                            })
-
-                            classificacao.push({
-                                timeId: dist.timeId,
-                                time: dist.time,
-                                vitorias,
-                                derrotas,
-                                pontosPro,
-                                pontosContra,
-                                saldo: pontosPro - pontosContra,
-                                regionalTipo
-                            })
-                        }
-
-                        // Ordenar por vitórias, depois por saldo
-                        classificacao.sort((a, b) => {
-                            if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
-                            if (b.saldo !== a.saldo) return b.saldo - a.saldo
-                            return b.pontosPro - a.pontosPro
-                        })
-
-                        classificacao.forEach((item, index) => {
-                            (item as any).posicaoRegional = index + 1
-                        })
-
-                        classificacaoPorRegional.set(regionalTipo, classificacao)
-                        console.log(`   📋 ${regionalTipo}: ${classificacao.length} times classificados`)
-                    }
-
-                    // ✅ 6. GERAR PLAYOFFS POR CONFERÊNCIA
-                    let totalPlayoffJogos = 0
-
-                    for (const conferencia of superliga.conferencias) {
-                        console.log(`\n🏟️  Gerando playoffs ${conferencia.nome}...`)
-
-                        if (conferencia.tipo === 'CENTRO NORTE') {
-                            // Centro-Norte: direto para semifinal (3 times por regional)
-                            const cerrado = classificacaoPorRegional.get('CERRADO') || []
-                            const amazonia = classificacaoPorRegional.get('AMAZONIA') || []
-
-                            if (cerrado.length > 0 && amazonia.length > 0) {
-                                // Semifinal 1: 1º Cerrado vs 2º Amazônia
-                                const semi1 = await prisma.playoffJogo.create({
-                                    data: {
-                                        campeonatoId: superliga.id,
-                                        conferenciaId: conferencia.id,
-                                        fase: 'SEMIFINAL CONFERENCIA',
-                                        rodada: 1,
-                                        nome: `Semifinal ${conferencia.nome} 1`,
-                                        timeClassificado1Id: cerrado[0]?.timeId,
-                                        timeClassificado2Id: amazonia[1]?.timeId,
-                                        status: 'AGUARDANDO'
-                                    }
-                                })
-
-                                // Semifinal 2: 1º Amazônia vs 2º Cerrado
-                                const semi2 = await prisma.playoffJogo.create({
-                                    data: {
-                                        campeonatoId: superliga.id,
-                                        conferenciaId: conferencia.id,
-                                        fase: 'SEMIFINAL CONFERENCIA',
-                                        rodada: 1,
-                                        nome: `Semifinal ${conferencia.nome} 2`,
-                                        timeClassificado1Id: amazonia[0]?.timeId,
-                                        timeClassificado2Id: cerrado[1]?.timeId,
-                                        status: 'AGUARDANDO'
-                                    }
-                                })
-
-                                // Final da conferência
-                                await prisma.playoffJogo.create({
-                                    data: {
-                                        campeonatoId: superliga.id,
-                                        conferenciaId: conferencia.id,
-                                        fase: 'FINAL CONFERENCIA',
-                                        rodada: 1,
-                                        nome: `Final ${conferencia.nome}`,
-                                        jogoAnterior1Id: semi1.id,
-                                        jogoAnterior2Id: semi2.id,
-                                        status: 'AGUARDANDO'
-                                    }
-                                })
-
-                                totalPlayoffJogos += 3
-                                console.log(`     ✅ 3 jogos gerados`)
-                            }
-
-                        } else {
-                            // Outras conferências: com wild cards
-                            const regionaisTipos = conferencia.regionais.map(r => r.tipo)
-                            const primeirosColocados: TimeClassificado[] = []
-                            const segundosColocados: TimeClassificado[] = []
-
-                            regionaisTipos.forEach(regionalTipo => {
-                                const classificacao = classificacaoPorRegional.get(regionalTipo) || []
-                                if (classificacao[0]) primeirosColocados.push(classificacao[0])
-                                if (classificacao[1]) segundosColocados.push(classificacao[1])
-                            })
-
-                            // Ordenar primeiros e segundos colocados
-                            const ordenarTimes = (times: TimeClassificado[]) => times.sort((a, b) => {
-                                if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
-                                if (b.saldo !== a.saldo) return b.saldo - a.saldo
-                                return b.pontosPro - a.pontosPro
-                            })
-
-                            ordenarTimes(primeirosColocados)
-                            ordenarTimes(segundosColocados)
-
-                            if (primeirosColocados.length >= 2 && segundosColocados.length >= 2) {
-                                // Wild Cards
-                                const wc1 = await prisma.playoffJogo.create({
-                                    data: {
-                                        campeonatoId: superliga.id,
-                                        conferenciaId: conferencia.id,
-                                        fase: 'WILD CARD',
-                                        rodada: 1,
-                                        nome: `Wild Card ${conferencia.nome} 1`,
-                                        timeClassificado1Id: primeirosColocados[2]?.timeId || segundosColocados[0]?.timeId,
-                                        timeClassificado2Id: segundosColocados[2]?.timeId || segundosColocados[1]?.timeId,
-                                        status: 'AGUARDANDO'
-                                    }
-                                })
-
-                                const wc2 = await prisma.playoffJogo.create({
-                                    data: {
-                                        campeonatoId: superliga.id,
-                                        conferenciaId: conferencia.id,
-                                        fase: 'WILD CARD',
-                                        rodada: 1,
-                                        nome: `Wild Card ${conferencia.nome} 2`,
-                                        timeClassificado1Id: segundosColocados[0]?.timeId,
-                                        timeClassificado2Id: segundosColocados[1]?.timeId,
-                                        status: 'AGUARDANDO'
-                                    }
-                                })
-
-                                // Semifinais
-                                const semi1 = await prisma.playoffJogo.create({
-                                    data: {
-                                        campeonatoId: superliga.id,
-                                        conferenciaId: conferencia.id,
-                                        fase: 'SEMIFINAL CONFERENCIA',
-                                        rodada: 1,
-                                        nome: `Semifinal ${conferencia.nome} 1`,
-                                        timeClassificado1Id: primeirosColocados[0]?.timeId,
-                                        jogoAnterior2Id: wc1.id,
-                                        status: 'AGUARDANDO'
-                                    }
-                                })
-
-                                const semi2 = await prisma.playoffJogo.create({
-                                    data: {
-                                        campeonatoId: superliga.id,
-                                        conferenciaId: conferencia.id,
-                                        fase: 'SEMIFINAL CONFERENCIA',
-                                        rodada: 1,
-                                        nome: `Semifinal ${conferencia.nome} 2`,
-                                        timeClassificado1Id: primeirosColocados[1]?.timeId,
-                                        jogoAnterior2Id: wc2.id,
-                                        status: 'AGUARDANDO'
-                                    }
-                                })
-
-                                // Final da conferência
-                                await prisma.playoffJogo.create({
-                                    data: {
-                                        campeonatoId: superliga.id,
-                                        conferenciaId: conferencia.id,
-                                        fase: 'FINAL CONFERENCIA',
-                                        rodada: 1,
-                                        nome: `Final ${conferencia.nome}`,
-                                        jogoAnterior1Id: semi1.id,
-                                        jogoAnterior2Id: semi2.id,
-                                        status: 'AGUARDANDO'
-                                    }
-                                })
-
-                                totalPlayoffJogos += 5
-                                console.log(`     ✅ 5 jogos gerados (2 WC + 2 SF + 1 F)`)
-                            }
-                        }
-                    }
-
-                    // ✅ 7. GERAR FASE NACIONAL
-                    const semifinalNacional1 = await prisma.playoffJogo.create({
-                        data: {
-                            campeonatoId: superliga.id,
-                            fase: 'SEMIFINAL NACIONAL',
-                            rodada: 1,
-                            nome: 'Semifinal Nacional 1',
-                            status: 'AGUARDANDO'
-                        }
-                    })
-
-                    const semifinalNacional2 = await prisma.playoffJogo.create({
-                        data: {
-                            campeonatoId: superliga.id,
-                            fase: 'SEMIFINAL NACIONAL',
-                            rodada: 1,
-                            nome: 'Semifinal Nacional 2',
-                            status: 'AGUARDANDO'
-                        }
-                    })
-
-                    await prisma.playoffJogo.create({
-                        data: {
-                            campeonatoId: superliga.id,
-                            fase: 'FINAL NACIONAL',
-                            rodada: 1,
-                            nome: 'Grande Decisão Nacional',
-                            jogoAnterior1Id: semifinalNacional1.id,
-                            jogoAnterior2Id: semifinalNacional2.id,
-                            status: 'AGUARDANDO'
-                        }
-                    })
-
-                    totalPlayoffJogos += 3
-
-                    // ✅ 8. ATUALIZAR STATUS DA SUPERLIGA
+                    // ✅ ATUALIZAR STATUS DA SUPERLIGA
                     await prisma.campeonato.update({
                         where: { id: superliga.id },
-                        data: { status: 'PLAYOFFS' }
+                        data: {
+                            status: 'PLAYOFFS',
+                            configSuperliga: {
+                                faseAtual: 'PLAYOFFS CONFERENCIA',
+                                playoffsGeradosEm: new Date().toISOString()
+                            } as any
+                        }
                     })
 
-                    console.log(`\n🎉 PLAYOFFS GERADOS AUTOMATICAMENTE!`)
+                    console.log('🎉 PLAYOFFS GERADOS AUTOMATICAMENTE!')
                     console.log(`📊 Total de jogos de playoff: ${totalPlayoffJogos}`)
-                    console.log(`✅ Status da Superliga: PLAYOFFS`)
+                    console.log('✅ Status da Superliga: PLAYOFFS')
 
-                    // Resposta com playoffs gerados
+                    // ✅ RESPOSTA COM PLAYOFFS GERADOS
                     res.json({
                         mensagem: `${resultados.sucesso} resultados importados`,
                         erros: resultados.erros.length > 0 ? resultados.erros : null,
@@ -2638,7 +2376,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
             console.log(`⏳ Ainda faltam ${faltam} jogos para finalizar a temporada regular`)
         }
 
-        // ✅ 9. RESPOSTA NORMAL (se não gerou playoffs)
+        // ✅ 5. RESPOSTA NORMAL (se não gerou playoffs)
         res.json({
             mensagem: `${resultados.sucesso} resultados importados`,
             erros: resultados.erros.length > 0 ? resultados.erros : null,

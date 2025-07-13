@@ -526,7 +526,7 @@ export async function gerarPlayoffsSul(campeonatoId: number, conferenciaId: numb
         console.log(`✅ Wild Card 2: ${segundoPampa.time.nome} × ${terceiroAraucaria.time.nome}`)
 
         // ✅ VERIFICAR SE OS JOGOS SÃO REALMENTE DIFERENTES
-        if (wildcard1.timeClassificado1Id === wildcard2.timeClassificado1Id && 
+        if (wildcard1.timeClassificado1Id === wildcard2.timeClassificado1Id &&
             wildcard1.timeClassificado2Id === wildcard2.timeClassificado2Id) {
             console.error('❌ ERRO: Wild Cards são idênticos!')
             throw new Error('Wild Cards duplicados detectados')
@@ -690,10 +690,14 @@ export async function gerarPlayoffsCentroNorte(campeonatoId: number, conferencia
 
 export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId: number) {
     try {
+        // ✅ PATCH DE DEBUG - ADICIONAR ESTAS LINHAS
+        console.log('🔥 PATCH: gerarPlayoffsNordeste INICIANDO')
+        console.log('🔥 PATCH: campeonatoId =', campeonatoId)
+        console.log('🔥 PATCH: conferenciaId =', conferenciaId)
+
         console.log('🌵 INICIANDO GERAÇÃO DE PLAYOFFS NORDESTE...')
         console.log(`   📋 CampeonatoId: ${campeonatoId}`)
         console.log(`   📋 ConferenciaId: ${conferenciaId}`)
-
         // ✅ VERIFICAR SE JÁ EXISTEM PLAYOFFS PARA EVITAR DUPLICAÇÃO
         const playoffsExistentes = await prisma.playoffJogo.findMany({
             where: {
@@ -717,21 +721,21 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
         console.log('   📈 Calculando classificação...')
         const classificacao = await calcularClassificacaoPorConferencia(campeonatoId);
         console.log(`   📊 Classificação calculada:`, Object.keys(classificacao))
-        
+
         // ✅ CORREÇÃO PRINCIPAL: Buscar por múltiplas nomenclaturas possíveis
         let nordeste = classificacao['NORDESTE'] || classificacao['Nordeste'] || classificacao['nordeste'];
-        
+
         console.log(`   🔍 Nordeste encontrado:`, nordeste ? 'SIM' : 'NÃO')
-        
+
         if (!nordeste) {
             console.log('   ❌ Tentando buscar na estrutura completa...')
             console.log('   📊 Chaves disponíveis:', Object.keys(classificacao))
-            
+
             // Buscar por qualquer chave que contenha "nordeste" (case insensitive)
-            const chaveNordeste = Object.keys(classificacao).find(key => 
+            const chaveNordeste = Object.keys(classificacao).find(key =>
                 key.toLowerCase().includes('nordeste')
             );
-            
+
             if (chaveNordeste) {
                 nordeste = classificacao[chaveNordeste];
                 console.log(`   ✅ Nordeste encontrado com chave: "${chaveNordeste}"`)
@@ -855,7 +859,8 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
             }
         }
 
-        console.log('   📊 Resultado final:', {
+        console.log('🔥 PATCH: Chegou ao final da função com sucesso')
+        console.log('🔥 PATCH: resultado =', {
             wildcards: resultado.wildcards.length,
             semifinais: resultado.semifinais.length,
             final: !!resultado.final
@@ -865,12 +870,12 @@ export async function gerarPlayoffsNordeste(campeonatoId: number, conferenciaId:
         return resultado
 
     } catch (error) {
+        // ✅ PATCH DE DEBUG - ADICIONAR ESTAS LINHAS NO CATCH
+        console.error('🔥 PATCH: ERRO CAPTURADO NO gerarPlayoffsNordeste')
+        console.error('🔥 PATCH: Tipo do erro:', typeof error)
+        console.error('🔥 PATCH: Erro:', error)
+
         console.error('❌ ERRO DETALHADO na geração de playoffs Nordeste:')
-        console.error('   🔴 Tipo do erro:', error instanceof Error ? error.constructor.name : typeof error)
-        console.error('   🔴 Mensagem:', error instanceof Error ? error.message : String(error))
-        console.error('   🔴 Stack:', error instanceof Error ? error.stack : 'Sem stack trace')
-        console.error('   🔴 CampeonatoId:', campeonatoId)
-        console.error('   🔴 ConferenciaId:', conferenciaId)
         throw error
     }
 }
@@ -951,6 +956,7 @@ export async function obterStatusPlayoffs(campeonatoId: number) {
 }
 
 export async function gerarTodosPlayoffs(campeonatoId: number) {
+    console.log('🔥 gerarTodosPlayoffs INICIOU com campeonatoId:', campeonatoId)
     try {
         console.log('🏆 DEBUG: INICIANDO GERAÇÃO DE TODOS OS PLAYOFFS...')
 
@@ -965,6 +971,7 @@ export async function gerarTodosPlayoffs(campeonatoId: number) {
         let totalPlayoffJogos = 0
 
         for (const conf of conferencias) {
+            console.log(`🔥 Processando conferência: ${conf.tipo} (ID: ${conf.id})`)
             console.log(`\n🎯 DEBUG: Processando ${conf.tipo}...`)
             console.log(`   📋 ID da conferência: ${conf.id}`)
 
@@ -978,7 +985,10 @@ export async function gerarTodosPlayoffs(campeonatoId: number) {
                 })
 
                 if (playoffsExistentes.length > 0) {
-                    console.log(`   ⚠️  ${conf.tipo} já tem ${playoffsExistentes.length} playoffs - PULANDO`)
+                    console.log(`   ⚠️  ${conf.tipo} já tem ${playoffsExistentes.length} playoffs`)
+                    const jogos = playoffsExistentes.length
+                    totalPlayoffJogos += jogos
+                    console.log(`   ✅ ${conf.tipo}: ${jogos} jogos (já existem)`)
                     continue
                 }
 
@@ -986,29 +996,39 @@ export async function gerarTodosPlayoffs(campeonatoId: number) {
 
                 switch (conf.tipo) {
                     case 'SUDESTE':
+                        console.log('🔥 PATCH: SUDESTE case executado')
                         console.log('   🏭 Gerando Sudeste...')
                         resultado = await gerarPlayoffsSudeste(campeonatoId, conf.id)
                         break
 
                     case 'SUL':
+                        console.log('🔥 PATCH: SUL case executado')
                         console.log('   🧊 Gerando Sul...')
                         resultado = await gerarPlayoffsSul(campeonatoId, conf.id)
                         break
 
                     case 'NORDESTE':
-                        console.log('   🌵 DEBUG: Gerando Nordeste...')
-                        console.log(`   🌵 DEBUG: Parâmetros - campeonatoId: ${campeonatoId}, conferenciaId: ${conf.id}`)
-                        resultado = await gerarPlayoffsNordeste(campeonatoId, conf.id)
-                        console.log(`   🌵 DEBUG: Resultado Nordeste:`, resultado ? 'SUCESSO' : 'FALHOU')
+                        console.log('🔥 PATCH: NORDESTE case ENCONTRADO!')
+                        console.log('🔥 PATCH: conf.tipo =', conf.tipo)
+                        console.log('🔥 PATCH: conf.id =', conf.id)
+                        console.log('   🌵 Gerando Nordeste...')
+                        try {
+                            resultado = await gerarPlayoffsNordeste(campeonatoId, conf.id)
+                            console.log('🔥 PATCH: gerarPlayoffsNordeste retornou:', !!resultado)
+                        } catch (errorNordeste) {
+                            console.error('🔥 PATCH: ERRO no gerarPlayoffsNordeste:', errorNordeste)
+                            throw errorNordeste
+                        }
                         break
 
                     case 'CENTRO NORTE':
+                        console.log('🔥 PATCH: CENTRO NORTE case executado')
                         console.log('   🌲 Gerando Centro-Norte...')
                         resultado = await gerarPlayoffsCentroNorte(campeonatoId, conf.id)
                         break
 
                     default:
-                        console.log(`   ⚠️  Tipo desconhecido: ${conf.tipo}`)
+                        console.log('🔥 PATCH: DEFAULT case - tipo desconhecido:', conf.tipo)
                         continue
                 }
 

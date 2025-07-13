@@ -1,11 +1,8 @@
-// scripts/gerar-resultados-jogos-restantes.ts
-// Script para gerar planilhas de RESULTADOS dos 20 jogos RESTANTES da temporada regular (jogos 65-84)
-// Seguindo EXATAMENTE o padrão de gerar-resultados-por-fim-de-semana.ts
-
+// scripts/gerar-resultados-playoffs.ts - COPIADO do script que funciona
 import { PrismaClient } from '@prisma/client'
 import * as XLSX from 'xlsx'
-import * as fs from 'fs'
-import * as path from 'path'
+import path from 'path'
+import fs from 'fs'
 
 const prisma = new PrismaClient()
 
@@ -23,122 +20,106 @@ interface JogoResultado {
   status: string
 }
 
-// ✅ GERAÇÃO DE PLACARES REALISTAS (mesmo padrão)
+// ✅ GERAR PLACAR REALISTA (igual ao original)
 function gerarPlacarRealista(): { mandante: number; visitante: number } {
-  const pontosComuns = [0, 3, 6, 7, 9, 10, 13, 14, 16, 17, 20, 21, 23, 24, 27, 28, 30, 31, 34, 35, 37, 38, 41, 42, 45, 48]
+  const base1 = Math.floor(Math.random() * 35) + 7
+  const base2 = Math.floor(Math.random() * 35) + 7
   
-  const mandante = pontosComuns[Math.floor(Math.random() * pontosComuns.length)]
-  let visitante = pontosComuns[Math.floor(Math.random() * pontosComuns.length)]
-  
-  // Evitar empates em 90% dos casos
-  if (mandante === visitante && Math.random() < 0.9) {
-    const incrementos = [3, 7, 6]
-    const incremento = incrementos[Math.floor(Math.random() * incrementos.length)]
-    
-    if (Math.random() < 0.5) {
-      return { mandante: mandante + incremento, visitante }
-    } else {
-      return { mandante, visitante: visitante + incremento }
-    }
+  if (base1 === base2) {
+    return { mandante: base1, visitante: base2 + 7 }
   }
   
-  return { mandante, visitante }
+  return { mandante: base1, visitante: base2 }
 }
 
-// ✅ BUSCAR APENAS OS 20 JOGOS RESTANTES AGRUPADOS POR FIM DE SEMANA
-async function buscarJogosRestantesAgrupados(): Promise<Map<number, any[]>> {
-  console.log('🔍 Buscando os 20 jogos RESTANTES da temporada regular...')
-  
-  const superliga = await prisma.campeonato.findFirst({
-    where: {
-      temporada: '2025',
-      isSuperliga: true
-    }
-  })
-
-  if (!superliga) {
-    throw new Error('❌ Superliga 2025 não encontrada no banco de dados')
+// ✅ DETERMINAR FIM DE SEMANA PELOS PLAYOFFS (baseado na fase)
+function determinarFimDeSemana(jogo: any): number {
+  // Mapear cada fase para um fim de semana específico
+  switch (jogo.fase) {
+    case 'WILD CARD': return 13
+    case 'SEMIFINAL CONFERENCIA': return 14  
+    case 'FINAL CONFERENCIA': return 15
+    case 'SEMIFINAL NACIONAL': return 16
+    case 'FINAL NACIONAL': return 17
+    default: return 17
   }
+}
 
-  console.log(`✅ Superliga encontrada: ID ${superliga.id}`)
+// ✅ BUSCAR JOGOS AGRUPADOS POR FIM DE SEMANA (adaptado para playoffs)
+async function buscarJogosAgrupados(): Promise<Map<number, any[]>> {
+  try {
+    console.log('🔍 Buscando jogos de playoff agrupados por fim de semana...')
 
-  // Buscar TODOS os jogos da agenda ordenados por data
-  const todosJogos = await prisma.jogo.findMany({
-    where: {
-      campeonatoId: superliga.id,
-      fase: 'TEMPORADA REGULAR'
-    },
-    include: {
-      timeCasa: { 
-        select: { nome: true, sigla: true, estadio: true, cidade: true } 
+    const superliga = await prisma.campeonato.findFirst({
+      where: { temporada: '2025', isSuperliga: true }
+    })
+
+    if (!superliga) {
+      throw new Error('Superliga 2025 não encontrada')
+    }
+
+    // ✅ BUSCAR TODOS OS JOGOS DE PLAYOFF
+    const jogos = await prisma.playoffJogo.findMany({
+      where: { campeonatoId: superliga.id },
+      include: {
+        timeClassificado1: true,
+        timeClassificado2: true,
+        conferencia: true
       },
-      timeVisitante: { 
-        select: { nome: true, sigla: true } 
-      }
-    },
-    orderBy: [
-      { dataJogo: 'asc' },
-      { id: 'asc' }
-    ]
-  })
+      orderBy: [{ fase: 'asc' }, { dataJogo: 'asc' }]
+    })
 
-  console.log(`📋 Total de jogos da temporada regular: ${todosJogos.length}`)
+    // ✅ MAPEAR JOGOS (incluindo os TBD)
+    const jogosFormatados = jogos.map(jogo => ({
+      id: jogo.id,
+      dataJogo: jogo.dataJogo || new Date(),
+      rodada: 1,
+      fase: jogo.fase,
+      timeCasa: {
+        nome: jogo.timeClassificado1?.nome || `Vencedor Jogo ${jogo.id - 5}`,
+        sigla: jogo.timeClassificado1?.sigla || 'TBD',
+        cidade: jogo.timeClassificado1?.cidade || 'N/A',
+        estadio: `Estádio ${jogo.timeClassificado1?.cidade || 'TBD'}`
+      },
+      timeVisitante: {
+        nome: jogo.timeClassificado2?.nome || `Vencedor Jogo ${jogo.id - 3}`,
+        sigla: jogo.timeClassificado2?.sigla || 'TBD'
+      },
+      conferencia: jogo.conferencia?.nome || 'Nacional',
+      local: `Estádio ${jogo.timeClassificado1?.cidade || 'TBD'}`
+    }))
 
-  if (todosJogos.length === 0) {
-    throw new Error('❌ Nenhum jogo encontrado na agenda. Importe a agenda primeiro!')
-  }
+    // ✅ AGRUPAR POR FIM DE SEMANA PELA FASE
+    const jogosPorFimDeSemana = new Map<number, any[]>()
 
-  // ✅ PEGAR APENAS OS 20 ÚLTIMOS JOGOS (jogos 65-84)
-  // Se temos 84 jogos total, os últimos 20 são do índice 64 até 83 (84 jogos)
-  const jogosRestantes = todosJogos.slice(-20) // Últimos 20 jogos
-
-  console.log(`🎯 Jogos restantes encontrados: ${jogosRestantes.length}`)
-  console.log(`📅 Data do primeiro jogo restante: ${new Date(jogosRestantes[0]?.dataJogo).toLocaleDateString('pt-BR')}`)
-  console.log(`📅 Data do último jogo restante: ${new Date(jogosRestantes[jogosRestantes.length - 1]?.dataJogo).toLocaleDateString('pt-BR')}`)
-
-  if (jogosRestantes.length === 0) {
-    throw new Error('❌ Nenhum jogo restante encontrado. Todos os jogos já foram processados.')
-  }
-
-  // ✅ AGRUPAR JOGOS RESTANTES POR FIM DE SEMANA (mesma lógica do script original)
-  const jogosPorFimDeSemana = new Map<number, any[]>()
-  let fimDeSemanaAtual = 1
-  let dataAnterior: Date | null = null
-
-  jogosRestantes.forEach((jogo) => {
-    const dataJogo = new Date(jogo.dataJogo)
-    
-    // Se mudou a data, verificar se é um novo fim de semana
-    if (dataAnterior) {
-      const diferencaDias = Math.abs(dataJogo.getTime() - dataAnterior.getTime()) / (1000 * 60 * 60 * 24)
+    jogosFormatados.forEach(jogo => {
+      const fimDeSemana = determinarFimDeSemana(jogo)  // ✅ PASSAR O JOGO INTEIRO
       
-      // ✅ NOVO FIM DE SEMANA APENAS SE DIFERENÇA > 3 DIAS
-      if (diferencaDias > 3) {
-        fimDeSemanaAtual++
+      if (!jogosPorFimDeSemana.has(fimDeSemana)) {
+        jogosPorFimDeSemana.set(fimDeSemana, [])
       }
-    }
+      
+      jogosPorFimDeSemana.get(fimDeSemana)!.push(jogo)
+    })
 
-    if (!jogosPorFimDeSemana.has(fimDeSemanaAtual)) {
-      jogosPorFimDeSemana.set(fimDeSemanaAtual, [])
-    }
+    console.log(`✅ Encontrados ${jogosFormatados.length} jogos de playoff`)
+    
+    jogosPorFimDeSemana.forEach((jogos, fimDeSemana) => {
+      const datasJogos = [...new Set(jogos.map(j => new Date(j.dataJogo).toLocaleDateString('pt-BR')))]
+      console.log(`   Fim de Semana ${fimDeSemana}: ${jogos.length} jogos (${datasJogos.join(', ')})`)
+    })
 
-    jogosPorFimDeSemana.get(fimDeSemanaAtual)!.push(jogo)
-    dataAnterior = dataJogo
-  })
+    console.log(`\n🎯 Total de fins de semana dos playoffs: ${jogosPorFimDeSemana.size}`)
 
-  // Log da distribuição
-  console.log('\n📊 DISTRIBUIÇÃO DOS JOGOS RESTANTES POR FIM DE SEMANA:')
-  jogosPorFimDeSemana.forEach((jogos, fimDeSemana) => {
-    const datasJogos = [...new Set(jogos.map(j => new Date(j.dataJogo).toLocaleDateString('pt-BR')))]
-    console.log(`   Fim de Semana ${String(fimDeSemana).padStart(2, '0')}: ${jogos.length} jogos (${datasJogos.join(', ')})`)
-  })
+    return jogosPorFimDeSemana
 
-  console.log(`\n🎯 Total de fins de semana dos jogos restantes: ${jogosPorFimDeSemana.size}`)
-
-  return jogosPorFimDeSemana
+  } catch (error) {
+    console.error('❌ Erro ao buscar jogos de playoff:', error)
+    throw error
+  }
 }
 
-// ✅ GERAR RESULTADOS FAKE PARA UM FIM DE SEMANA (mesmo padrão)
+// ✅ GERAR RESULTADOS FAKE PARA UM FIM DE SEMANA (igual ao original)
 async function gerarResultadosFimDeSemana(fimDeSemana: number, jogos: any[]): Promise<JogoResultado[]> {
   console.log(`🎲 Gerando resultados para Fim de Semana ${fimDeSemana} (${jogos.length} jogos)...`)
   
@@ -155,9 +136,9 @@ async function gerarResultadosFimDeSemana(fimDeSemana: number, jogos: any[]): Pr
       placar_visitante: placar.visitante,
       data_jogo: new Date(jogo.dataJogo).toISOString().split('T')[0],
       rodada: jogo.rodada || 1,
-      fase: jogo.fase || 'TEMPORADA REGULAR',
-      conferencia: jogo.conferencia || 'N/A',
-      estadio: jogo.local || jogo.timeCasa.estadio || `Estádio ${jogo.timeCasa.cidade}`,
+      fase: jogo.fase,
+      conferencia: jogo.conferencia,
+      estadio: jogo.local,
       status: 'FINALIZADO'
     }
 
@@ -169,7 +150,7 @@ async function gerarResultadosFimDeSemana(fimDeSemana: number, jogos: any[]): Pr
   return resultados
 }
 
-// ✅ CRIAR PLANILHA DE RESULTADOS PARA UM FIM DE SEMANA (mesmo padrão)
+// ✅ CRIAR PLANILHA DE RESULTADOS (igual ao original)
 async function criarPlanilhaResultados(fimDeSemana: number, resultados: JogoResultado[]): Promise<string> {
   if (resultados.length === 0) {
     console.log(`⏭️  Pulando Fim de Semana ${fimDeSemana} - sem jogos`)
@@ -178,79 +159,67 @@ async function criarPlanilhaResultados(fimDeSemana: number, resultados: JogoResu
 
   const workbook = XLSX.utils.book_new()
   
-  // ✅ ABA PRINCIPAL: RESULTADOS
   const worksheet = XLSX.utils.json_to_sheet(resultados)
   XLSX.utils.book_append_sheet(workbook, worksheet, 'RESULTADOS')
   
-  // ✅ ABA INFO: Instruções de importação (mesmo padrão)
   const dataJogo = resultados[0]?.data_jogo || 'N/A'
   const info = [
-    ['📋 SUPERLIGA 2025 - RESULTADOS DOS JOGOS RESTANTES'],
+    ['📋 SUPERLIGA 2025 - RESULTADOS DOS PLAYOFFS'],
     [''],
     ['Fim de Semana:', fimDeSemana],
     ['Data dos Jogos:', dataJogo],
     ['Total de Jogos:', resultados.length],
     ['Gerado em:', new Date().toLocaleString('pt-BR')],
     ['Status:', 'RESULTADOS FINAIS'],
-    ['Tipo:', 'JOGOS RESTANTES DA TEMPORADA REGULAR'],
     [''],
     ['📖 INSTRUÇÕES DE IMPORTAÇÃO:'],
     ['1. Acesse o sistema admin: /admin/importar'],
     ['2. Vá na aba "Resultados"'],
     ['3. Faça upload deste arquivo'],
     ['4. Aguarde o processamento completo'],
-    ['5. Verifique se os playoffs foram gerados automaticamente (se aplicável)'],
     [''],
     ['⚠️ IMPORTANTE:'],
     ['- Importe sempre na ordem sequencial dos fins de semana'],
     ['- Aguarde a conclusão antes de importar o próximo'],
     ['- A planilha de ESTATÍSTICAS deve ser importada 1 dia após'],
-    ['- Estes são os ÚLTIMOS 20 JOGOS da temporada regular'],
     [''],
     ['🎯 PRÓXIMO PASSO:'],
     ['Após importar esta planilha, aguarde 1 dia e importe:'],
-    [`estatisticas_jogos_restantes_fim_de_semana_${String(fimDeSemana).padStart(2, '0')}_${dataJogo.replace(/-/g, '')}.xlsx`]
+    [`estatisticas_fim_de_semana_${String(fimDeSemana).padStart(2, '0')}_playoffs.xlsx`]
   ]
   
   const infoWorksheet = XLSX.utils.aoa_to_sheet(info)
   XLSX.utils.book_append_sheet(workbook, infoWorksheet, 'INFO')
   
-  // ✅ CRIAR NOME DO ARQUIVO
   const dataFormatada = dataJogo.replace(/-/g, '')
-  const nomeArquivo = `resultados_jogos_restantes_fim_de_semana_${String(fimDeSemana).padStart(2, '0')}_${dataFormatada}.xlsx`
+  const nomeArquivo = `resultados_fim_de_semana_${String(fimDeSemana).padStart(2, '0')}_playoffs_${dataFormatada}.xlsx`
   
-  // ✅ GARANTIR QUE A PASTA EXISTE
-  const pastaDestino = 'planilhas-resultados-jogos-restantes'
+  const pastaDestino = 'planilhas-resultados-playoffs'
   if (!fs.existsSync(pastaDestino)) {
     fs.mkdirSync(pastaDestino, { recursive: true })
   }
   
   const caminhoCompleto = path.join(pastaDestino, nomeArquivo)
   
-  // ✅ SALVAR ARQUIVO
   XLSX.writeFile(workbook, caminhoCompleto)
   
   return caminhoCompleto
 }
 
-// ✅ GERAR TODAS AS PLANILHAS DE RESULTADOS DOS JOGOS RESTANTES
-async function gerarTodasAsPlanilhasResultadosJogosRestantes(): Promise<void> {
-  console.log('🚀 INICIANDO GERAÇÃO DE PLANILHAS DOS 20 JOGOS RESTANTES\n')
+// ✅ GERAR TODAS AS PLANILHAS (igual ao original)
+async function gerarTodasAsPlanilhasResultados(): Promise<void> {
+  console.log('🚀 INICIANDO GERAÇÃO DE PLANILHAS DE RESULTADOS DOS PLAYOFFS\n')
   
   try {
-    // Buscar jogos restantes agrupados por fim de semana
-    const jogosPorFimDeSemana = await buscarJogosRestantesAgrupados()
+    const jogosPorFimDeSemana = await buscarJogosAgrupados()
     
     const arquivosGerados: string[] = []
     
-    // Gerar planilha para cada fim de semana
     for (const [fimDeSemana, jogos] of jogosPorFimDeSemana) {
       console.log(`\n🗓️ Processando Fim de Semana ${fimDeSemana}...`)
       
-      // Gerar resultados fake
       const resultados = await gerarResultadosFimDeSemana(fimDeSemana, jogos)
       
-      // Criar planilha
       const caminhoArquivo = await criarPlanilhaResultados(fimDeSemana, resultados)
       
       if (caminhoArquivo) {
@@ -259,24 +228,14 @@ async function gerarTodasAsPlanilhasResultadosJogosRestantes(): Promise<void> {
       }
     }
     
-    // ✅ RELATÓRIO FINAL
-    console.log('\n🎉 GERAÇÃO DE RESULTADOS DOS JOGOS RESTANTES COMPLETA!')
+    console.log('\n🎉 GERAÇÃO DE RESULTADOS DOS PLAYOFFS COMPLETA!')
     console.log(`📁 Total de planilhas geradas: ${arquivosGerados.length}`)
     console.log(`📊 Total de fins de semana: ${jogosPorFimDeSemana.size}`)
     
-    console.log('\n📋 ARQUIVOS DE RESULTADOS DOS JOGOS RESTANTES GERADOS:')
+    console.log('\n📋 ARQUIVOS DE RESULTADOS DOS PLAYOFFS GERADOS:')
     arquivosGerados.forEach((arquivo, index) => {
-      console.log(`${String(index + 1).padStart(2, '0')}. ${arquivo}`)
+      console.log(`${String(index + 1).padStart(2, '0')}. ${path.basename(arquivo)}`)
     })
-    
-    console.log('\n📖 FLUXO DE IMPORTAÇÃO:')
-    console.log('1. Importe as planilhas de RESULTADOS na ordem sequencial')
-    console.log('2. Sistema admin: /admin/importar > aba "Resultados"')
-    console.log('3. 1 dia após cada jogo, importe a planilha de ESTATÍSTICAS correspondente')
-    console.log('4. O sistema deve gerar playoffs automaticamente após todos os jogos')
-    console.log('')
-    console.log('🔜 PRÓXIMO PASSO: Execute o script de gerar estatísticas dos jogos restantes')
-    console.log('npm run generate:estatisticas-jogos-restantes')
     
   } catch (error) {
     console.error('❌ Erro na geração:', error)
@@ -284,73 +243,28 @@ async function gerarTodasAsPlanilhasResultadosJogosRestantes(): Promise<void> {
   }
 }
 
-// ✅ GERAR APENAS UM FIM DE SEMANA ESPECÍFICO
-async function gerarFimDeSemanaEspecifico(numero: number): Promise<void> {
-  console.log(`🎯 Gerando RESULTADOS apenas do Fim de Semana ${numero} dos jogos restantes...`)
-  
-  try {
-    const jogosPorFimDeSemana = await buscarJogosRestantesAgrupados()
-    const jogos = jogosPorFimDeSemana.get(numero)
-    
-    if (!jogos || jogos.length === 0) {
-      throw new Error(`Fim de semana ${numero} não encontrado ou sem jogos. Disponíveis: 1-${jogosPorFimDeSemana.size}`)
-    }
-    
-    const resultados = await gerarResultadosFimDeSemana(numero, jogos)
-    const caminhoArquivo = await criarPlanilhaResultados(numero, resultados)
-    
-    console.log(`✅ Planilha de resultados criada: ${caminhoArquivo}`)
-    
-  } catch (error) {
-    console.error('❌ Erro:', error)
-    throw error
-  }
-}
-
-// ✅ FUNÇÃO PRINCIPAL
+// ✅ MAIN (igual ao original)
 async function main() {
   try {
-    const args = process.argv.slice(2)
-    
-    if (args.includes('--help') || args.includes('-h')) {
-      console.log('📖 USO DO SCRIPT DE RESULTADOS DOS JOGOS RESTANTES:')
-      console.log('')
-      console.log('npm run generate:resultados-jogos-restantes              # Gerar todos os fins de semana')
-      console.log('npm run generate:resultados-jogos-restantes --fs=N       # Gerar apenas fim de semana N')
-      console.log('npm run generate:resultados-jogos-restantes --help       # Mostrar ajuda')
-      console.log('')
-      console.log('EXEMPLOS:')
-      console.log('npm run generate:resultados-jogos-restantes --fs=1       # Apenas Fim de Semana 1')
-      console.log('npm run generate:resultados-jogos-restantes --fs=4       # Apenas Fim de Semana 4')
-      console.log('')
-      console.log('⚠️ IMPORTANTE: Os primeiros 64 jogos devem ter sido importados!')
-      console.log('⚠️ Estes são os 20 ÚLTIMOS jogos da temporada regular')
-      return
-    }
-    
-    const fimDeSemanaArg = args.find(arg => arg.startsWith('--fs='))
-    
-    if (fimDeSemanaArg) {
-      const numero = parseInt(fimDeSemanaArg.split('=')[1])
-      if (isNaN(numero) || numero < 1) {
-        throw new Error('Fim de semana deve ser um número positivo')
-      }
-      await gerarFimDeSemanaEspecifico(numero)
-    } else {
-      await gerarTodasAsPlanilhasResultadosJogosRestantes()
-    }
-    
+    await gerarTodasAsPlanilhasResultados()
   } catch (error) {
-    console.error('💥 Erro:', error)
-    process.exit(1)
+    console.error('❌ Erro durante execução:', error)
+    throw error
   } finally {
     await prisma.$disconnect()
   }
 }
 
-// Executar se chamado diretamente
 if (require.main === module) {
   main()
+    .then(() => {
+      console.log('\n🔚 Geração de resultados dos playoffs concluída.')
+      process.exit(0)
+    })
+    .catch(error => {
+      console.error('\n💥 Erro:', error)
+      process.exit(1)
+    })
 }
 
-export { gerarTodasAsPlanilhasResultadosJogosRestantes, gerarFimDeSemanaEspecifico }
+export default main

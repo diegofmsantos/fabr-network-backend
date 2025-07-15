@@ -8,7 +8,7 @@ import { rankingRouter } from './ranking'
 
 export const mainRouter = express.Router()
 
-mainRouter.use('/times', timeRouter)
+mainRouter.use('/time', timeRouter)
 mainRouter.use('/jogadores', jogadorRouter)
 mainRouter.use('/materias', materiaRouter)
 mainRouter.use('/admin', adminRouter)

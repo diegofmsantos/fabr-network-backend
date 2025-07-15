@@ -7,7 +7,7 @@ const prisma = new PrismaClient()
 
 export const timeRouter = express.Router()
 
-timeRouter.get('/times', async (req, res) => {
+timeRouter.get('/', async (req, res) => {
     console.log('Rota /api/times chamada')
     try {
         const { temporada } = req.query
@@ -55,7 +55,7 @@ timeRouter.get('/times', async (req, res) => {
     }
 })
 
-timeRouter.post('/time', async (req, res) => {
+timeRouter.post('/', async (req, res) => {
     try {
         const teamData = TimeSchema.parse(req.body)
 

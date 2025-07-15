@@ -10,8 +10,9 @@ const server = express()
 const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
-    'https://fabr-network-adm.vercel.app',
+    'https://fabr-network-admin.vercel.app',
     'https://fabrnetwork.com.br',
+    'https://fabr-back.vercel.app',  
 ]
 server.use(helmet())
 server.use(cors({

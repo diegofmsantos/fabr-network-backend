@@ -8,11 +8,11 @@ const server = express()
 
 
 const allowedOrigins = [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    'https://fabr-network-admin.vercel.app',
-    'https://fabrnetwork.com.br',
-    'https://fabr-back.vercel.app',  
+    'http://localhost:3000',              // Frontend Admin (dev)
+    'http://localhost:3001',              // Frontend Exibição (dev) 
+    'https://fabr-network-admin.vercel.app', // Frontend Admin (prod)
+    'https://fabrnetwork.com.br',         // Frontend Exibição (prod)
+    'https://fabr-back.vercel.app',
 ]
 server.use(helmet())
 server.use(cors({

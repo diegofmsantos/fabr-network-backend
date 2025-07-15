@@ -29,8 +29,7 @@ model Time {
   temporada       String
   jogadores       JogadorTime[]
 
-  // ✅ NOVOS RELACIONAMENTOS PARA DISTRIBUIÇÃO
-  distribuicaoRegional DistribuicaoTime[] // Novo relacionamento
+  distribuicaoRegional DistribuicaoTime[]
 
   playoffClassificado1 PlayoffJogo[] @relation("PlayoffTime1")
   playoffClassificado2 PlayoffJogo[] @relation("PlayoffTime2")
@@ -114,7 +113,6 @@ model Campeonato {
   conferencias Conferencia[]
   PlayoffJogo  PlayoffJogo[]
   
-  // ✅ NOVO RELACIONAMENTO PARA DISTRIBUIÇÃO
   distribuicoesTimes DistribuicaoTime[]
 
   @@index([temporada])
@@ -134,7 +132,6 @@ model Conferencia {
   regionais    Regional[]
   playoffJogos PlayoffJogo[]
   
-  // ✅ NOVO RELACIONAMENTO PARA DISTRIBUIÇÃO
   distribuicoesTimes DistribuicaoTime[]
 
   @@unique([campeonatoId, tipo])
@@ -151,14 +148,12 @@ model Regional {
 
   conferencia Conferencia @relation(fields: [conferenciaId], references: [id], onDelete: Cascade)
   
-  // ✅ NOVO RELACIONAMENTO PARA DISTRIBUIÇÃO
   distribuicoesTimes DistribuicaoTime[]
 
   @@unique([conferenciaId, tipo])
   @@index([conferenciaId])
 }
 
-// ✅ NOVA TABELA PARA DISTRIBUIÇÃO DE TIMES
 model DistribuicaoTime {
   id           Int @id @default(autoincrement())
   campeonatoId Int
@@ -167,21 +162,18 @@ model DistribuicaoTime {
   timeId       Int
   temporada    String
   
-  // Campos para facilitar consultas
-  conferenciaType String // SUDESTE, SUL, NORDESTE, CENTRO NORTE
-  regionalType    String // SERRAMAR, CANASTRA, etc.
+  conferenciaType String 
+  regionalType    String
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // Relacionamentos
   campeonato  Campeonato  @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
   conferencia Conferencia @relation(fields: [conferenciaId], references: [id], onDelete: Cascade)
   regional    Regional    @relation(fields: [regionalId], references: [id], onDelete: Cascade)
   time        Time        @relation(fields: [timeId], references: [id], onDelete: Cascade)
 
-  // ✅ ÍNDICES PARA PERFORMANCE
-  @@unique([campeonatoId, timeId, temporada]) // Um time por campeonato/temporada
+  @@unique([campeonatoId, timeId, temporada]) 
   @@index([campeonatoId, temporada])
   @@index([conferenciaId])
   @@index([regionalId])
@@ -242,12 +234,10 @@ model Jogo {
   observacoes             String?
   estatisticasProcessadas Boolean  @default(false)
   
-  // ✅ NOVOS CAMPOS PARA MELHOR CONTROLE
-  conferencia             String?  // Para facilitar consultas
-  regional                String?  // Para facilitar consultas
-  temporada               String?  // Campo redundante mas útil para consultas rápidas
+  conferencia             String? 
+  regional                String?
+  temporada               String? 
   
-  // ✅ CAMPOS DE AUDITORIA
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -261,10 +251,10 @@ model Jogo {
   @@index([status])
   @@index([timeCasaId])
   @@index([timeVisitanteId])
-  @@index([conferencia]) // ✅ NOVO ÍNDICE
-  @@index([regional])    // ✅ NOVO ÍNDICE
-  @@index([temporada])   // ✅ NOVO ÍNDICE
-  @@index([fase])        // ✅ NOVO ÍNDICE
+  @@index([conferencia]) 
+  @@index([regional])   
+  @@index([temporada])   
+  @@index([fase])    
 }
 
 model EstatisticaJogo {
@@ -274,12 +264,10 @@ model EstatisticaJogo {
   timeId       Int
   estatisticas Json
   
-  // ✅ NOVOS CAMPOS PARA MELHOR CONTROLE
-  temporada    String?  // Para facilitar consultas
-  rodada       Int?     // Para facilitar relatórios
-  fase         String?  // Para separar temporada regular de playoffs
+  temporada    String?  
+  rodada       Int?    
+  fase         String?  
   
-  // ✅ CAMPOS DE AUDITORIA
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -290,8 +278,8 @@ model EstatisticaJogo {
   @@unique([jogoId, jogadorId])
   @@index([jogoId])
   @@index([jogadorId])
-  @@index([timeId])      // ✅ NOVO ÍNDICE
-  @@index([temporada])   // ✅ NOVO ÍNDICE
-  @@index([rodada])      // ✅ NOVO ÍNDICE
-  @@index([fase])        // ✅ NOVO ÍNDICE
+  @@index([timeId]) 
+  @@index([temporada])
+  @@index([rodada])
+  @@index([fase])
 }

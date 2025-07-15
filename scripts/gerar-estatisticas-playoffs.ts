@@ -1,7 +1,3 @@
-// scripts/gerar-estatisticas-jogos-restantes.ts
-// Script para gerar planilhas de ESTATÍSTICAS dos 20 jogos RESTANTES da temporada regular
-// Seguindo EXATAMENTE o padrão de gerar-estatisticas-por-fim-de-semana.ts
-
 import { PrismaClient } from '@prisma/client'
 import * as XLSX from 'xlsx'
 import * as fs from 'fs'
@@ -9,7 +5,6 @@ import * as path from 'path'
 
 const prisma = new PrismaClient()
 
-// ✅ INTERFACE SEGUINDO O PADRÃO EXATO DOS SCRIPTS EXISTENTES
 interface EstatisticaJogador {
   jogo_id: number
   jogador_id: number
@@ -23,7 +18,6 @@ interface EstatisticaJogador {
   rodada: number
   fase: string
   
-  // Estatísticas de Passe
   passe_completado: number
   passe_tentado: number
   jardas_passadas: number
@@ -32,24 +26,20 @@ interface EstatisticaJogador {
   sacks_sofridos: number
   fumble_de_passador: number
   
-  // Estatísticas de Corrida
   corridas: number
   jardas_corridas: number
   tds_corridos: number
   fumble_de_corredor: number
   
-  // Estatísticas de Recepção
   recepcoes: number
   alvo: number
   jardas_recebidas: number
   tds_recebidos: number
   
-  // Estatísticas de Retorno
   retornos: number
   jardas_retornadas: number
   td_retornados: number
   
-  // Estatísticas de Defesa
   tackles_totais: number
   tackles_for_loss: number
   sacks_forcado: number
@@ -59,19 +49,16 @@ interface EstatisticaJogador {
   safety: number
   td_defensivo: number
   
-  // Estatísticas de Kicker
   xp_bons: number
   tentativas_de_xp: number
   fg_bons: number
   tentativas_de_fg: number
   fg_mais_longo: number
   
-  // Estatísticas de Punter
   punts: number
   jardas_de_punt: number
 }
 
-// ✅ BUSCAR DADOS PARA ESTATÍSTICAS DOS JOGOS RESTANTES
 async function buscarDadosParaEstatisticasJogosRestantes() {
   console.log('🔍 Buscando dados para estatísticas dos 20 jogos restantes...')
 
@@ -86,7 +73,6 @@ async function buscarDadosParaEstatisticasJogosRestantes() {
     throw new Error('❌ Superliga 2025 não encontrada')
   }
 
-  // Buscar TODOS os jogos da temporada regular ordenados
   const todosJogos = await prisma.jogo.findMany({
     where: {
       campeonatoId: superliga.id,
@@ -102,14 +88,12 @@ async function buscarDadosParaEstatisticasJogosRestantes() {
     ]
   })
 
-  // ✅ PEGAR APENAS OS 20 ÚLTIMOS JOGOS
   const jogosRestantes = todosJogos.slice(-20)
 
   if (jogosRestantes.length === 0) {
     throw new Error('❌ Nenhum jogo restante encontrado')
   }
 
-  // ✅ AGRUPAR POR FIM DE SEMANA (mesma lógica do script original)
   const jogosPorFimDeSemana = new Map<string, any[]>()
   let fimDeSemanaAtual = 1
   let dataAnterior: Date | null = null
@@ -133,7 +117,6 @@ async function buscarDadosParaEstatisticasJogosRestantes() {
     dataAnterior = dataJogo
   })
 
-  // Buscar todos os jogadores da temporada 2025
   const jogadores = await prisma.jogadorTime.findMany({
     where: { temporada: '2025' },
     include: {
@@ -149,24 +132,20 @@ async function buscarDadosParaEstatisticasJogosRestantes() {
   return { jogosPorFimDeSemana, jogadores }
 }
 
-// ✅ GERAR ESTATÍSTICAS PARA UM FIM DE SEMANA
 async function gerarEstatisticasFimDeSemana(fimDeSemana: number, jogos: any[], jogadores: any[]): Promise<EstatisticaJogador[]> {
   console.log(`📊 Gerando estatísticas para Fim de Semana ${fimDeSemana} (${jogos.length} jogos)...`)
   
   const estatisticas: EstatisticaJogador[] = []
 
   for (const jogo of jogos) {
-    // Buscar jogadores dos dois times (mesmo padrão)
     const jogadoresTimeCasa = jogadores.filter(j => j.timeId === jogo.timeCasaId)
     const jogadoresTimeVisitante = jogadores.filter(j => j.timeId === jogo.timeVisitanteId)
 
-    // Selecionar ~25 jogadores por time (padrão dos scripts)
     const jogadoresAtivosTimeCasa = jogadoresTimeCasa.slice(0, 25)
     const jogadoresAtivosTimeVisitante = jogadoresTimeVisitante.slice(0, 25)
 
     const dataJogo = new Date(jogo.dataJogo).toISOString().split('T')[0]
 
-    // Gerar estatísticas para time casa
     for (const jogadorTime of jogadoresAtivosTimeCasa) {
       const stats = gerarEstatisticasPorPosicao(jogadorTime.jogador.posicao, jogadorTime.jogador.setor)
       
@@ -188,7 +167,6 @@ async function gerarEstatisticasFimDeSemana(fimDeSemana: number, jogos: any[], j
       estatisticas.push(estatistica)
     }
 
-    // Gerar estatísticas para time visitante
     for (const jogadorTime of jogadoresAtivosTimeVisitante) {
       const stats = gerarEstatisticasPorPosicao(jogadorTime.jogador.posicao, jogadorTime.jogador.setor)
       
@@ -215,10 +193,8 @@ async function gerarEstatisticasFimDeSemana(fimDeSemana: number, jogos: any[], j
   return estatisticas
 }
 
-// ✅ GERAR ESTATÍSTICAS POR POSIÇÃO (mesmo padrão dos scripts existentes)
 function gerarEstatisticasPorPosicao(posicao: string, setor: string) {
   const stats = {
-    // Passe
     passe_completado: 0,
     passe_tentado: 0,
     jardas_passadas: 0,
@@ -227,24 +203,20 @@ function gerarEstatisticasPorPosicao(posicao: string, setor: string) {
     sacks_sofridos: 0,
     fumble_de_passador: 0,
     
-    // Corrida
     corridas: 0,
     jardas_corridas: 0,
     tds_corridos: 0,
     fumble_de_corredor: 0,
     
-    // Recepção
     recepcoes: 0,
     alvo: 0,
     jardas_recebidas: 0,
     tds_recebidos: 0,
     
-    // Retorno
     retornos: 0,
     jardas_retornadas: 0,
     td_retornados: 0,
     
-    // Defesa
     tackles_totais: 0,
     tackles_for_loss: 0,
     sacks_forcado: 0,
@@ -254,19 +226,16 @@ function gerarEstatisticasPorPosicao(posicao: string, setor: string) {
     safety: 0,
     td_defensivo: 0,
     
-    // Kicker
     xp_bons: 0,
     tentativas_de_xp: 0,
     fg_bons: 0,
     tentativas_de_fg: 0,
     fg_mais_longo: 0,
     
-    // Punter
     punts: 0,
     jardas_de_punt: 0
   }
 
-  // Mesma lógica dos scripts existentes
   switch (setor) {
     case 'Offense':
       if (posicao === 'QB') {
@@ -339,7 +308,6 @@ function gerarEstatisticasPorPosicao(posicao: string, setor: string) {
   return stats
 }
 
-// ✅ CRIAR PLANILHA DE ESTATÍSTICAS PARA UM FIM DE SEMANA
 async function criarPlanilhaEstatisticas(fimDeSemana: number, estatisticas: EstatisticaJogador[], dataJogo: string): Promise<string> {
   if (estatisticas.length === 0) {
     console.log(`⏭️  Pulando Fim de Semana ${fimDeSemana} - sem estatísticas`)
@@ -348,10 +316,8 @@ async function criarPlanilhaEstatisticas(fimDeSemana: number, estatisticas: Esta
 
   const workbook = XLSX.utils.book_new()
   
-  // ✅ ABA PRINCIPAL: ESTATÍSTICAS
   const worksheet = XLSX.utils.json_to_sheet(estatisticas)
   
-  // Definir largura das colunas
   const cols = [
     { wch: 10 }, { wch: 12 }, { wch: 25 }, { wch: 10 }, { wch: 20 }, { wch: 8 },
     { wch: 8 }, { wch: 8 }, { wch: 12 }, { wch: 8 }, { wch: 15 },
@@ -361,7 +327,6 @@ async function criarPlanilhaEstatisticas(fimDeSemana: number, estatisticas: Esta
   
   XLSX.utils.book_append_sheet(workbook, worksheet, 'ESTATISTICAS')
   
-  // ✅ ABA INFO: Instruções (mesmo padrão)
   const info = [
     ['📊 SUPERLIGA 2025 - ESTATÍSTICAS DOS JOGOS RESTANTES'],
     [''],
@@ -395,11 +360,9 @@ async function criarPlanilhaEstatisticas(fimDeSemana: number, estatisticas: Esta
   const infoWorksheet = XLSX.utils.aoa_to_sheet(info)
   XLSX.utils.book_append_sheet(workbook, infoWorksheet, 'INFO')
   
-  // ✅ CRIAR NOME DO ARQUIVO
   const dataFormatada = dataJogo.replace(/-/g, '')
   const nomeArquivo = `estatisticas_jogos_restantes_fim_de_semana_${String(fimDeSemana).padStart(2, '0')}_${dataFormatada}.xlsx`
   
-  // ✅ GARANTIR QUE A PASTA EXISTE
   const pastaDestino = 'planilhas-estatisticas-jogos-restantes'
   if (!fs.existsSync(pastaDestino)) {
     fs.mkdirSync(pastaDestino, { recursive: true })
@@ -407,13 +370,11 @@ async function criarPlanilhaEstatisticas(fimDeSemana: number, estatisticas: Esta
   
   const caminhoCompleto = path.join(pastaDestino, nomeArquivo)
   
-  // ✅ SALVAR ARQUIVO
   XLSX.writeFile(workbook, caminhoCompleto)
   
   return caminhoCompleto
 }
 
-// ✅ GERAR TODAS AS PLANILHAS DE ESTATÍSTICAS DOS JOGOS RESTANTES
 async function gerarTodasAsPlanilhasEstatisticasJogosRestantes(): Promise<void> {
   console.log('🚀 INICIANDO GERAÇÃO DE PLANILHAS DE ESTATÍSTICAS DOS JOGOS RESTANTES\n')
   
@@ -423,18 +384,14 @@ async function gerarTodasAsPlanilhasEstatisticasJogosRestantes(): Promise<void> 
     const arquivosGerados: string[] = []
     let totalEstatisticas = 0
     
-    // Gerar planilha para cada fim de semana
     let fimDeSemanaNumero = 1
     for (const [chave, jogos] of jogosPorFimDeSemana) {
       console.log(`\n📊 Processando ${chave}...`)
       
-      // Gerar estatísticas
       const estatisticas = await gerarEstatisticasFimDeSemana(fimDeSemanaNumero, jogos, jogadores)
       
-      // Data do primeiro jogo do fim de semana
       const dataJogo = jogos[0] ? new Date(jogos[0].dataJogo).toISOString().split('T')[0] : '2025-07-06'
       
-      // Criar planilha
       const caminhoArquivo = await criarPlanilhaEstatisticas(fimDeSemanaNumero, estatisticas, dataJogo)
       
       if (caminhoArquivo) {
@@ -446,7 +403,6 @@ async function gerarTodasAsPlanilhasEstatisticasJogosRestantes(): Promise<void> 
       fimDeSemanaNumero++
     }
     
-    // ✅ RELATÓRIO FINAL
     console.log('\n🎉 GERAÇÃO DE ESTATÍSTICAS DOS JOGOS RESTANTES COMPLETA!')
     console.log(`📁 Total de planilhas geradas: ${arquivosGerados.length}`)
     console.log(`📊 Total de estatísticas geradas: ${totalEstatisticas.toLocaleString()}`)
@@ -474,14 +430,12 @@ async function gerarTodasAsPlanilhasEstatisticasJogosRestantes(): Promise<void> 
   }
 }
 
-// ✅ GERAR APENAS UM FIM DE SEMANA ESPECÍFICO
 async function gerarEstatisticasFimDeSemanaEspecifico(numero: number): Promise<void> {
   console.log(`🎯 Gerando ESTATÍSTICAS apenas do Fim de Semana ${numero} dos jogos restantes...`)
   
   try {
     const { jogosPorFimDeSemana, jogadores } = await buscarDadosParaEstatisticasJogosRestantes()
     
-    // Converter o mapa para array e pegar o fim de semana específico
     const finsArray = Array.from(jogosPorFimDeSemana.entries())
     if (numero < 1 || numero > finsArray.length) {
       throw new Error(`Fim de semana ${numero} não encontrado. Disponíveis: 1-${finsArray.length}`)
@@ -502,7 +456,6 @@ async function gerarEstatisticasFimDeSemanaEspecifico(numero: number): Promise<v
   }
 }
 
-// ✅ FUNÇÃO PRINCIPAL
 async function main() {
   try {
     const args = process.argv.slice(2)
@@ -544,7 +497,6 @@ async function main() {
   }
 }
 
-// Executar se chamado diretamente
 if (require.main === module) {
   main()
 }

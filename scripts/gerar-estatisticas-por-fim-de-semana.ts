@@ -1,7 +1,3 @@
-// scripts/gerar-estatisticas-por-fim-de-semana.ts
-// Script para gerar planilhas de ESTATÍSTICAS separadas por fim de semana
-// Baseado na agenda real da Superliga 2025 (84 jogos em 17 fins de semana)
-
 import { PrismaClient } from '@prisma/client'
 import * as XLSX from 'xlsx'
 import * as fs from 'fs'
@@ -17,8 +13,6 @@ interface EstatisticaJogo {
   posicao: string
   setor: string
   
-  // ✅ TODOS OS CAMPOS DE ESTATÍSTICAS (sempre presentes)
-  // Passe
   passes_completos: number
   passes_tentados: number
   jardas_de_passe: number
@@ -27,24 +21,20 @@ interface EstatisticaJogo {
   sacks_sofridos: number
   fumble_de_passador: number
   
-  // Corrida
   corridas: number
   jardas_corridas: number
   tds_corridos: number
   fumble_de_corredor: number
   
-  // Recepção
   recepcoes: number
   alvo: number
   jardas_recebidas: number
   tds_recebidos: number
   
-  // Retorno
   retornos: number
   jardas_retornadas: number
   td_retornados: number
   
-  // Defesa
   tackles_totais: number
   tackles_for_loss: number
   sacks_forcado: number
@@ -54,21 +44,17 @@ interface EstatisticaJogo {
   safety: number
   td_defensivo: number
   
-  // Kicker
   xp_bons: number
   tentativas_de_xp: number
   fg_bons: number
   tentativas_de_fg: number
   fg_mais_longo: number
   
-  // Punter (APENAS OS 2 CAMPOS REAIS)
   punts: number
   jardas_de_punt: number
 }
 
-// ✅ GERAÇÃO DE ESTATÍSTICAS REALISTAS POR POSIÇÃO
 function gerarEstatisticasPorPosicao(posicao: string, setor: string): EstatisticaJogo {
-  // ✅ INICIALIZAR TODOS OS CAMPOS COM 0
   const stats: EstatisticaJogo = {
     jogo_id: 0, // será preenchido depois
     jogador_id: 0, // será preenchido depois
@@ -77,7 +63,6 @@ function gerarEstatisticasPorPosicao(posicao: string, setor: string): Estatistic
     posicao: '', // será preenchido depois
     setor: '', // será preenchido depois
     
-    // Passe
     passes_completos: 0,
     passes_tentados: 0,
     jardas_de_passe: 0,
@@ -86,24 +71,20 @@ function gerarEstatisticasPorPosicao(posicao: string, setor: string): Estatistic
     sacks_sofridos: 0,
     fumble_de_passador: 0,
     
-    // Corrida
     corridas: 0,
     jardas_corridas: 0,
     tds_corridos: 0,
     fumble_de_corredor: 0,
     
-    // Recepção
     recepcoes: 0,
     alvo: 0,
     jardas_recebidas: 0,
     tds_recebidos: 0,
     
-    // Retorno
     retornos: 0,
     jardas_retornadas: 0,
     td_retornados: 0,
     
-    // Defesa
     tackles_totais: 0,
     tackles_for_loss: 0,
     sacks_forcado: 0,
@@ -113,27 +94,23 @@ function gerarEstatisticasPorPosicao(posicao: string, setor: string): Estatistic
     safety: 0,
     td_defensivo: 0,
     
-    // Kicker
     xp_bons: 0,
     tentativas_de_xp: 0,
     fg_bons: 0,
     tentativas_de_fg: 0,
     fg_mais_longo: 0,
     
-    // Punter
     punts: 0,
     jardas_de_punt: 0
   }
   
-  // ✅ AGORA GERAR ESTATÍSTICAS BASEADO NA POSIÇÃO
-  // QUARTERBACKS (Ataque)
   if (posicao === 'QB' || setor === 'Ataque' && Math.random() < 0.1) {
-    const tentativas = Math.floor(Math.random() * 35) + 10 // 10-45 tentativas
-    const completos = Math.floor(tentativas * (0.55 + Math.random() * 0.3)) // 55-85% aproveitamento
+    const tentativas = Math.floor(Math.random() * 35) + 10 
+    const completos = Math.floor(tentativas * (0.55 + Math.random() * 0.3)) 
     
     stats.passes_tentados = tentativas
     stats.passes_completos = Math.min(completos, tentativas)
-    stats.jardas_de_passe = completos * (4 + Math.random() * 12) // 4-16 jardas por comp
+    stats.jardas_de_passe = completos * (4 + Math.random() * 12) 
     stats.td_passados = Math.random() < 0.3 ? Math.floor(Math.random() * 4) : 0
     stats.interceptacoes_sofridas = Math.random() < 0.2 ? Math.floor(Math.random() * 3) : 0
     stats.sacks_sofridos = Math.random() < 0.4 ? Math.floor(Math.random() * 4) : 0
@@ -502,7 +479,6 @@ async function gerarEstatisticasFimDeSemanaEspecifico(numero: number): Promise<v
   }
 }
 
-// ✅ FUNÇÃO PRINCIPAL
 async function main() {
   try {
     const args = process.argv.slice(2)
@@ -543,7 +519,6 @@ async function main() {
   }
 }
 
-// Executar se chamado diretamente
 if (require.main === module) {
   main()
 }

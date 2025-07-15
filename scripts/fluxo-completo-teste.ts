@@ -686,10 +686,9 @@ async function executarEtapaAutomatica(step: FluxoStep): Promise<void> {
 
   try {
     if (step.id === 12) {
-      // Etapa 12: Executar simulação integrada de playoffs
+
       await simularPlayoffsCompletos()
     } else {
-      // Outras etapas: executar comando externo
       execSync(step.comando, {
         stdio: 'inherit',
         cwd: process.cwd()
@@ -707,7 +706,6 @@ async function gerarRelatorioFinal(): Promise<void> {
   console.log('🎉 FLUXO COMPLETO EXECUTADO COM SUCESSO!')
   console.log('🎉'.repeat(20))
 
-  // Verificar status final do banco
   try {
     const stats = await Promise.all([
       prisma.time.count({ where: { temporada: '2025' } }),
@@ -730,7 +728,6 @@ async function gerarRelatorioFinal(): Promise<void> {
     console.log(`   📈 Registros de Estatísticas: ${stats[6]} (esperado: ~100k)`)
     console.log(`   🌍 Conferências: ${stats[7]} (esperado: 4)`)
 
-    // Verificar campeão nacional
     const campeao = await prisma.playoffJogo.findFirst({
       where: {
         fase: 'FINAL NACIONAL',
@@ -745,7 +742,6 @@ async function gerarRelatorioFinal(): Promise<void> {
       console.log(`\n🏆 CAMPEÃO NACIONAL 2025: ${campeao.timeVencedor.nome}`)
     }
 
-    // Verificar campeões de conferência
     const campeoesCon = await prisma.playoffJogo.findMany({
       where: {
         fase: 'FINAL CONFERENCIA',
@@ -781,7 +777,6 @@ async function gerarRelatorioFinal(): Promise<void> {
   console.log('   ⚙️ Admin: http://localhost:3001/admin/superliga')
 }
 
-// Executar se chamado diretamente
 if (require.main === module) {
   executarFluxoCompleto()
     .then(() => {

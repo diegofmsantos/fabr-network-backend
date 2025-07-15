@@ -10,7 +10,7 @@ const server = express()
 const allowedOrigins = [
     'http://localhost:3000',              // Frontend Admin (dev)
     'http://localhost:3001',              // Frontend Exibição (dev) 
-    'https://fabr-network-admin.vercel.app', // Frontend Admin (prod)
+    'https://fabr-network-adm.vercel.app', // Frontend Admin (prod)
     'https://fabrnetwork.com.br',         // Frontend Exibição (prod)
     'https://fabr-back.vercel.app',
 ]

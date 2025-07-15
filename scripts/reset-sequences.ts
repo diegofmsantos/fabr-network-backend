@@ -79,11 +79,7 @@ async function resetDatabase() {
     await prisma.$executeRawUnsafe('ALTER SEQUENCE "PlayoffJogo_id_seq" RESTART WITH 1;');
     await prisma.$executeRawUnsafe('ALTER SEQUENCE "Jogo_id_seq" RESTART WITH 1;');
     await prisma.$executeRawUnsafe('ALTER SEQUENCE "EstatisticaJogo_id_seq" RESTART WITH 1;');
-    
-    // ✅ REMOVER SEQUENCES ANTIGAS QUE NÃO EXISTEM MAIS
-    // await prisma.$executeRawUnsafe('ALTER SEQUENCE "Grupo_id_seq" RESTART WITH 1;'); // REMOVIDO
-    // await prisma.$executeRawUnsafe('ALTER SEQUENCE "GrupoTime_id_seq" RESTART WITH 1;'); // REMOVIDO
-    // await prisma.$executeRawUnsafe('ALTER SEQUENCE "ClassificacaoGrupo_id_seq" RESTART WITH 1;'); // REMOVIDO
+  
 
     console.log('✅ Sequences resetadas com sucesso!');
 
@@ -97,7 +93,7 @@ async function resetDatabase() {
       prisma.campeonato.count(),
       prisma.conferencia.count(),
       prisma.regional.count(),
-      prisma.distribuicaoTime.count(), // ✅ NOVA VERIFICAÇÃO
+      prisma.distribuicaoTime.count(), 
       prisma.jogo.count(),
       prisma.playoffJogo.count(),
       prisma.estatisticaJogo.count(),
@@ -112,7 +108,7 @@ async function resetDatabase() {
     console.log(`   Campeonatos: ${counts[3]}`);
     console.log(`   Conferências: ${counts[4]}`);
     console.log(`   Regionais: ${counts[5]}`);
-    console.log(`   Distribuições: ${counts[6]}`); // ✅ NOVA
+    console.log(`   Distribuições: ${counts[6]}`); 
     console.log(`   Jogos: ${counts[7]}`);
     console.log(`   Playoff Jogos: ${counts[8]}`);
     console.log(`   Estatísticas: ${counts[9]}`);
@@ -131,7 +127,6 @@ async function resetDatabase() {
     } else {
       console.log('⚠️  Atenção: Alguns dados podem não ter sido removidos');
       
-      // Mostrar quais tabelas ainda têm dados
       const tableNames = [
         'Times', 'Jogadores', 'Jogador-Time', 'Campeonatos', 
         'Conferências', 'Regionais', 'Distribuições', 'Jogos', 

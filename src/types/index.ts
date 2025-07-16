@@ -1377,7 +1377,7 @@ export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
   AMAZONIA: [
     'Porto Velho Miners',
     'Manaus FA',
-    'Manaus Cavaliers'
+    'São Raimundo Cavaliers'
   ]
 }
 

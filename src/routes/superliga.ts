@@ -1082,7 +1082,7 @@ function isTimeNoRegional(nomeTime: string, tipoRegional: string): boolean {
     'PAMPA': ['Santa Maria Soldiers', 'Juventude FA', 'Bravos FA', 'Istepôs FA'],
     'ATLANTICO': ['Fortaleza Tritões', 'Ceará Sabres', 'João Pessoa Espectros', 'Recife Mariners', 'Cavalaria 2 de Julho', 'Caruaru Wolves'],
     'CERRADO': ['Rondonópolis Hawks', 'Cuiabá Arsenal', 'Tubarões do Cerrado'],
-    'AMAZONIA': ['Porto Velho Miners', 'Manaus FA', 'Manaus Cavaliers']
+    'AMAZONIA': ['Porto Velho Miners', 'Manaus FA', 'São Raimundo Cavaliers']
   }
 
   return distribuicaoTimes[tipoRegional]?.includes(nomeTime) || false

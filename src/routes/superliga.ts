@@ -373,13 +373,13 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
 
     let faseAtual = 'CONFIGURACAO'
     if (timesDistribuidos === 0) {
-      faseAtual = 'AGUARDANDO_DISTRIBUICAO'
+      faseAtual = 'AGUARDANDO DISTRIBUICAO'
     } else if (totalJogos === 0) {
-      faseAtual = 'AGUARDANDO_AGENDA'
+      faseAtual = 'AGUARDANDO AGENDA'
     } else if (jogosFinalizados < totalJogos) {
-      faseAtual = 'TEMPORADA_REGULAR'
+      faseAtual = 'TEMPORADA REGULAR'
     } else if (jogosPlayoff === 0) {
-      faseAtual = 'GERANDO_PLAYOFFS'
+      faseAtual = 'GERANDO PLAYOFFS'
     } else {
       faseAtual = 'PLAYOFFS'
     }

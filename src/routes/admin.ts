@@ -889,7 +889,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
         for (let i = 0; i < jogosRaw.length; i++) {
             const jogoData = jogosRaw[i] as any
-            const linha = i + 2 
+            const linha = i + 2
 
             try {
                 const nomeTimeCasa = jogoData.time_mandante?.toString().toLowerCase().trim() ||
@@ -1524,7 +1524,7 @@ adminRouter.post('/reprocessar-jogo', upload.single('arquivo'), async (req, res)
                                 tentativas_de_xp: Math.max(0, (estatisticasAtuais.kicker?.tentativas_de_xp || 0) - (estatAnterior.estatisticas.kicker?.tentativas_de_xp || 0)),
                                 fg_bons: Math.max(0, (estatisticasAtuais.kicker?.fg_bons || 0) - (estatAnterior.estatisticas.kicker?.fg_bons || 0)),
                                 tentativas_de_fg: Math.max(0, (estatisticasAtuais.kicker?.tentativas_de_fg || 0) - (estatAnterior.estatisticas.kicker?.tentativas_de_fg || 0)),
-                                fg_mais_longo: estatisticasAtuais.kicker?.fg_mais_longo || 0 
+                                fg_mais_longo: estatisticasAtuais.kicker?.fg_mais_longo || 0
                             },
                             punter: {
                                 punts: Math.max(0, (estatisticasAtuais.punter?.punts || 0) - (estatAnterior.estatisticas.punter?.punts || 0)),
@@ -2687,7 +2687,7 @@ adminRouter.get('/jogadores/:jogadorId/estatisticas-jogos', async (req: Request,
             },
             orderBy: {
                 jogo: {
-                    dataJogo: 'desc' 
+                    dataJogo: 'desc'
                 }
             }
         })
@@ -2740,6 +2740,138 @@ adminRouter.get('/jogadores/:jogadorId/estatisticas-jogos', async (req: Request,
         res.status(500).json({
             error: 'Erro interno do servidor',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+    }
+})
+
+adminRouter.post('/reset-database', async (req, res) => {
+    try {
+        console.log('🗑️ Iniciando reset do banco de dados via API...')
+
+        console.log('📊 Limpando dados das tabelas...')
+
+        await prisma.estatisticaJogo.deleteMany()
+        console.log('   ✅ EstatisticaJogo limpa')
+
+        await prisma.playoffJogo.deleteMany()
+        console.log('   ✅ PlayoffJogo limpa')
+
+        await prisma.jogo.deleteMany()
+        console.log('   ✅ Jogo limpa')
+
+        await prisma.distribuicaoTime.deleteMany()
+        console.log('   ✅ DistribuicaoTime limpa')
+
+        await prisma.regional.deleteMany()
+        console.log('   ✅ Regional limpa')
+
+        await prisma.conferencia.deleteMany()
+        console.log('   ✅ Conferencia limpa')
+
+        await prisma.campeonato.deleteMany()
+        console.log('   ✅ Campeonato limpa')
+
+        await prisma.jogadorTime.deleteMany()
+        console.log('   ✅ JogadorTime limpa')
+
+        await prisma.jogador.deleteMany()
+        console.log('   ✅ Jogador limpa')
+
+        await prisma.time.deleteMany()
+        console.log('   ✅ Time limpa')
+
+        await prisma.metaDados.deleteMany()
+        console.log('   ✅ MetaDados limpa')
+
+        await prisma.materia.deleteMany()
+        console.log('   ✅ Materia limpa')
+
+        console.log('🔄 Resetando sequences...')
+
+        try {
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Time_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Jogador_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "JogadorTime_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Materia_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "MetaDados_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Campeonato_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Conferencia_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Regional_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "DistribuicaoTime_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "PlayoffJogo_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Jogo_id_seq" RESTART WITH 1;')
+            await prisma.$executeRawUnsafe('ALTER SEQUENCE "EstatisticaJogo_id_seq" RESTART WITH 1;')
+
+            console.log('✅ Sequences resetadas com sucesso!')
+        } catch (sequenceError) {
+            console.log('⚠️ Algumas sequences podem não existir ainda (normal em banco novo)')
+        }
+
+        const counts = await Promise.all([
+            prisma.time.count(),
+            prisma.jogador.count(),
+            prisma.jogadorTime.count(),
+            prisma.campeonato.count(),
+            prisma.conferencia.count(),
+            prisma.regional.count(),
+            prisma.distribuicaoTime.count(),
+            prisma.jogo.count(),
+            prisma.playoffJogo.count(),
+            prisma.estatisticaJogo.count(),
+            prisma.metaDados.count(),
+            prisma.materia.count(),
+        ])
+
+        console.log('📊 Contagem final:')
+        console.log(`   Times: ${counts[0]}`)
+        console.log(`   Jogadores: ${counts[1]}`)
+        console.log(`   Jogador-Time: ${counts[2]}`)
+        console.log(`   Campeonatos: ${counts[3]}`)
+        console.log(`   Conferências: ${counts[4]}`)
+        console.log(`   Regionais: ${counts[5]}`)
+        console.log(`   Distribuições: ${counts[6]}`)
+        console.log(`   Jogos: ${counts[7]}`)
+        console.log(`   Playoff Jogos: ${counts[8]}`)
+        console.log(`   Estatísticas: ${counts[9]}`)
+        console.log(`   MetaDados: ${counts[10]}`)
+        console.log(`   Matérias: ${counts[11]}`)
+
+        if (counts.every(count => count === 0)) {
+            console.log('🎉 BANCO ZERADO COM SUCESSO!')
+
+            res.status(200).json({
+                success: true,
+                message: 'Banco de dados resetado com sucesso!',
+                counts: {
+                    times: counts[0],
+                    jogadores: counts[1],
+                    campeonatos: counts[3],
+                    jogos: counts[7]
+                }
+            })
+        } else {
+            console.log('⚠️ Alguns dados podem não ter sido removidos')
+
+            res.status(200).json({
+                success: true,
+                message: 'Reset concluído com avisos',
+                counts: {
+                    times: counts[0],
+                    jogadores: counts[1],
+                    campeonatos: counts[3],
+                    jogos: counts[7]
+                },
+                warnings: 'Alguns registros podem não ter sido removidos'
+            })
+        }
+
+    } catch (error) {
+        console.error('❌ Erro ao resetar banco:', error)
+
+        res.status(500).json({
+            success: false,
+            message: 'Erro ao resetar banco de dados',
+            error: error instanceof Error ? error.message : 'Erro desconhecido'
         })
     }
 })

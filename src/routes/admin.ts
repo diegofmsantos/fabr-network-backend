@@ -2876,4 +2876,153 @@ adminRouter.post('/reset-database', async (req, res) => {
     }
 })
 
+adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
+    try {
+        const { id } = req.params
+        const { 
+            placarCasa, 
+            placarVisitante, 
+            dataJogo, 
+            local, 
+            observacoes, 
+            status 
+        } = req.body
+
+        console.log(`Atualizando jogo ${id} com dados:`, req.body)
+
+        // Verificar se o jogo existe
+        const jogoExistente = await prisma.jogo.findUnique({
+            where: { id: parseInt(id) },
+            include: {
+                timeCasa: { select: { nome: true, sigla: true } },
+                timeVisitante: { select: { nome: true, sigla: true } }
+            }
+        })
+
+        if (!jogoExistente) {
+            res.status(404).json({ error: 'Jogo não encontrado' })
+            return
+        }
+
+        // Preparar dados para atualização
+        const dadosAtualizacao: any = {}
+
+        // Atualizar placar se fornecido
+        if (placarCasa !== undefined) {
+            if (placarCasa < 0) {
+                res.status(400).json({ error: 'Placar casa não pode ser negativo' })
+                return
+            }
+            dadosAtualizacao.placarCasa = parseInt(placarCasa)
+        }
+
+        if (placarVisitante !== undefined) {
+            if (placarVisitante < 0) {
+                res.status(400).json({ error: 'Placar visitante não pode ser negativo' })
+                return
+            }
+            dadosAtualizacao.placarVisitante = parseInt(placarVisitante)
+        }
+
+        // Atualizar data se fornecida
+        if (dataJogo) {
+            try {
+                const novaData = new Date(dataJogo)
+                if (isNaN(novaData.getTime())) {
+                    res.status(400).json({ error: 'Data do jogo inválida' })
+                    return
+                }
+                dadosAtualizacao.dataJogo = novaData
+            } catch (error) {
+                res.status(400).json({ error: 'Formato de data inválido' })
+                return
+            }
+        }
+
+        // Atualizar local se fornecido
+        if (local !== undefined) {
+            dadosAtualizacao.local = local.trim() || null
+        }
+
+        // Atualizar observações se fornecidas
+        if (observacoes !== undefined) {
+            dadosAtualizacao.observacoes = observacoes.trim() || null
+        }
+
+        // Atualizar status se fornecido
+        if (status) {
+            const statusValidos = ['AGENDADO', 'AO VIVO', 'FINALIZADO', 'ADIADO', 'CANCELADO']
+            if (!statusValidos.includes(status)) {
+                res.status(400).json({ 
+                    error: 'Status inválido', 
+                    statusValidos 
+                })
+                return
+            }
+            dadosAtualizacao.status = status
+        }
+
+        // Se não há nada para atualizar
+        if (Object.keys(dadosAtualizacao).length === 0) {
+            res.status(400).json({ error: 'Nenhum dado fornecido para atualização' })
+            return
+        }
+
+        // Atualizar o jogo
+        const jogoAtualizado = await prisma.jogo.update({
+            where: { id: parseInt(id) },
+            data: dadosAtualizacao,
+            include: {
+                timeCasa: { 
+                    select: { 
+                        id: true,
+                        nome: true, 
+                        sigla: true,
+                        logo: true,
+                        cor: true 
+                    } 
+                },
+                timeVisitante: { 
+                    select: { 
+                        id: true,
+                        nome: true, 
+                        sigla: true,
+                        logo: true,
+                        cor: true 
+                    } 
+                },
+                campeonato: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        temporada: true
+                    }
+                }
+            }
+        })
+
+        console.log(`✅ Jogo ${id} atualizado com sucesso:`)
+        console.log(`   ${jogoAtualizado.timeCasa.sigla} vs ${jogoAtualizado.timeVisitante.sigla}`)
+        console.log(`   Data: ${jogoAtualizado.dataJogo}`)
+        console.log(`   Local: ${jogoAtualizado.local || 'Não definido'}`)
+        console.log(`   Status: ${jogoAtualizado.status}`)
+        if (jogoAtualizado.placarCasa !== null && jogoAtualizado.placarVisitante !== null) {
+            console.log(`   Placar: ${jogoAtualizado.placarCasa} x ${jogoAtualizado.placarVisitante}`)
+        }
+
+        res.json({
+            message: 'Jogo atualizado com sucesso',
+            jogo: jogoAtualizado,
+            alteracoes: Object.keys(dadosAtualizacao)
+        })
+
+    } catch (error) {
+        console.error('❌ Erro ao atualizar jogo:', error)
+        res.status(500).json({
+            error: 'Erro interno ao atualizar jogo',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+    }
+})
+
 export default adminRouter

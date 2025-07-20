@@ -5,7 +5,7 @@ const prisma = new PrismaClient()
 
 export const materiaRouter = express.Router()
 
-materiaRouter.get('/materias', async (req, res) => {
+materiaRouter.get('/', async (req, res) => {
     try {
         const materias = await prisma.materia.findMany({
             orderBy: {
@@ -19,7 +19,7 @@ materiaRouter.get('/materias', async (req, res) => {
     }
 })
 
-materiaRouter.post('/materias', async (req, res) => {
+materiaRouter.post('/', async (req, res) => {
     try {
         const materiaData = req.body;
 
@@ -46,7 +46,7 @@ materiaRouter.post('/materias', async (req, res) => {
     }
 });
 
-materiaRouter.put('/materias/:id', async (req, res) => {
+materiaRouter.put('/:id', async (req, res) => {
     const { id } = req.params;
     const materiaData = req.body;
 
@@ -67,7 +67,7 @@ materiaRouter.put('/materias/:id', async (req, res) => {
     }
 });
 
-materiaRouter.delete('/materia/:id', async (req, res) => {
+materiaRouter.delete('/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10)
 

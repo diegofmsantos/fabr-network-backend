@@ -45,17 +45,17 @@ model Time {
 model Jogador {
   id               Int               @id @default(autoincrement())
   nome             String
-  posicao          String
-  setor            String
-  experiencia      Int
-  idade            Int
-  altura           Float
-  peso             Float
-  instagram        String
-  instagram2       String
-  cidade           String
-  nacionalidade    String
-  timeFormador     String
+  posicao          String?
+  setor            String?
+  experiencia      Int?
+  idade            Int?
+  altura           Float?
+  peso             Float?
+  instagram        String?
+  instagram2       String?
+  cidade           String?
+  nacionalidade    String?
+  timeFormador     String?
   times            JogadorTime[]
   estatisticasJogo EstatisticaJogo[]
 }

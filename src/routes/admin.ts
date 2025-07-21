@@ -630,7 +630,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, re
 
         for (const jogador of jogadoresRaw) {
             try {
-                if (!jogador.nome || !jogador.time_nome) {
+                if (!jogador.nome || !jogador.time_nome || !jogador.numero) {
                     resultados.erros.push({
                         jogador: jogador.nome || 'Desconhecido',
                         erro: 'Dados obrigatórios ausentes'
@@ -2225,13 +2225,35 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                     continue
                 }
 
+                // ✅ CORRIGIDO: Lê o status da planilha ou assume 'FINALIZADO' se não informado
+                const statusPlanilha = resultado.status || resultado.Status || 'FINALIZADO'
+
+                // ✅ CORRIGIDO: Só atualiza placares se o jogo for finalizado
+                const updateData: any = {
+                    status: statusPlanilha,
+                    observacoes: resultado.observacoes || null
+                }
+
+                // Se for finalizado, valida e adiciona placares
+                if (statusPlanilha === 'FINALIZADO') {
+                    const placarCasa = parseInt(resultado.placar_mandante)
+                    const placarVisitante = parseInt(resultado.placar_visitante)
+
+                    if (isNaN(placarCasa) || isNaN(placarVisitante)) {
+                        resultados.erros.push({
+                            linha: resultado.id_jogo,
+                            erro: 'Para jogos finalizados, placares são obrigatórios'
+                        })
+                        continue
+                    }
+
+                    updateData.placarCasa = placarCasa
+                    updateData.placarVisitante = placarVisitante
+                }
+
                 await prisma.jogo.update({
                     where: { id: jogo.id },
-                    data: {
-                        placarCasa: parseInt(resultado.placar_mandante) || 0,
-                        placarVisitante: parseInt(resultado.placar_visitante) || 0,
-                        status: 'FINALIZADO'
-                    }
+                    data: updateData
                 })
 
                 resultados.sucesso++
@@ -2879,13 +2901,13 @@ adminRouter.post('/reset-database', async (req, res) => {
 adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
     try {
         const { id } = req.params
-        const { 
-            placarCasa, 
-            placarVisitante, 
-            dataJogo, 
-            local, 
-            observacoes, 
-            status 
+        const {
+            placarCasa,
+            placarVisitante,
+            dataJogo,
+            local,
+            observacoes,
+            status
         } = req.body
 
         console.log(`Atualizando jogo ${id} com dados:`, req.body)
@@ -2953,9 +2975,9 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
         if (status) {
             const statusValidos = ['AGENDADO', 'AO VIVO', 'FINALIZADO', 'ADIADO', 'CANCELADO']
             if (!statusValidos.includes(status)) {
-                res.status(400).json({ 
-                    error: 'Status inválido', 
-                    statusValidos 
+                res.status(400).json({
+                    error: 'Status inválido',
+                    statusValidos
                 })
                 return
             }
@@ -2973,23 +2995,23 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
             where: { id: parseInt(id) },
             data: dadosAtualizacao,
             include: {
-                timeCasa: { 
-                    select: { 
+                timeCasa: {
+                    select: {
                         id: true,
-                        nome: true, 
+                        nome: true,
                         sigla: true,
                         logo: true,
-                        cor: true 
-                    } 
+                        cor: true
+                    }
                 },
-                timeVisitante: { 
-                    select: { 
+                timeVisitante: {
+                    select: {
                         id: true,
-                        nome: true, 
+                        nome: true,
                         sigla: true,
                         logo: true,
-                        cor: true 
-                    } 
+                        cor: true
+                    }
                 },
                 campeonato: {
                     select: {

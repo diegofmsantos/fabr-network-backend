@@ -589,7 +589,7 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
     res.json(jogosFormatados)
   } catch (error) {
     console.error('❌ Erro ao buscar jogos:', error)
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Erro ao buscar jogos',
       details: error instanceof Error ? error.message : 'Erro desconhecido'
     })
@@ -1087,5 +1087,90 @@ function isTimeNoRegional(nomeTime: string, tipoRegional: string): boolean {
 
   return distribuicaoTimes[tipoRegional]?.includes(nomeTime) || false
 }
+
+superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => {
+  try {
+    const { temporada } = req.params
+    const { fase, status, rodada, conferencia, regional, limite } = req.query
+
+    console.log(`🔍 Buscando jogos da temporada ${temporada} com filtros:`, {
+      fase, status, rodada, conferencia, regional, limite
+    })
+
+    const superliga = await buscarSuperligaPorTemporada(temporada)
+    if (!superliga) {
+      res.status(404).json({
+        error: `Superliga ${temporada} não encontrada`,
+        temporada,
+        message: 'Esta temporada ainda não foi criada'
+      })
+      return
+    }
+
+    // Construir filtros dinâmicos
+    const whereConditions: any = {
+      campeonatoId: superliga.id
+    }
+
+    if (fase) {
+      whereConditions.fase = fase as string
+    }
+
+    if (status) {
+      whereConditions.status = status as string
+    }
+
+    if (rodada) {
+      whereConditions.rodada = parseInt(rodada as string)
+    }
+
+    if (conferencia) {
+      whereConditions.conferencia = conferencia as string
+    }
+
+    if (regional) {
+      whereConditions.regional = regional as string
+    }
+
+    const jogos = await prisma.jogo.findMany({
+      where: whereConditions,
+      include: {
+        timeCasa: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            logo: true
+          }
+        },
+        timeVisitante: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            logo: true
+          }
+        }
+      },
+      orderBy: [
+        { rodada: 'asc' },
+        { dataJogo: 'asc' }
+      ],
+      take: limite ? parseInt(limite as string) : undefined
+    })
+
+    console.log(`✅ Encontrados ${jogos.length} jogos`)
+
+    res.json(jogos)
+  } catch (error) {
+    console.error('Erro ao buscar jogos:', error)
+    res.status(500).json({
+      error: 'Erro ao buscar jogos',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
+  }
+})
 
 export default superligaRouter

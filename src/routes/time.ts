@@ -20,12 +20,20 @@ timeRouter.get('/', async (req, res) => {
                     where: { temporada: temporadaFiltro },
                     include: { jogador: true }
                 },
+                _count: {
+                    select: {
+                        jogadores: {
+                            where: { temporada: temporadaFiltro }
+                        }
+                    }
+                }
+
             },
         });
 
         const timesFormatados = times.map(time => {
             let titulosParsed = time.titulos;
-            
+
             if (typeof time.titulos === 'string') {
                 try {
                     titulosParsed = JSON.parse(time.titulos);
@@ -33,10 +41,11 @@ timeRouter.get('/', async (req, res) => {
                     console.error(`Erro ao fazer parse dos títulos para ${time.nome}:`, error);
                 }
             }
-            
+
             return {
                 ...time,
                 titulos: titulosParsed,
+                _count: time._count,
                 jogadores: time.jogadores.map(jt => ({
                     ...jt.jogador,
                     numero: jt.numero,
@@ -78,7 +87,7 @@ timeRouter.post('/', async (req, res) => {
                 coord_ofen: teamData.coord_ofen || '',
                 coord_defen: teamData.coord_defen || '',
                 titulos: teamData.titulos || [],
-                temporada: teamData.temporada || '2025', 
+                temporada: teamData.temporada || '2025',
             },
         })
 
@@ -130,12 +139,12 @@ timeRouter.put('/time/:id', async (req, res) => {
     const { id } = req.params
 
     try {
-        const timeData = TimeSchema.parse(req.body) 
-        const { id: _, jogadores, ...updateData } = timeData 
+        const timeData = TimeSchema.parse(req.body)
+        const { id: _, jogadores, ...updateData } = timeData
 
         const updatedTime = await prisma.time.update({
-            where: { id: parseInt(id) }, 
-            data: updateData, 
+            where: { id: parseInt(id) },
+            data: updateData,
         })
 
         res.status(200).json(updatedTime)

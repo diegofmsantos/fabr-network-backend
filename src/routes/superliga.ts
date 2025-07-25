@@ -1173,4 +1173,200 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
   }
 })
 
+superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => {
+  try {
+    const { temporada } = req.params
+    const {
+      status,
+      fase,
+      rodada,
+      conferencia,
+      regional,
+      timeId,
+      limite
+    } = req.query
+
+    console.log(`🔍 [SUPERLIGA] Buscando jogos para temporada ${temporada}`)
+    console.log(`📊 [SUPERLIGA] Filtros recebidos:`, { status, fase, rodada, conferencia, regional, timeId, limite })
+
+    // ✅ BUSCAR A SUPERLIGA
+    const superliga = await prisma.campeonato.findFirst({
+      where: {
+        temporada: temporada,
+        isSuperliga: true
+      },
+      include: {
+        _count: {
+          select: {
+            jogos: true,
+            conferencias: true
+          }
+        }
+      }
+    })
+
+    if (!superliga) {
+      console.log(`❌ [SUPERLIGA] Superliga ${temporada} não encontrada`)
+      res.status(404).json({
+        error: `Superliga ${temporada} não encontrada`,
+        details: `Verifique se a Superliga foi criada para a temporada ${temporada}`
+      })
+      return
+    }
+
+    console.log(`✅ [SUPERLIGA] Encontrada: ${superliga.nome} (ID: ${superliga.id})`)
+    console.log(`📊 [SUPERLIGA] Total de jogos no banco: ${superliga._count.jogos}`)
+
+    // ✅ CONSTRUIR FILTROS DE BUSCA
+    const whereClause: any = {
+      campeonatoId: superliga.id
+    }
+
+    // Aplicar filtros opcionais
+    if (status && status !== 'todos') {
+      whereClause.status = status
+      console.log(`🔍 [SUPERLIGA] Filtro status: ${status}`)
+    }
+
+    if (fase && fase !== 'todas') {
+      whereClause.fase = fase
+      console.log(`🔍 [SUPERLIGA] Filtro fase: ${fase}`)
+    }
+
+    if (rodada && !isNaN(parseInt(rodada as string))) {
+      whereClause.rodada = parseInt(rodada as string)
+      console.log(`🔍 [SUPERLIGA] Filtro rodada: ${rodada}`)
+    }
+
+    if (conferencia && conferencia !== 'todas') {
+      whereClause.conferencia = conferencia
+      console.log(`🔍 [SUPERLIGA] Filtro conferência: ${conferencia}`)
+    }
+
+    if (regional && regional !== 'todas') {
+      whereClause.regional = regional
+      console.log(`🔍 [SUPERLIGA] Filtro regional: ${regional}`)
+    }
+
+    if (timeId && !isNaN(parseInt(timeId as string))) {
+      const timeIdNum = parseInt(timeId as string)
+      whereClause.OR = [
+        { timeCasaId: timeIdNum },
+        { timeVisitanteId: timeIdNum }
+      ]
+      console.log(`🔍 [SUPERLIGA] Filtro time: ${timeIdNum}`)
+    }
+
+    console.log(`🔍 [SUPERLIGA] Query final:`, JSON.stringify(whereClause, null, 2))
+
+    // ✅ BUSCAR JOGOS COM RELACIONAMENTOS
+    const jogos = await prisma.jogo.findMany({
+      where: whereClause,
+      include: {
+        timeCasa: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            logo: true,
+            cor: true,
+            presidente: true,
+            head_coach: true,
+            estadio: true
+          }
+        },
+        timeVisitante: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            logo: true,
+            cor: true,
+            presidente: true,
+            head_coach: true,
+            estadio: true
+          }
+        },
+        campeonato: {
+          select: {
+            id: true,
+            nome: true,
+            temporada: true,
+            isSuperliga: true
+          }
+        },
+        // ✅ INCLUIR ESTATÍSTICAS SE NECESSÁRIO
+        estatisticas: {
+          select: {
+            id: true,
+            jogadorId: true,
+            timeId: true,
+            estatisticas: true,
+            jogador: {
+              select: {
+                id: true,
+                nome: true,
+                posicao: true
+              }
+            },
+            time: {
+              select: {
+                id: true,
+                nome: true,
+                sigla: true
+              }
+            }
+          },
+          take: 50 // Limitar para performance
+        }
+      },
+      orderBy: [
+        { rodada: 'asc' },
+        { dataJogo: 'asc' },
+        { id: 'asc' }
+      ],
+      take: limite ? Math.min(parseInt(limite as string), 100) : undefined // Máximo 100 jogos
+    })
+
+    console.log(`✅ [SUPERLIGA] Encontrados ${jogos.length} jogos`)
+    console.log(`📊 [SUPERLIGA] Primeira amostra:`, jogos.slice(0, 2).map(j => ({
+      id: j.id,
+      rodada: j.rodada,
+      fase: j.fase,
+      timeCasa: j.timeCasa.sigla,
+      timeVisitante: j.timeVisitante.sigla,
+      status: j.status,
+      data: j.dataJogo
+    })))
+
+    // ✅ RESPOSTA COM LOGS PARA DEBUG
+    res.json({
+      jogos,
+      meta: {
+        total: jogos.length,
+        superligaId: superliga.id,
+        superligaNome: superliga.nome,
+        temporada: temporada,
+        filtrosAplicados: {
+          status: status || 'todos',
+          fase: fase || 'todas',
+          rodada: rodada || 'todas',
+          conferencia: conferencia || 'todas',
+          regional: regional || 'todas',
+          timeId: timeId || 'todos',
+          limite: limite || 'sem limite'
+        }
+      }
+    })
+
+  } catch (error) {
+    console.error('❌ [SUPERLIGA] Erro ao buscar jogos:', error)
+    res.status(500).json({
+      error: 'Erro interno ao buscar jogos da Superliga',
+      details: error instanceof Error ? error.message : 'Erro desconhecido',
+      temporada: req.params.temporada
+    })
+  }
+})
+
 export default superligaRouter

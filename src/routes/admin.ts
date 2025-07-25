@@ -588,69 +588,96 @@ adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) =
     }
 });
 
-adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, res) => {
+adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Request, res: Response) => {
     try {
+        console.log('📋 Iniciando importação de jogadores...')
+
         if (!req.file) {
-            res.status(400).json({ error: 'Nenhum arquivo enviado' });
-            return;
+            res.status(400).json({ error: 'Nenhum arquivo foi enviado' })
+            return
         }
 
-        console.log('Arquivo recebido:', req.file.path);
+        console.log(`📁 Arquivo recebido: ${req.file.originalname} (${req.file.size} bytes)`)
 
-        const workbook = xlsx.readFile(req.file.path, {
-            raw: false,
-            cellText: true
-        });
+        const workbook = xlsx.readFile(req.file.path)
+        const planilha = workbook.Sheets[workbook.SheetNames[0]]
+        const dadosJogadores = xlsx.utils.sheet_to_json(planilha)
 
-        const sheetName = workbook.SheetNames[0];
-        const jogadorSheet = workbook.Sheets[sheetName];
-
-        let jogadoresRaw = xlsx.utils.sheet_to_json(jogadorSheet) as any[];
-
-        function convertNumbersToStrings(obj: any): any {
-            if (obj === null || obj === undefined) return obj;
-            if (typeof obj === 'number') return String(obj);
-            if (Array.isArray(obj)) return obj.map(item => convertNumbersToStrings(item));
-            if (typeof obj === 'object') {
-                const result: any = {};
-                for (const key in obj) {
-                    result[key] = convertNumbersToStrings(obj[key]);
-                }
-                return result;
-            }
-            return obj;
-        }
-
-        jogadoresRaw = convertNumbersToStrings(jogadoresRaw);
+        console.log(`📊 Total de linhas na planilha: ${dadosJogadores.length}`)
 
         const resultados = {
-            sucesso: 0,
-            erros: [] as any[]
-        };
+            totalLinhas: dadosJogadores.length,
+            jogadoresImportados: 0,
+            jogadoresDuplicados: 0,
+            errosValidacao: 0,
+            errosTime: 0,
+            errosGerais: 0,
+            detalhesErros: [] as Array<{
+                linha: number,
+                nome?: string,
+                time?: string,
+                erro: string
+            }>
+        }
 
-        for (const jogador of jogadoresRaw) {
+        let linhaAtual = 0
+
+        for (const jogador of dadosJogadores as any[]) {
+            linhaAtual++
+
             try {
-                if (!jogador.nome || !jogador.time_nome || !jogador.numero) {
-                    resultados.erros.push({
-                        jogador: jogador.nome || 'Desconhecido',
-                        erro: 'Dados obrigatórios ausentes'
-                    });
-                    continue;
+                if (!jogador.nome || !jogador.time_nome) {
+                    resultados.errosValidacao++
+                    resultados.detalhesErros.push({
+                        linha: linhaAtual,
+                        nome: jogador.nome,
+                        time: jogador.time_nome,
+                        erro: 'Nome do jogador ou time não informado'
+                    })
+                    continue
                 }
+
+                console.log(`📝 Processando ${linhaAtual}/${dadosJogadores.length}: ${jogador.nome} (${jogador.time_nome})`)
 
                 const time = await prisma.time.findFirst({
                     where: {
                         nome: jogador.time_nome,
-                        temporada: jogador.temporada || '2025'
+                        temporada: '2025'
                     }
-                });
+                })
 
                 if (!time) {
-                    resultados.erros.push({
-                        jogador: jogador.nome,
+                    resultados.errosTime++
+                    resultados.detalhesErros.push({
+                        linha: linhaAtual,
+                        nome: jogador.nome,
+                        time: jogador.time_nome,
                         erro: `Time "${jogador.time_nome}" não encontrado`
-                    });
-                    continue;
+                    })
+                    continue
+                }
+
+                const jogadorExistente = await prisma.jogador.findFirst({
+                    where: {
+                        nome: jogador.nome,
+                        times: {
+                            some: {
+                                timeId: time.id,
+                                temporada: '2025'
+                            }
+                        }
+                    }
+                })
+
+                if (jogadorExistente) {
+                    resultados.jogadoresDuplicados++
+                    resultados.detalhesErros.push({
+                        linha: linhaAtual,
+                        nome: jogador.nome,
+                        time: jogador.time_nome,
+                        erro: 'Jogador já existe neste time'
+                    })
+                    continue
                 }
 
                 const estatisticas = {
@@ -701,98 +728,116 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req, re
                         punts: Number(jogador.punts || 0),
                         jardas_de_punt: Number(jogador.jardas_de_punt || 0)
                     }
-                };
-
-                let jogadorExistente = await prisma.jogador.findFirst({
-                    where: {
-                        nome: jogador.nome,
-                        times: {
-                            some: {
-                                timeId: time.id,
-                                temporada: jogador.temporada || '2025'
-                            }
-                        }
-                    },
-                    include: {
-                        times: {
-                            where: {
-                                timeId: time.id,
-                                temporada: jogador.temporada || '2025'
-                            }
-                        }
-                    }
-                });
-
-                if (jogadorExistente) {
-                    if (jogadorExistente.times && jogadorExistente.times.length > 0) {
-                        await prisma.jogadorTime.update({
-                            where: { id: jogadorExistente.times[0].id },
-                            data: {
-                                numero: Number(jogador.numero || 0),
-                                camisa: jogador.camisa || '',
-                                estatisticas: estatisticas
-                            }
-                        });
-                    }
-                } else {
-                    const novoJogador = await prisma.jogador.create({
-                        data: {
-                            nome: jogador.nome,
-                            posicao: jogador.posicao || '',
-                            setor: jogador.setor || 'Ataque',
-                            experiencia: Number(jogador.experiencia || 0),
-                            idade: Number(jogador.idade || 0),
-                            altura: Number(jogador.altura || 0),
-                            peso: Number(jogador.peso || 0),
-                            instagram: jogador.instagram || '',
-                            instagram2: jogador.instagram2 || '',
-                            cidade: jogador.cidade || '',
-                            nacionalidade: jogador.nacionalidade || '',
-                            timeFormador: jogador.timeFormador || ''
-                        }
-                    });
-
-                    await prisma.jogadorTime.create({
-                        data: {
-                            jogadorId: novoJogador.id,
-                            timeId: time.id,
-                            temporada: jogador.temporada || '2025',
-                            numero: Number(jogador.numero || 0),
-                            camisa: jogador.camisa || '',
-                            estatisticas: estatisticas
-                        }
-                    });
                 }
 
-                resultados.sucesso++;
+                const novoJogador = await prisma.jogador.create({
+                    data: {
+                        nome: jogador.nome,
+                        posicao: jogador.posicao || '',
+                        setor: jogador.setor || 'Ataque',
+                        experiencia: Number(jogador.experiencia || 0),
+                        idade: Number(jogador.idade || 0),
+                        altura: parseFloat(jogador.altura || '0'),
+                        peso: Number(jogador.peso || 0),
+                        instagram: jogador.instagram || '',
+                        instagram2: jogador.instagram2 || '',
+                        cidade: jogador.cidade || '',
+                        nacionalidade: jogador.nacionalidade || '',
+                        timeFormador: jogador.time_formador || ''
+                    }
+                })
+
+                await prisma.jogadorTime.create({
+                    data: {
+                        jogadorId: novoJogador.id,
+                        timeId: time.id,
+                        temporada: '2025',
+                        numero: Number(jogador.numero || 0),
+                        camisa: jogador.camisa || '',
+                        estatisticas: estatisticas
+                    }
+                })
+
+                resultados.jogadoresImportados++
+
+                if (resultados.jogadoresImportados % 50 === 0) {
+                    console.log(`📈 Progresso: ${resultados.jogadoresImportados} jogadores importados...`)
+                }
+
             } catch (error) {
-                console.error(`Erro ao processar jogador ${jogador.nome}:`, error);
-                resultados.erros.push({
-                    jogador: jogador.nome || 'Desconhecido',
+                resultados.errosGerais++
+                resultados.detalhesErros.push({
+                    linha: linhaAtual,
+                    nome: jogador.nome,
+                    time: jogador.time_nome,
                     erro: error instanceof Error ? error.message : 'Erro desconhecido'
-                });
+                })
+                console.error(`❌ Erro na linha ${linhaAtual}:`, error)
             }
         }
 
-        fs.unlinkSync(req.file.path);
+        if (fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path)
+        }
+
+        console.log('\n' + '='.repeat(60))
+        console.log('📊 RELATÓRIO FINAL DA IMPORTAÇÃO DE JOGADORES')
+        console.log('='.repeat(60))
+        console.log(`📋 Total de linhas processadas: ${resultados.totalLinhas}`)
+        console.log(`✅ Jogadores importados com sucesso: ${resultados.jogadoresImportados}`)
+        console.log(`⚠️  Jogadores duplicados (ignorados): ${resultados.jogadoresDuplicados}`)
+        console.log(`❌ Erros de validação: ${resultados.errosValidacao}`)
+        console.log(`❌ Erros de time não encontrado: ${resultados.errosTime}`)
+        console.log(`❌ Erros gerais: ${resultados.errosGerais}`)
+        console.log(`📈 Taxa de sucesso: ${((resultados.jogadoresImportados / resultados.totalLinhas) * 100).toFixed(1)}%`)
+        console.log('='.repeat(60))
+
+        if (resultados.detalhesErros.length > 0) {
+            console.log('\n🔍 PRIMEIROS 10 ERROS DETALHADOS:')
+            resultados.detalhesErros.slice(0, 10).forEach((erro, index) => {
+                console.log(`${index + 1}. Linha ${erro.linha}: ${erro.nome || 'Nome não informado'} (${erro.time || 'Time não informado'}) - ${erro.erro}`)
+            })
+
+            if (resultados.detalhesErros.length > 10) {
+                console.log(`... e mais ${resultados.detalhesErros.length - 10} erros`)
+            }
+        }
+
+        const totalJogadoresNoBanco = await prisma.jogadorTime.count({
+            where: { temporada: '2025' }
+        })
+
+        console.log(`\n🎯 VERIFICAÇÃO: ${totalJogadoresNoBanco} jogadores-time no banco para temporada 2025`)
 
         res.status(200).json({
-            mensagem: `Processamento concluído: ${resultados.sucesso} jogadores importados com sucesso`,
-            erros: resultados.erros.length > 0 ? resultados.erros : null
-        });
+            message: 'Importação de jogadores concluída',
+            arquivo: req.file.originalname,
+            resultados: {
+                totalLinhas: resultados.totalLinhas,
+                jogadoresImportados: resultados.jogadoresImportados,
+                jogadoresDuplicados: resultados.jogadoresDuplicados,
+                errosValidacao: resultados.errosValidacao,
+                errosTime: resultados.errosTime,
+                errosGerais: resultados.errosGerais,
+                taxaSucesso: `${((resultados.jogadoresImportados / resultados.totalLinhas) * 100).toFixed(1)}%`,
+                totalJogadoresNoBanco
+            },
+            erros: resultados.detalhesErros.length > 0 ? resultados.detalhesErros.slice(0, 20) : null
+        })
+
     } catch (error) {
-        console.error('Erro ao processar planilha de jogadores:', error);
+        console.error('❌ Erro crítico na importação de jogadores:', error)
 
         if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
+            fs.unlinkSync(req.file.path)
         }
 
         res.status(500).json({
-            error: 'Erro ao processar a planilha de jogadores',
+            error: 'Erro crítico ao processar a planilha de jogadores',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
-        });
+        })
     }
-});
+})
 
 adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req: Request, res: Response) => {
     try {
@@ -1041,6 +1086,51 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
             res.status(400).json({ error: 'ID do jogo e data são obrigatórios' });
             return;
         }
+
+        // ✅ INSERIR ESTA VALIDAÇÃO AQUI (ANTES DO console.log e workbook)
+        console.log('🔍 Validando status do jogo...');
+
+        const jogo = await prisma.jogo.findUnique({
+            where: { id: Number(id_jogo) },
+            select: {
+                id: true,
+                status: true,
+                dataJogo: true,
+                timeCasa: { select: { nome: true, sigla: true } },
+                timeVisitante: { select: { nome: true, sigla: true } }
+            }
+        });
+
+        if (!jogo) {
+            console.error(`❌ Jogo ${id_jogo} não encontrado`);
+            res.status(400).json({
+                error: `Jogo ${id_jogo} não encontrado`
+            });
+            return;
+        }
+
+        // ✅ VALIDAÇÃO CRÍTICA: Só permitir estatísticas para jogos FINALIZADOS
+        if (jogo.status !== 'FINALIZADO') {
+            console.error(`❌ Tentativa de inserir estatísticas para jogo ${id_jogo} com status: ${jogo.status}`);
+            console.error(`   Jogo: ${jogo.timeCasa.nome} vs ${jogo.timeVisitante.nome}`);
+
+            res.status(400).json({
+                error: `Não é possível inserir estatísticas para jogo com status: ${jogo.status}`,
+                detalhes: {
+                    jogoId: id_jogo,
+                    status: jogo.status,
+                    confronto: `${jogo.timeCasa.nome} vs ${jogo.timeVisitante.nome}`,
+                    data: jogo.dataJogo,
+                    statusPermitido: 'FINALIZADO'
+                }
+            });
+            return;
+        }
+
+        console.log(`✅ Jogo ${id_jogo} validado para inserção de estatísticas`);
+        console.log(`   Status: ${jogo.status}`);
+        console.log(`   Confronto: ${jogo.timeCasa.sigla} vs ${jogo.timeVisitante.sigla}`);
+        // ✅ FIM DA VALIDAÇÃO
 
         console.log('📊 INICIANDO DUPLA INSERÇÃO DE ESTATÍSTICAS...');
         console.log(`🎯 Jogo: ${id_jogo}, Data: ${data_jogo}`);

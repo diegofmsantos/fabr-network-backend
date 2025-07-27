@@ -6,322 +6,7 @@ import xlsx from 'xlsx'
 import multer from 'multer'
 import { calcularClassificacaoPorConferencia } from '../utils/distribuicaoUtils';
 import { gerarTodosPlayoffs } from '../utils/superligaUtils';
-
-export async function verificarGeracaoAutomaticaPlayoffs(campeonatoId: number) {
-    try {
-        const totalJogosTemporada = await prisma.jogo.count({
-            where: {
-                campeonatoId,
-                fase: 'TEMPORADA REGULAR'
-            }
-        })
-
-        const jogosFinalizados = await prisma.jogo.count({
-            where: {
-                campeonatoId,
-                fase: 'TEMPORADA REGULAR',
-                status: 'FINALIZADO'
-            }
-        })
-
-        console.log(`📊 Status: ${jogosFinalizados}/${totalJogosTemporada} jogos da temporada regular finalizados`)
-
-        if (totalJogosTemporada > 0 && jogosFinalizados === totalJogosTemporada) {
-            console.log('🏆 TODOS OS JOGOS FINALIZADOS! Gerando playoffs automaticamente...')
-
-            const playoffsExistentes = await prisma.playoffJogo.count({
-                where: { campeonatoId }
-            })
-
-            if (playoffsExistentes === 0) {
-                console.log('🔥 PATCH: Chamando gerarTodosPlayoffs com campeonatoId:', campeonatoId)
-
-                try {
-                    const resultado = await gerarTodosPlayoffs(campeonatoId)
-                    console.log('🔥 PATCH: gerarTodosPlayoffs retornou:', resultado)
-                } catch (errorPlayoffs) {
-                    console.error('🔥 PATCH: ERRO em gerarTodosPlayoffs:', errorPlayoffs)
-                    throw errorPlayoffs
-                }
-
-                await prisma.campeonato.update({
-                    where: { id: campeonatoId },
-                    data: {
-                        status: 'PLAYOFFS',
-                        configSuperliga: {
-                            faseAtual: 'PLAYOFFS CONFERENCIA',
-                            playoffsGeradosEm: new Date().toISOString()
-                        } as any
-                    }
-                })
-
-                console.log('🎉 PLAYOFFS GERADOS AUTOMATICAMENTE!')
-                return { playoffsGerados: true }
-            }
-        }
-
-        return { playoffsGerados: false }
-
-    } catch (error) {
-        console.error('❌ Erro na verificação automática:', error)
-        return { playoffsGerados: false, erro: error }
-    }
-}
-
-async function verificarGeracaoPlayoffsPorConferencia(campeonatoId: number) {
-    try {
-        console.log('\n🔍 Verificando geração de playoffs por conferência...')
-
-        const superliga = await prisma.campeonato.findFirst({
-            where: {
-                id: campeonatoId,
-                isSuperliga: true
-            },
-            include: {
-                conferencias: {
-                    include: {
-                        regionais: true
-                    }
-                }
-            }
-        })
-
-        if (!superliga) {
-            console.log('⚠️  Superliga não encontrada')
-            return { playoffsGerados: false, conferenciasProcessadas: [] }
-        }
-
-        // ✅ VERIFICAR SE TEMPORADA REGULAR ESTÁ FINALIZADA (64 jogos)
-        const jogosTemporadaRegular = await prisma.jogo.count({
-            where: {
-                campeonatoId,
-                fase: 'TEMPORADA REGULAR'
-            }
-        })
-
-        const jogosFinalizados = await prisma.jogo.count({
-            where: {
-                campeonatoId,
-                fase: 'TEMPORADA REGULAR',
-                status: 'FINALIZADO'
-            }
-        })
-
-        console.log(`📊 Status geral: ${jogosFinalizados}/${jogosTemporadaRegular} jogos finalizados`)
-
-        // ✅ SE TEMPORADA REGULAR COMPLETA, GERAR TODOS OS PLAYOFFS
-        if (jogosFinalizados >= 62 && jogosTemporadaRegular >= 64) { // Permitir 2 jogos pendentes
-            console.log('🏆 Temporada regular quase completa! Verificando playoffs...')
-
-            const playoffsExistentes = await prisma.playoffJogo.count({
-                where: { campeonatoId }
-            })
-
-            console.log(`📋 Playoffs existentes: ${playoffsExistentes}`)
-
-            // ✅ SE TEM MENOS DE 17 PLAYOFFS, GERAR TODOS
-            if (playoffsExistentes < 17) { // Total esperado: ~17-20 jogos de playoff
-                console.log('🚀 GERANDO TODOS OS PLAYOFFS DE UMA VEZ...')
-
-                try {
-                    // Importar função de gerar todos os playoffs
-                    const { gerarTodosPlayoffs } = await import('../utils/superligaUtils')
-                    const totalPlayoffJogos = await gerarTodosPlayoffs(campeonatoId)
-
-                    await prisma.campeonato.update({
-                        where: { id: campeonatoId },
-                        data: {
-                            status: 'PLAYOFFS',
-                            configSuperliga: {
-                                faseAtual: 'PLAYOFFS CONFERENCIA',
-                                playoffsGeradosEm: new Date().toISOString(),
-                                tipoGeracao: 'COMPLETO'
-                            } as any
-                        }
-                    })
-
-                    console.log(`🎉 TODOS OS PLAYOFFS GERADOS: ${totalPlayoffJogos} jogos`)
-
-                    return {
-                        playoffsGerados: true,
-                        totalJogos: totalPlayoffJogos,
-                        conferenciasProcessadas: [{
-                            conferencia: 'TODAS',
-                            jogosGerados: totalPlayoffJogos,
-                            status: 'sucesso',
-                            observacao: 'Todos os playoffs gerados de uma vez'
-                        }]
-                    }
-
-                } catch (error) {
-                    console.error('❌ Erro ao gerar todos os playoffs:', error)
-                    
-                    // ✅ FALLBACK: Gerar por conferência se falhar
-                    return await gerarPlayoffsPorConferencia(superliga, campeonatoId)
-                }
-            } else {
-                console.log('✅ Playoffs já existem em quantidade adequada')
-                return {
-                    playoffsGerados: true,
-                    totalJogos: playoffsExistentes,
-                    conferenciasProcessadas: [{
-                        conferencia: 'TODAS',
-                        jogosGerados: playoffsExistentes,
-                        status: 'ja_existentes'
-                    }]
-                }
-            }
-        } else {
-            // ✅ VERIFICAÇÃO INDIVIDUAL POR CONFERÊNCIA (lógica original)
-            const faltam = jogosTemporadaRegular - jogosFinalizados
-            console.log(`⏳ Aguardando mais ${faltam} jogos para gerar todos os playoffs`)
-            
-            return await gerarPlayoffsPorConferencia(superliga, campeonatoId)
-        }
-
-    } catch (error) {
-        console.error('❌ Erro na verificação:', error)
-        throw error
-    }
-}
-
-// ✅ FUNÇÃO AUXILIAR PARA GERAR POR CONFERÊNCIA (método original)
-async function gerarPlayoffsPorConferencia(superliga: any, campeonatoId: number) {
-    const conferenciasProcessadas = []
-    let totalPlayoffsGerados = 0
-
-    // Função para mapear nomes de conferência
-    function mapearNomeConferencia(tipoConferencia: string): string[] {
-        const mapeamento = {
-            'SUDESTE': ['Sudeste', 'SUDESTE'],
-            'SUL': ['Sul', 'SUL'],
-            'NORDESTE': ['Nordeste', 'NORDESTE'],
-            'CENTRO NORTE': ['Centro-Norte', 'CENTRO NORTE', 'Centro Norte', 'Centro-Norte']
-        };
-        
-        return mapeamento[tipoConferencia as keyof typeof mapeamento] || [tipoConferencia];
-    }
-
-    for (const conferencia of superliga.conferencias) {
-        console.log(`\n🔍 Verificando conferência: ${conferencia.tipo}`)
-
-        // Verificar se já tem playoffs gerados
-        const playoffsExistentes = await prisma.playoffJogo.count({
-            where: {
-                campeonatoId,
-                conferenciaId: conferencia.id
-            }
-        })
-
-        if (playoffsExistentes > 0) {
-            console.log(`   ✅ ${conferencia.tipo} já tem ${playoffsExistentes} playoffs`)
-            continue
-        }
-
-        // Usar mapeamento para buscar jogos
-        const possiveisNomes = mapearNomeConferencia(conferencia.tipo)
-        
-        const jogosTemporadaRegular = await prisma.jogo.count({
-            where: {
-                campeonatoId,
-                fase: 'TEMPORADA REGULAR',
-                conferencia: {
-                    in: possiveisNomes
-                }
-            }
-        })
-
-        const jogosFinalizados = await prisma.jogo.count({
-            where: {
-                campeonatoId,
-                fase: 'TEMPORADA REGULAR',
-                conferencia: {
-                    in: possiveisNomes
-                },
-                status: 'FINALIZADO'
-            }
-        })
-
-        console.log(`   📊 ${conferencia.tipo}: ${jogosFinalizados}/${jogosTemporadaRegular} jogos finalizados`)
-
-        const jogosEsperadosPorConferencia = {
-            'SUDESTE': 24,
-            'SUL': 16,
-            'NORDESTE': 12,
-            'CENTRO NORTE': 12
-        }
-
-        const jogosEsperados = jogosEsperadosPorConferencia[conferencia.tipo as keyof typeof jogosEsperadosPorConferencia] || 0
-        const jogosPendentes = jogosEsperados - jogosFinalizados
-        const podeGerarPlayoffs = jogosPendentes <= 2 && jogosFinalizados > 0
-
-        console.log(`   📈 ${conferencia.tipo}: ${((jogosFinalizados / jogosEsperados) * 100).toFixed(1)}% concluído`)
-
-        if (podeGerarPlayoffs) {
-            console.log(`   🏆 ${conferencia.tipo}: Gerando playoffs...`)
-
-            try {
-                let resultado
-                
-                switch (conferencia.tipo) {
-                    case 'SUDESTE':
-                        const { gerarPlayoffsSudeste } = await import('../utils/superligaUtils')
-                        resultado = await gerarPlayoffsSudeste(campeonatoId, conferencia.id)
-                        break
-
-                    case 'SUL':
-                        const { gerarPlayoffsSul } = await import('../utils/superligaUtils')
-                        resultado = await gerarPlayoffsSul(campeonatoId, conferencia.id)
-                        break
-
-                    case 'NORDESTE':
-                        const { gerarPlayoffsNordeste } = await import('../utils/superligaUtils')
-                        resultado = await gerarPlayoffsNordeste(campeonatoId, conferencia.id)
-                        break
-
-                    case 'CENTRO NORTE':
-                        const { gerarPlayoffsCentroNorte } = await import('../utils/superligaUtils')
-                        resultado = await gerarPlayoffsCentroNorte(campeonatoId, conferencia.id)
-                        break
-
-                    default:
-                        console.log(`   ⚠️  Tipo não reconhecido: ${conferencia.tipo}`)
-                        continue
-                }
-
-                if (resultado) {
-                    const jogosGerados = resultado.wildcards.length + resultado.semifinais.length + (resultado.final ? 1 : 0)
-                    totalPlayoffsGerados += jogosGerados
-                    
-                    conferenciasProcessadas.push({
-                        conferencia: conferencia.tipo,
-                        jogosGerados,
-                        status: 'sucesso'
-                    })
-
-                    console.log(`   ✅ ${conferencia.tipo}: ${jogosGerados} jogos gerados`)
-                }
-
-            } catch (error) {
-                console.error(`   ❌ Erro em ${conferencia.tipo}:`, error)
-                conferenciasProcessadas.push({
-                    conferencia: conferencia.tipo,
-                    jogosGerados: 0,
-                    status: 'erro',
-                    erro: error instanceof Error ? error.message : 'Erro desconhecido'
-                })
-            }
-        } else {
-            console.log(`   ⏳ ${conferencia.tipo}: Aguardando ${jogosPendentes} jogos`)
-        }
-    }
-
-    return {
-        playoffsGerados: totalPlayoffsGerados > 0,
-        totalJogos: totalPlayoffsGerados,
-        conferenciasProcessadas
-    }
-}
+import { verificarGeracaoPlayoffsPorConferencia } from '../utils/adminPlayoffsUtils'
 
 const prisma = new PrismaClient()
 
@@ -1184,7 +869,8 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
         const resultados = {
             sucesso: 0,
             erros: [] as any[],
-            warnings: [] as any[]
+            warnings: [] as any[],
+            jogosPlayoffPulados: 0
         }
 
         for (let i = 0; i < jogosRaw.length; i++) {
@@ -1192,69 +878,55 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             const linha = i + 2
 
             try {
-                const nomeTimeCasa = jogoData.time_mandante?.toString().toLowerCase().trim() ||
-                    jogoData.time_casa?.toString().toLowerCase().trim()
+                // ✅ VERIFICAR SE CAMPOS ESTÃO VAZIOS (JOGOS DE PLAYOFF)
+                const nomeTimeCasa = jogoData.time_mandante?.toString().trim() || jogoData.time_casa?.toString().trim()
+                const nomeTimeVisitante = jogoData.time_visitante?.toString().trim()
 
-                if (!nomeTimeCasa) {
-                    resultados.erros.push({
-                        linha,
-                        erro: 'Nome do time mandante/casa não encontrado na planilha'
-                    })
+                // ✅ PULAR JOGOS COM CAMPOS VAZIOS (PLAYOFFS)
+                if (!nomeTimeCasa || !nomeTimeVisitante || 
+                    nomeTimeCasa === '' || nomeTimeVisitante === '' ||
+                    nomeTimeCasa === 'undefined' || nomeTimeVisitante === 'undefined') {
+                    
+                    console.log(`⏭️  Pulando jogo playoff: linha ${linha} (campos vazios)`)
+                    resultados.jogosPlayoffPulados++
                     continue
                 }
 
-                const timeCasa = mapaTimes.get(nomeTimeCasa)
+                const timeCasa = mapaTimes.get(nomeTimeCasa.toLowerCase().trim())
                 if (!timeCasa) {
                     resultados.erros.push({
                         linha,
-                        jogo: `${jogoData.time_mandante || jogoData.time_casa} vs ${jogoData.time_visitante}`,
-                        erro: `Time mandante "${jogoData.time_mandante || jogoData.time_casa}" não encontrado`
+                        jogo: `${nomeTimeCasa} vs ${nomeTimeVisitante}`,
+                        erro: `Time mandante "${nomeTimeCasa}" não encontrado`
                     })
                     continue
                 }
 
-                const nomeTimeVisitante = jogoData.time_visitante?.toString().toLowerCase().trim()
-                if (!nomeTimeVisitante) {
-                    resultados.erros.push({
-                        linha,
-                        erro: 'Nome do time visitante não encontrado na planilha'
-                    })
-                    continue
-                }
-
-                const timeVisitante = mapaTimes.get(nomeTimeVisitante)
+                const timeVisitante = mapaTimes.get(nomeTimeVisitante.toLowerCase().trim())
                 if (!timeVisitante) {
                     resultados.erros.push({
                         linha,
-                        jogo: `${jogoData.time_mandante || jogoData.time_casa} vs ${jogoData.time_visitante}`,
-                        erro: `Time visitante "${jogoData.time_visitante}" não encontrado`
+                        jogo: `${nomeTimeCasa} vs ${nomeTimeVisitante}`,
+                        erro: `Time visitante "${nomeTimeVisitante}" não encontrado`
                     })
                     continue
                 }
 
                 let dataJogo: Date
                 try {
-                    const dataRaw = jogoData.data_jogo || jogoData.data
-
-                    if (typeof dataRaw === 'number') {
-                        const excelEpoch = new Date(1900, 0, 1)
-                        dataJogo = new Date(excelEpoch.getTime() + (dataRaw - 2) * 24 * 60 * 60 * 1000)
-                    } else if (typeof dataRaw === 'string') {
-                        dataJogo = new Date(dataRaw)
-                    } else if (dataRaw instanceof Date) {
-                        dataJogo = dataRaw
+                    if (typeof jogoData.data === 'number') {
+                        dataJogo = new Date((jogoData.data - 25569) * 86400 * 1000)
                     } else {
-                        throw new Error(`Formato de data não reconhecido: ${dataRaw}`)
+                        dataJogo = new Date(jogoData.data)
                     }
 
                     if (isNaN(dataJogo.getTime())) {
-                        throw new Error(`Data inválida: ${dataRaw}`)
+                        throw new Error('Data inválida')
                     }
-                } catch (error) {
+                } catch {
                     resultados.erros.push({
                         linha,
-                        jogo: `${timeCasa.sigla} vs ${timeVisitante.sigla}`,
-                        erro: `Erro de data: ${error instanceof Error ? error.message : 'Data inválida'}`
+                        erro: `Data inválida: ${jogoData.data || 'Data inválida'}`
                     })
                     continue
                 }
@@ -1308,6 +980,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             message: `Importação da agenda concluída com sucesso!`,
             jogosImportados: resultados.sucesso,
             totalLinhas: jogosRaw.length,
+            jogosPlayoffPulados: resultados.jogosPlayoffPulados,
             erros: resultados.erros.length > 0 ? resultados.erros : undefined,
             warnings: resultados.warnings.length > 0 ? resultados.warnings : undefined,
             proximaEtapa: 'Agora você pode importar os resultados dos jogos conforme eles acontecem'
@@ -1315,6 +988,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
         console.log('✅ Importação da agenda finalizada:')
         console.log(`   📊 Jogos importados: ${resultados.sucesso}`)
+        console.log(`   ⏭️  Jogos playoff pulados: ${resultados.jogosPlayoffPulados}`)
         console.log(`   ❌ Erros: ${resultados.erros.length}`)
 
         res.status(200).json(resposta)
@@ -3236,100 +2910,6 @@ adminRouter.post('/simular-temporada/:temporada', async (req: Request, res: Resp
     } catch (error) {
         console.error('Erro na simulação:', error)
         res.status(500).json({ error: 'Erro interno do servidor' })
-        return
-    }
-})
-
-adminRouter.post('/importar-resultados-incremental', upload.single('arquivo'), async (req: Request, res: Response): Promise<void> => {
-    try {
-        if (!req.file) {
-            res.status(400).json({ error: 'Arquivo não enviado' })
-            return
-        }
-
-        const { temporada } = req.body
-
-        if (!temporada) {
-            res.status(400).json({ error: 'Temporada é obrigatória' })
-            return
-        }
-
-        const workbook = xlsx.read(req.file.buffer)
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-        const dados = xlsx.utils.sheet_to_json(worksheet)
-
-        console.log(`📥 Importação incremental: ${dados.length} jogos`)
-
-        let jogosAtualizados = 0
-        let playoffsGerados = false
-        const erros: string[] = []
-
-        for (const linha of dados as any[]) {
-            try {
-                const jogoId = parseInt(linha.ID || linha.id || linha.JOGO_ID)
-                const placarCasa = parseInt(linha.PLACAR_CASA || linha.placarCasa)
-                const placarVisitante = parseInt(linha.PLACAR_VISITANTE || linha.placarVisitante)
-
-                if (isNaN(jogoId) || isNaN(placarCasa) || isNaN(placarVisitante)) {
-                    throw new Error('Dados inválidos: ID, placar casa e visitante são obrigatórios')
-                }
-
-                const jogo = await prisma.jogo.update({
-                    where: { id: jogoId },
-                    data: {
-                        placarCasa,
-                        placarVisitante,
-                        status: 'FINALIZADO',
-                        observacoes: linha.OBSERVACOES || linha.observacoes || null
-                    },
-                    include: { campeonato: true }
-                })
-
-                console.log(`✅ Jogo ${jogoId} atualizado: ${placarCasa} x ${placarVisitante}`)
-                jogosAtualizados++
-
-                const jogoAtualizado = await prisma.jogo.findFirst({
-                    where: { id: jogoId },
-                    include: { campeonato: true }
-                })
-
-                if (jogoAtualizado?.campeonato.isSuperliga) {
-                    const resultado = await verificarGeracaoAutomaticaPlayoffs(jogoAtualizado.campeonatoId)
-                    if (resultado.playoffsGerados) {
-                        console.log('🎉 Playoffs gerados automaticamente após importação!')
-                    }
-                }
-
-                if (jogo.campeonato.isSuperliga && !playoffsGerados) {
-                    const resultado = await verificarGeracaoAutomaticaPlayoffs(jogo.campeonatoId)
-                    if (resultado.playoffsGerados) {
-                        playoffsGerados = true
-                        console.log('🎉 Playoffs gerados automaticamente!')
-                    }
-                }
-
-            } catch (error) {
-                erros.push(`Jogo ID ${linha.ID}: ${error}`)
-                console.error(`❌ Erro no jogo ${linha.ID}:`, error)
-            }
-        }
-
-        const resposta = {
-            message: `Importação incremental concluída`,
-            jogosAtualizados,
-            playoffsGerados,
-            erros: erros.length > 0 ? erros : undefined,
-            proximaEtapa: playoffsGerados ? 'Playoffs gerados! Verifique as páginas de playoff.' : 'Continue importando jogos conforme acontecem.'
-        }
-        res.status(200).json(resposta)
-        return
-
-    } catch (error) {
-        console.error('Erro na importação incremental:', error)
-        res.status(500).json({
-            error: 'Erro interno do servidor',
-            details: error instanceof Error ? error.message : 'Erro desconhecido'
-        })
         return
     }
 })

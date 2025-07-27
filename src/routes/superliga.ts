@@ -511,13 +511,10 @@ superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, re
 superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    const { status, fase, rodada, limite } = req.query
+    const { status, fase, rodada, conferencia, regional, timeId, limite } = req.query
 
     console.log(`🔍 Buscando jogos para temporada ${temporada}:`, {
-      status,
-      fase,
-      rodada,
-      limite
+      status, fase, rodada, limite
     })
 
     const superliga = await buscarSuperligaPorTemporada(temporada)
@@ -537,7 +534,8 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
 
     console.log(`🎯 Filtros aplicados:`, whereClause)
 
-    const jogos = await prisma.jogo.findMany({
+    // ✅ BUSCAR PRIMEIRO NA TABELA JOGO (AGENDA)
+    let jogos = await prisma.jogo.findMany({
       where: whereClause,
       include: {
         timeCasa: {
@@ -570,6 +568,77 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
 
     console.log(`✅ Encontrados ${jogos.length} jogos`)
 
+    // ✅ SE NÃO ENCONTROU PLAYOFFS, BUSCAR NA TABELA PLAYOFFJOGO
+    if (fase && jogos.length === 0) {
+      const fasesPlayoff = ['WILD CARD', 'SEMIFINAL DE CONFERÊNCIA', 'FINAL DE CONFERÊNCIA', 'SEMIFINAL NACIONAL', 'FINAL NACIONAL']
+      const faseString = fase.toString()
+
+      const temFasePlayoff = fasesPlayoff.some(f => faseString.includes(f))
+
+      if (temFasePlayoff) {
+        console.log(`🎯 Buscando playoffs na tabela PlayoffJogo...`)
+
+        const playoffJogos = await prisma.playoffJogo.findMany({
+          where: {
+            campeonatoId: superliga.id,
+            ...(fase && { fase: { in: faseString.split(',').map(f => f.trim()) } }),
+            ...(status && { status: status.toString() })
+          },
+          include: {
+            timeClassificado1: {
+              select: {
+                id: true,
+                nome: true,
+                sigla: true,
+                cor: true,
+                cidade: true,
+                logo: true
+              }
+            },
+            timeClassificado2: {
+              select: {
+                id: true,
+                nome: true,
+                sigla: true,
+                cor: true,
+                cidade: true,
+                logo: true
+              }
+            }
+          },
+          orderBy: [
+            { fase: 'asc' },
+            { rodada: 'asc' }
+          ],
+          take: limite ? parseInt(limite as string) : undefined
+        })
+
+        console.log(`🎯 Encontrados ${playoffJogos.length} playoffs na tabela PlayoffJogo`)
+
+        // ✅ CRIAR ARRAY SEPARADO COM JOGOS FORMATADOS
+        const jogosFormatadosPlayoff = playoffJogos.map(playoff => ({
+          id: playoff.id,
+          timeCasa: playoff.timeClassificado1 || { id: 0, nome: 'TBD', sigla: 'TBD', cor: '#999999', cidade: 'TBD', logo: '' },
+          timeVisitante: playoff.timeClassificado2 || { id: 0, nome: 'TBD', sigla: 'TBD', cor: '#999999', cidade: 'TBD', logo: '' },
+          dataJogo: playoff.dataJogo,
+          local: playoff.local,
+          rodada: playoff.rodada,
+          fase: playoff.fase,
+          status: playoff.status,
+          placarCasa: playoff.placarTime1,
+          placarVisitante: playoff.placarTime2,
+          observacoes: playoff.observacoes,
+          conferencia: null,
+          regional: null
+        }))
+
+        // ✅ RETORNAR DIRETAMENTE OS PLAYOFFS FORMATADOS
+        res.json(jogosFormatadosPlayoff)
+        return
+      }
+    }
+
+    // ✅ RETORNAR JOGOS NORMAIS FORMATADOS
     const jogosFormatados = jogos.map(jogo => ({
       id: jogo.id,
       timeCasa: jogo.timeCasa,
@@ -747,23 +816,60 @@ superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) =
     const superliga = await buscarSuperligaPorTemporada(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
-    } else {
-      const playoffJogos = await prisma.playoffJogo.findMany({
-        where: { campeonatoId: superliga.id },
-        include: {
-          timeClassificado1: true,
-          timeClassificado2: true,
-          timeVencedor: true,
-          conferencia: true
-        },
-        orderBy: [
-          { fase: 'asc' },
-          { rodada: 'asc' }
-        ]
-      })
-
-      res.json(playoffJogos)
+      return
     }
+
+    // ✅ BUSCAR PLAYOFFS NA TABELA PLAYOFFJOGO
+    const playoffJogos = await prisma.playoffJogo.findMany({
+      where: { campeonatoId: superliga.id },
+      include: {
+        timeClassificado1: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            cidade: true,
+            logo: true
+          }
+        },
+        timeClassificado2: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            cidade: true,
+            logo: true
+          }
+        },
+        timeVencedor: {
+          select: {
+            id: true,
+            nome: true,
+            sigla: true,
+            cor: true,
+            cidade: true,
+            logo: true
+          }
+        },
+        conferencia: {
+          select: {
+            id: true,
+            nome: true,
+            tipo: true
+          }
+        }
+      },
+      orderBy: [
+        { fase: 'asc' },
+        { rodada: 'asc' }
+      ]
+    })
+
+    console.log(`🎯 Retornando ${playoffJogos.length} jogos de playoff para o frontend`)
+
+    res.json(playoffJogos)
   } catch (error) {
     console.error('Erro ao buscar bracket:', error)
     res.status(500).json({ error: 'Erro ao buscar bracket dos playoffs' })

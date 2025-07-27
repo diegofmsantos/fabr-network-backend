@@ -974,7 +974,7 @@ export async function gerarTodosPlayoffs(campeonatoId: number) {
 
         const playoffsPorConferencia: Record<string, number> = {}
         playoffsFinais.forEach(p => {
-            const conf = p.conferencia?.tipo || 'SEM_CONFERENCIA'
+            const conf = p.conferencia?.tipo || 'SEM CONFERENCIA'
             playoffsPorConferencia[conf] = (playoffsPorConferencia[conf] || 0) + 1
         })
 

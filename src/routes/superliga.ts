@@ -1369,4 +1369,37 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
   }
 })
 
+superligaRouter.get('/:temporada/bracket-playoffjogo', async (req: Request, res: Response) => {
+  try {
+    const { temporada } = req.params
+
+    const superliga = await buscarSuperligaPorTemporada(temporada)
+    if (!superliga) {
+      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
+      return
+    }
+
+    const playoffJogos = await prisma.playoffJogo.findMany({
+      where: { campeonatoId: superliga.id },
+      include: {
+        timeClassificado1: true,
+        timeClassificado2: true,
+        timeVencedor: true,
+        conferencia: true
+      },
+      orderBy: [
+        { fase: 'asc' },
+        { rodada: 'asc' }
+      ]
+    })
+
+    console.log(`🎯 Encontrados ${playoffJogos.length} jogos na tabela PlayoffJogo`)
+    res.json(playoffJogos)
+
+  } catch (error) {
+    console.error('Erro ao buscar PlayoffJogos:', error)
+    res.status(500).json({ error: 'Erro ao buscar PlayoffJogos' })
+  }
+})
+
 export default superligaRouter

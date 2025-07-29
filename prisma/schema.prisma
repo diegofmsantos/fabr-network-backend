@@ -1,3 +1,5 @@
+// prisma/schema.prisma - VERSÃO SIMPLIFICADA SEM PlayoffJogo
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -31,12 +33,9 @@ model Time {
 
   distribuicaoRegional DistribuicaoTime[]
 
-  playoffClassificado1 PlayoffJogo[] @relation("PlayoffTime1")
-  playoffClassificado2 PlayoffJogo[] @relation("PlayoffTime2")
-  playoffVitorias      PlayoffJogo[] @relation("PlayoffVencedor")
-
-  jogosCasa        Jogo[]               @relation("JogosCasa")
-  jogosVisitante   Jogo[]               @relation("JogosVisitante")
+  // ✅ APENAS UMA RELAÇÃO - TABELA JOGO ÚNICA
+  jogosCasa        Jogo[]            @relation("JogosCasa")
+  jogosVisitante   Jogo[]            @relation("JogosVisitante")
   estatisticasJogo EstatisticaJogo[]
 
   @@unique([sigla, temporada])
@@ -88,12 +87,6 @@ model Materia {
   updatedAt  DateTime
 }
 
-model MetaDados {
-  id    Int    @id @default(autoincrement())
-  chave String @unique
-  valor String @db.Text
-}
-
 model Campeonato {
   id         Int       @id @default(autoincrement())
   nome       String
@@ -109,30 +102,86 @@ model Campeonato {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  jogos        Jogo[]
-  conferencias Conferencia[]
-  PlayoffJogo  PlayoffJogo[]
-  
-  distribuicoesTimes DistribuicaoTime[]
+  // ✅ RELAÇÕES SIMPLIFICADAS - APENAS TABELA JOGO
+  jogos            Jogo[]
+  conferencias     Conferencia[]
+  distribuicaoTime DistribuicaoTime[]
+  estatisticasJogo EstatisticaJogo[]
 
+  @@unique([temporada, isSuperliga])
   @@index([temporada])
   @@index([status])
 }
 
+// ✅ MODELO JOGO ÚNICO - PARA TEMPORADA REGULAR E PLAYOFFS
+model Jogo {
+  id                      Int      @id @default(autoincrement())
+  campeonatoId            Int
+  timeVisitanteId         Int
+  timeCasaId              Int
+  dataJogo                DateTime
+  local                   String?
+  rodada                  Int
+  // ✅ CAMPO FASE - DIFERENCIA TEMPORADA REGULAR DOS PLAYOFFS
+  fase                    String // 'TEMPORADA REGULAR', 'WILD CARD', 'SEMIFINAL DE CONFERÊNCIA', etc.
+  status                  String   @default("AGENDADO")
+  placarCasa              Int?
+  placarVisitante         Int?
+  observacoes             String?
+  estatisticasProcessadas Boolean  @default(false)
+
+  // ✅ CAMPOS ADICIONAIS PARA PLAYOFFS (quando aplicável)
+  nome           String? // Nome do jogo (ex: "Final Nacional")
+  timeVencedorId Int? // ID do time vencedor (para playoffs)
+
+  // ✅ CAMPOS DE CONTEXTO REGIONAL (mantidos do schema original)
+  conferencia String?
+  regional    String?
+  temporada   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campeonato    Campeonato @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  timeCasa      Time       @relation("JogosCasa", fields: [timeCasaId], references: [id])
+  timeVisitante Time       @relation("JogosVisitante", fields: [timeVisitanteId], references: [id])
+
+  // ✅ RELACIONAMENTOS PARA CONTEXTO REGIONAL (opcional)
+  conferenciaRelacao Conferencia? @relation("ConferenciaJogos", fields: [conferenciaId], references: [id])
+  regionalRelacao    Regional?    @relation("RegionalJogos", fields: [regionalId], references: [id])
+  conferenciaId      Int?
+  regionalId         Int?
+
+  estatisticas EstatisticaJogo[]
+
+  @@index([campeonatoId, rodada])
+  @@index([dataJogo])
+  @@index([status])
+  @@index([timeCasaId])
+  @@index([timeVisitanteId])
+  @@index([conferencia])
+  @@index([regional])
+  @@index([temporada])
+  @@index([fase])
+  @@index([campeonatoId, fase])
+}
+
 model Conferencia {
   id           Int    @id @default(autoincrement())
-  nome         String 
-  tipo         String 
-  icone        String 
+  nome         String
+  tipo         String
+  icone        String
   campeonatoId Int
-  ordem        Int 
+  ordem        Int
   totalTimes   Int
 
-  campeonato   Campeonato    @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
-  regionais    Regional[]
-  playoffJogos PlayoffJogo[]
-  
-  distribuicoesTimes DistribuicaoTime[]
+  campeonato Campeonato @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
+  regionais  Regional[]
+
+  distribuicaoTime DistribuicaoTime[]
+
+  // ✅ RELAÇÃO SIMPLIFICADA - APENAS TABELA JOGO
+  jogos Jogo[] @relation("ConferenciaJogos")
 
   @@unique([campeonatoId, tipo])
   @@index([campeonatoId])
@@ -147,33 +196,36 @@ model Regional {
   timesPorRegional Int
 
   conferencia Conferencia @relation(fields: [conferenciaId], references: [id], onDelete: Cascade)
-  
-  distribuicoesTimes DistribuicaoTime[]
+
+  distribuicaoTime DistribuicaoTime[]
+
+  // ✅ RELAÇÃO SIMPLIFICADA - APENAS TABELA JOGO
+  jogos Jogo[] @relation("RegionalJogos")
 
   @@unique([conferenciaId, tipo])
   @@index([conferenciaId])
 }
 
 model DistribuicaoTime {
-  id           Int @id @default(autoincrement())
-  campeonatoId Int
+  id            Int    @id @default(autoincrement())
+  campeonatoId  Int
   conferenciaId Int
-  regionalId   Int
-  timeId       Int
-  temporada    String
-  
-  conferenciaType String 
+  regionalId    Int
+  timeId        Int
+  temporada     String
+
+  conferenciaType String
   regionalType    String
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  time        Time        @relation(fields: [timeId], references: [id], onDelete: Cascade)
   campeonato  Campeonato  @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
   conferencia Conferencia @relation(fields: [conferenciaId], references: [id], onDelete: Cascade)
   regional    Regional    @relation(fields: [regionalId], references: [id], onDelete: Cascade)
-  time        Time        @relation(fields: [timeId], references: [id], onDelete: Cascade)
 
-  @@unique([campeonatoId, timeId, temporada]) 
+  @@unique([campeonatoId, timeId, temporada])
   @@index([campeonatoId, temporada])
   @@index([conferenciaId])
   @@index([regionalId])
@@ -181,105 +233,24 @@ model DistribuicaoTime {
   @@index([temporada])
 }
 
-model PlayoffJogo {
-  id            Int    @id @default(autoincrement())
-  campeonatoId  Int
-  conferenciaId Int?
-  fase          String 
-  rodada        Int 
-  nome          String 
-
-  timeClassificado1Id Int? 
-  timeClassificado2Id Int? 
-  jogoAnterior1Id     Int?
-  jogoAnterior2Id     Int? 
-
-  timeVencedorId Int? 
-  dataJogo       DateTime?
-  local          String?
-  status         String    @default("AGUARDANDO") 
-  placarTime1    Int?
-  placarTime2    Int?
-  observacoes    String?
-
-  campeonato  Campeonato   @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
-  conferencia Conferencia? @relation(fields: [conferenciaId], references: [id], onDelete: SetNull)
-
-  timeClassificado1 Time? @relation("PlayoffTime1", fields: [timeClassificado1Id], references: [id])
-  timeClassificado2 Time? @relation("PlayoffTime2", fields: [timeClassificado2Id], references: [id])
-  timeVencedor      Time? @relation("PlayoffVencedor", fields: [timeVencedorId], references: [id])
-
-  jogoAnterior1 PlayoffJogo? @relation("JogoSequencia1", fields: [jogoAnterior1Id], references: [id])
-  jogoAnterior2 PlayoffJogo? @relation("JogoSequencia2", fields: [jogoAnterior2Id], references: [id])
-
-  proximosJogos1 PlayoffJogo[] @relation("JogoSequencia1")
-  proximosJogos2 PlayoffJogo[] @relation("JogoSequencia2")
-
-  @@index([campeonatoId, fase, rodada])
-  @@index([conferenciaId])
-}
-
-model Jogo {
-  id                      Int      @id @default(autoincrement())
-  campeonatoId            Int
-  timeVisitanteId         Int
-  timeCasaId              Int
-  dataJogo                DateTime
-  local                   String?
-  rodada                  Int
-  fase                    String
-  status                  String   @default("AGENDADO")
-  placarCasa              Int?
-  placarVisitante         Int?
-  observacoes             String?
-  estatisticasProcessadas Boolean  @default(false)
-  
-  conferencia             String? 
-  regional                String?
-  temporada               String? 
-  
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-
-  campeonato    Campeonato        @relation(fields: [campeonatoId], references: [id], onDelete: Cascade)
-  timeCasa      Time              @relation("JogosCasa", fields: [timeCasaId], references: [id])
-  timeVisitante Time              @relation("JogosVisitante", fields: [timeVisitanteId], references: [id])
-  estatisticas  EstatisticaJogo[]
-
-  @@index([campeonatoId, rodada])
-  @@index([dataJogo])
-  @@index([status])
-  @@index([timeCasaId])
-  @@index([timeVisitanteId])
-  @@index([conferencia]) 
-  @@index([regional])   
-  @@index([temporada])   
-  @@index([fase])    
-}
-
 model EstatisticaJogo {
   id           Int  @id @default(autoincrement())
   jogoId       Int
   jogadorId    Int
   timeId       Int
+  campeonatoId Int
   estatisticas Json
-  
-  temporada    String?  
-  rodada       Int?    
-  fase         String?  
-  
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 
-  jogo    Jogo    @relation(fields: [jogoId], references: [id], onDelete: Cascade)
-  jogador Jogador @relation(fields: [jogadorId], references: [id], onDelete: Cascade)
-  time    Time    @relation(fields: [timeId], references: [id], onDelete: Cascade)
+  temporada String?
+  rodada    Int?
+  fase      String?
+
+  jogo       Jogo       @relation(fields: [jogoId], references: [id])
+  jogador    Jogador    @relation(fields: [jogadorId], references: [id])
+  time       Time       @relation(fields: [timeId], references: [id])
+  campeonato Campeonato @relation(fields: [campeonatoId], references: [id])
 
   @@unique([jogoId, jogadorId])
-  @@index([jogoId])
-  @@index([jogadorId])
-  @@index([timeId]) 
-  @@index([temporada])
-  @@index([rodada])
-  @@index([fase])
+  @@index([campeonatoId, timeId])
+  @@index([campeonatoId, jogadorId])
 }

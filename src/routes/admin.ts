@@ -777,6 +777,8 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
     }
 })
 
+// SUBSTITUA A FUNÇÃO COMPLETA adminRouter.post('/importar-agenda-jogos') em src/routes/admin.ts
+
 adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req: Request, res: Response) => {
     try {
         console.log('📋 Iniciando importação de agenda de jogos...')
@@ -788,6 +790,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
         console.log(`Arquivo recebido: ${req.file.path}`)
 
+        // ✅ BUSCAR SUPERLIGA
         const superliga = await prisma.campeonato.findFirst({
             where: {
                 temporada: '2025',
@@ -800,27 +803,9 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             return
         }
 
-        const timesDistribuidos = await prisma.distribuicaoTime.count({
-            where: {
-                campeonatoId: superliga.id,
-                temporada: '2025'
-            }
-        })
+        console.log(`✅ Superliga encontrada: ID ${superliga.id}`)
 
-        console.log(`🎯 Verificação: ${timesDistribuidos} times distribuídos para a Superliga`)
-
-        if (timesDistribuidos === 0) {
-            res.status(400).json({
-                error: 'Execute o script de distribuição dos times antes de importar a agenda',
-                detalhes: 'Nenhum time foi encontrado na distribuição das conferências'
-            })
-            return
-        }
-
-        if (timesDistribuidos < 32) {
-            console.log(`⚠️  Aviso: Apenas ${timesDistribuidos}/32 times distribuídos, mas prosseguindo...`)
-        }
-
+        // ✅ LER PLANILHA
         const workbook = xlsx.readFile(req.file.path)
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
@@ -833,172 +818,107 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             return
         }
 
+        // ✅ BUSCAR TODOS OS TIMES REAIS
         const times = await prisma.time.findMany({
             where: { temporada: '2025' },
             select: { id: true, nome: true, sigla: true }
         })
 
-        const mapaTimes = new Map<string, typeof times[0]>()
+        console.log(`📋 Times encontrados no banco: ${times.length}`)
+
+        // ✅ CRIAR MAPA DE TIMES PARA BUSCA RÁPIDA
+        const mapaTimes = new Map<string, { id: number; nome: string; sigla: string }>()
         times.forEach(time => {
             mapaTimes.set(time.nome.toLowerCase().trim(), time)
-            mapaTimes.set(time.sigla.toLowerCase().trim(), time)
         })
 
-        console.log(`🗺️  Mapa criado com ${mapaTimes.size} entradas para ${times.length} times`)
-
-        const distribuicao = await prisma.distribuicaoTime.findMany({
-            where: { campeonatoId: superliga.id },
-            include: {
-                conferencia: { select: { nome: true, tipo: true } },
-                regional: { select: { nome: true, tipo: true } }
-            }
-        })
-
-        const mapaDistribuicao = new Map<number, any>()
-        distribuicao.forEach(dist => {
-            mapaDistribuicao.set(dist.timeId, {
-                conferencia: dist.conferenciaType,
-                regional: dist.regionalType,
-                conferenciaObj: dist.conferencia,
-                regionalObj: dist.regional
-            })
-        })
-
+        // ✅ VARIÁVEIS DE CONTROLE
         const resultados = {
-            jogosTemporadaRegular: 0,
-            jogosPlayoffMock: 0,
-            erros: [] as any[],
-            warnings: [] as any[]
+            jogosImportados: 0,
+            jogosPulados: 0,
+            erros: [] as Array<{ linha: number; erro: string }>,
+            warnings: [] as Array<{ linha: number; warning: string }>
         }
 
+        console.log('🚀 Iniciando processamento dos jogos...')
+
+        // ✅ PROCESSAR CADA JOGO DA PLANILHA
         for (let i = 0; i < jogosRaw.length; i++) {
             const jogoData = jogosRaw[i] as any
-            const linha = i + 2
+            const linha = i + 1
 
             try {
-                // ✅ EXTRAIR NOMES DOS TIMES
-                const nomeTimeCasa = jogoData.time_mandante?.toString().trim() || jogoData.time_casa?.toString().trim()
-                const nomeTimeVisitante = jogoData.time_visitante?.toString().trim()
+                // ✅ VERIFICAR SE OS TIMES ESTÃO PREENCHIDOS
+                const nomeTimeCasa = jogoData.time_mandante?.toString()?.trim() || ''
+                const nomeTimeVisitante = jogoData.time_visitante?.toString()?.trim() || ''
 
-                // ✅ DETECTAR SE É JOGO DE PLAYOFF (campos vazios)
-                const isJogoPlayoff = !nomeTimeCasa || !nomeTimeVisitante ||
+                // ✅ PULAR LINHAS COM TIMES VAZIOS (PLAYOFFS)
+                if (!nomeTimeCasa || !nomeTimeVisitante ||
                     nomeTimeCasa === '' || nomeTimeVisitante === '' ||
-                    nomeTimeCasa === 'undefined' || nomeTimeVisitante === 'undefined' ||
-                    nomeTimeCasa.includes('A definir') || nomeTimeVisitante.includes('A definir') ||
-                    nomeTimeCasa.includes('TBD') || nomeTimeVisitante.includes('TBD')
+                    nomeTimeCasa.toLowerCase() === 'tbd' || nomeTimeVisitante.toLowerCase() === 'tbd' ||
+                    nomeTimeCasa.toLowerCase().includes('a definir') || nomeTimeVisitante.toLowerCase().includes('a definir')) {
 
-                let timeCasa, timeVisitante
-
-                if (isJogoPlayoff) {
-                    // ✅ JOGO DE PLAYOFF - CRIAR MOCK VARIADO
-                    const timesArray = Array.from(mapaTimes.values())
-
-                    if (timesArray.length < 2) {
-                        resultados.erros.push({
-                            linha,
-                            erro: 'Não há times suficientes para criar mock de playoff'
-                        })
-                        continue
-                    }
-
-                    // Criar combinações diferentes para cada jogo
-                    const jogoIndex = linha - 65 // Primeiro playoff é linha 65
-                    const indexCasa = (jogoIndex * 3) % timesArray.length
-                    let indexVisitante = (jogoIndex * 3 + 7) % timesArray.length
-
-                    // Garantir que não seja o mesmo time
-                    if (indexCasa === indexVisitante) {
-                        indexVisitante = (indexVisitante + 1) % timesArray.length
-                    }
-
-                    timeCasa = timesArray[indexCasa]
-                    timeVisitante = timesArray[indexVisitante]
-
-                    console.log(`🏈 Playoff mock criado: linha ${linha} - ${timeCasa.nome} vs ${timeVisitante.nome} (temporário)`)
-                } else {
-                    // ✅ JOGO DE TEMPORADA REGULAR - BUSCAR TIMES REAIS
-                    timeCasa = mapaTimes.get(nomeTimeCasa.toLowerCase().trim())
-                    if (!timeCasa) {
-                        resultados.erros.push({
-                            linha,
-                            jogo: `${nomeTimeCasa} vs ${nomeTimeVisitante}`,
-                            erro: `Time mandante "${nomeTimeCasa}" não encontrado`
-                        })
-                        continue
-                    }
-
-                    timeVisitante = mapaTimes.get(nomeTimeVisitante.toLowerCase().trim())
-                    if (!timeVisitante) {
-                        resultados.erros.push({
-                            linha,
-                            jogo: `${nomeTimeCasa} vs ${nomeTimeVisitante}`,
-                            erro: `Time visitante "${nomeTimeVisitante}" não encontrado`
-                        })
-                        continue
-                    }
-                }
-
-                // ✅ PROCESSAR DATA DO JOGO
-                let dataJogo: Date
-                try {
-                    if (typeof jogoData.data === 'number') {
-                        dataJogo = new Date((jogoData.data - 25569) * 86400 * 1000)
-                    } else {
-                        dataJogo = new Date(jogoData.data)
-                    }
-
-                    if (isNaN(dataJogo.getTime())) {
-                        throw new Error('Data inválida')
-                    }
-                } catch {
-                    resultados.erros.push({
+                    resultados.jogosPulados++
+                    resultados.warnings.push({
                         linha,
-                        erro: `Data inválida: ${jogoData.data || 'Data não informada'}`
+                        warning: `Jogo ${jogoData.id_jogo || linha} pulado - times não definidos (provavelmente playoff)`
                     })
                     continue
                 }
 
-                // ✅ OBTER CONTEXTO REGIONAL (só para temporada regular)
-                let conferenciaJogo = null
-                let regionalJogo = null
+                // ✅ BUSCAR IDS DOS TIMES
+                const timeCasa = mapaTimes.get(nomeTimeCasa.toLowerCase())
+                const timeVisitante = mapaTimes.get(nomeTimeVisitante.toLowerCase())
 
-                if (!isJogoPlayoff) {
-                    const distCasa = mapaDistribuicao.get(timeCasa.id)
-                    conferenciaJogo = jogoData.conferencia || distCasa?.conferencia || 'Geral'
-                    regionalJogo = jogoData.regional || distCasa?.regional || null
+                if (!timeCasa) {
+                    resultados.erros.push({
+                        linha,
+                        erro: `Time mandante não encontrado: "${nomeTimeCasa}"`
+                    })
+                    continue
                 }
 
-                // ✅ CRIAR JOGO
-                const novoJogo = await prisma.jogo.create({
+                if (!timeVisitante) {
+                    resultados.erros.push({
+                        linha,
+                        erro: `Time visitante não encontrado: "${nomeTimeVisitante}"`
+                    })
+                    continue
+                }
+
+                // ✅ PREPARAR DADOS DO JOGO
+                const dataJogo = new Date(jogoData.data)
+                if (isNaN(dataJogo.getTime())) {
+                    resultados.erros.push({
+                        linha,
+                        erro: `Data inválida: "${jogoData.data}"`
+                    })
+                    continue
+                }
+
+                // ✅ CRIAR JOGO NO BANCO DE DADOS
+                await prisma.jogo.create({
                     data: {
                         campeonatoId: superliga.id,
                         timeCasaId: timeCasa.id,
                         timeVisitanteId: timeVisitante.id,
                         dataJogo: dataJogo,
-                        local: jogoData.local || jogoData.estadio || (isJogoPlayoff ? 'A definir' : (timeCasa?.nome || 'Local não definido')),
+                        local: jogoData.local || timeCasa.nome,
                         rodada: parseInt(jogoData.rodada?.toString() || '1'),
                         fase: jogoData.fase || 'TEMPORADA REGULAR',
                         status: 'AGENDADO',
-                        // ✅ MARCAR JOGOS MOCK
-                        observacoes: isJogoPlayoff
-                            ? 'MOCK - Times serão definidos após temporada regular'
-                            : (jogoData.observacoes || null),
-                        conferencia: conferenciaJogo,
-                        regional: regionalJogo,
+                        observacoes: jogoData.observacoes || null,
+                        conferencia: jogoData.conferencia || null,
+                        regional: jogoData.regional || null,
                         temporada: '2025'
                     }
                 })
 
-                // ✅ CONTABILIZAR RESULTADOS
-                if (isJogoPlayoff) {
-                    resultados.jogosPlayoffMock++
-                } else {
-                    resultados.jogosTemporadaRegular++
-                }
+                resultados.jogosImportados++
 
-                // ✅ LOG DE PROGRESSO
-                if (i % 10 === 0) {
-                    console.log(`📊 Processando: ${i + 1}/${jogosRaw.length}`)
+                // ✅ LOG DE PROGRESSO A CADA 10 JOGOS
+                if ((resultados.jogosImportados) % 10 === 0) {
+                    console.log(`📊 Processados: ${resultados.jogosImportados} jogos importados, ${resultados.jogosPulados} pulados`)
                 }
 
             } catch (error) {
@@ -1014,33 +934,31 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
         try {
             fs.unlinkSync(req.file.path)
         } catch (cleanupError) {
-            console.warn('⚠️  Não foi possível remover arquivo temporário:', cleanupError)
+            console.warn('⚠️ Não foi possível remover arquivo temporário:', cleanupError)
         }
 
         // ✅ RESPOSTA FINAL
-        const totalJogos = resultados.jogosTemporadaRegular + resultados.jogosPlayoffMock
-
         const resposta = {
             message: `Agenda importada com sucesso!`,
             resumo: {
-                totalJogos,
-                jogosTemporadaRegular: resultados.jogosTemporadaRegular,
-                jogosPlayoffs: resultados.jogosPlayoffMock,
-                jogosComErro: resultados.erros.length
+                jogosImportados: resultados.jogosImportados,
+                jogosPulados: resultados.jogosPulados,
+                jogosComErro: resultados.erros.length,
+                totalProcessado: jogosRaw.length
             },
             detalhes: {
                 totalLinhas: jogosRaw.length,
                 erros: resultados.erros.length > 0 ? resultados.erros : undefined,
                 warnings: resultados.warnings.length > 0 ? resultados.warnings : undefined
             },
-            proximaEtapa: 'Agora você pode importar os resultados dos jogos conforme eles acontecem'
+            proximaEtapa: 'Importe os resultados da temporada regular. Os playoffs serão criados conforme você importar seus resultados.'
         }
 
         console.log('✅ Importação da agenda finalizada:')
-        console.log(`   📊 Jogos temporada regular: ${resultados.jogosTemporadaRegular}`)
-        console.log(`   🏈 Jogos playoff (mock): ${resultados.jogosPlayoffMock}`)
-        console.log(`   📋 Total de jogos: ${totalJogos}`)
+        console.log(`   📊 Jogos importados: ${resultados.jogosImportados}`)
+        console.log(`   ⏭️ Jogos pulados (playoffs): ${resultados.jogosPulados}`)
         console.log(`   ❌ Erros: ${resultados.erros.length}`)
+        console.log(`   ⚠️ Warnings: ${resultados.warnings.length}`)
 
         res.status(200).json(resposta)
 
@@ -2704,92 +2622,64 @@ adminRouter.post('/reset-database', async (req, res) => {
         await prisma.time.deleteMany()
         console.log('   ✅ Time limpa')
 
-
         await prisma.materia.deleteMany()
         console.log('   ✅ Materia limpa')
 
         console.log('🔄 Resetando sequences...')
 
+        // ✅ CORRIGIDO: Usando prisma.$executeRaw e removendo PlayoffJogo_id_seq inexistente
         try {
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Time_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Jogador_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "JogadorTime_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Materia_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "MetaDados_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Campeonato_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Conferencia_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Regional_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "DistribuicaoTime_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "PlayoffJogo_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "Jogo_id_seq" RESTART WITH 1;')
-            await prisma.$executeRawUnsafe('ALTER SEQUENCE "EstatisticaJogo_id_seq" RESTART WITH 1;')
+            await prisma.$executeRaw`ALTER SEQUENCE "Time_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Jogador_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "JogadorTime_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Materia_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Campeonato_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Conferencia_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Regional_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "DistribuicaoTime_id_seq" RESTART WITH 1`
+            // ✅ REMOVIDO: await prisma.$executeRaw`ALTER SEQUENCE "PlayoffJogo_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Jogo_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "EstatisticaJogo_id_seq" RESTART WITH 1`
 
             console.log('✅ Sequences resetadas com sucesso!')
-        } catch (sequenceError) {
-            console.log('⚠️ Algumas sequences podem não existir ainda (normal em banco novo)')
+        } catch (error) {
+            console.error('⚠️ Erro ao resetar sequences:', error)
+            // Continua mesmo com erro (algumas sequences podem não existir)
         }
 
+        // Verificação final
         const counts = await Promise.all([
             prisma.time.count(),
             prisma.jogador.count(),
-            prisma.jogadorTime.count(),
             prisma.campeonato.count(),
-            prisma.conferencia.count(),
-            prisma.regional.count(),
-            prisma.distribuicaoTime.count(),
-            prisma.jogo.count(),
-            prisma.estatisticaJogo.count(),
-            prisma.materia.count(),
+            prisma.jogo.count()
         ])
 
-        console.log('📊 Contagem final:')
+        console.log('📊 Verificação final:')
         console.log(`   Times: ${counts[0]}`)
         console.log(`   Jogadores: ${counts[1]}`)
-        console.log(`   Jogador-Time: ${counts[2]}`)
-        console.log(`   Campeonatos: ${counts[3]}`)
-        console.log(`   Conferências: ${counts[4]}`)
-        console.log(`   Regionais: ${counts[5]}`)
-        console.log(`   Distribuições: ${counts[6]}`)
-        console.log(`   Jogos: ${counts[7]}`)
-        console.log(`   Estatísticas: ${counts[8]}`)
-        console.log(`   Matérias: ${counts[9]}`)
+        console.log(`   Campeonatos: ${counts[2]}`)
+        console.log(`   Jogos: ${counts[3]}`)
 
-        if (counts.every(count => count === 0)) {
-            console.log('🎉 BANCO ZERADO COM SUCESSO!')
-
-            res.status(200).json({
-                success: true,
-                message: 'Banco de dados resetado com sucesso!',
-                counts: {
+        res.json({
+            message: 'Banco de dados resetado com sucesso',
+            detalhes: {
+                tabelas_limpas: 10,
+                sequences_resetadas: 10,
+                verificacao: {
                     times: counts[0],
                     jogadores: counts[1],
-                    campeonatos: counts[3],
-                    jogos: counts[7]
+                    campeonatos: counts[2],
+                    jogos: counts[3]
                 }
-            })
-        } else {
-            console.log('⚠️ Alguns dados podem não ter sido removidos')
-
-            res.status(200).json({
-                success: true,
-                message: 'Reset concluído com avisos',
-                counts: {
-                    times: counts[0],
-                    jogadores: counts[1],
-                    campeonatos: counts[3],
-                    jogos: counts[7]
-                },
-                warnings: 'Alguns registros podem não ter sido removidos'
-            })
-        }
+            }
+        })
 
     } catch (error) {
-        console.error('❌ Erro ao resetar banco:', error)
-
+        console.error('❌ Erro no reset do banco:', error)
         res.status(500).json({
-            success: false,
-            message: 'Erro ao resetar banco de dados',
-            error: error instanceof Error ? error.message : 'Erro desconhecido'
+            error: 'Erro ao resetar banco de dados',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
     }
 })

@@ -21,7 +21,7 @@ export async function gerarJogosTemporadaRegular(campeonatoId: number) {
     }
 
     const { temporada } = superliga
-    
+
     const todosTimes = await prisma.time.findMany({
       where: { temporada }
     })
@@ -31,26 +31,26 @@ export async function gerarJogosTemporadaRegular(campeonatoId: number) {
     }
 
     const timesPorRegional: { [key: string]: any[] } = {}
-    
+
     for (const [regionalTipo, nomesEsperados] of Object.entries(TIMES_SUPERLIGA)) {
-      const timesDoRegional = todosTimes.filter(time => 
+      const timesDoRegional = todosTimes.filter(time =>
         nomesEsperados.includes(time.nome)
       )
       timesPorRegional[regionalTipo] = timesDoRegional
     }
 
     const jogosIntraRegionais = await gerarJogosIntraRegionais(
-      campeonatoId, 
-      timesPorRegional, 
+      campeonatoId,
+      timesPorRegional,
       new Date('2025-07-05'),
-      7 
+      7
     )
 
     const jogosInterRegionais = await gerarJogosInterRegionais(
       campeonatoId,
       timesPorRegional,
       new Date('2025-08-15'),
-      10 
+      10
     )
 
     const todosJogos = [...jogosIntraRegionais, ...jogosInterRegionais]
@@ -105,7 +105,7 @@ async function gerarJogosIntraRegionais(
         jogosIntraRegionais.push(jogo)
 
         dataAtual = new Date(dataAtual.getTime() + intervaloDias * 24 * 60 * 60 * 1000)
-        
+
         if (jogosIntraRegionais.length % 8 === 0) {
           rodadaAtual++
         }
@@ -132,15 +132,15 @@ async function gerarJogosInterRegionais(
     for (let j = i + 1; j < regionais.length; j++) {
       const regionalA = regionais[i]
       const regionalB = regionais[j]
-      
+
       const timesA = timesPorRegional[regionalA]
       const timesB = timesPorRegional[regionalB]
 
       const mesmaConferencia = await verificarMesmaConferencia(regionalA, regionalB)
-      
+
       if (mesmaConferencia) {
         const numJogos = Math.min(2, timesA.length, timesB.length)
-        
+
         for (let k = 0; k < numJogos; k++) {
           const timeA = timesA[k % timesA.length]
           const timeB = timesB[k % timesB.length]
@@ -152,7 +152,7 @@ async function gerarJogosInterRegionais(
             timeCasaId: timeCasa.id,
             timeVisitanteId: timeVisitante.id,
             dataJogo: new Date(dataAtual),
-            rodada: Math.floor(contadorJogo / 8) + 3, 
+            rodada: Math.floor(contadorJogo / 8) + 3,
             fase: 'TEMPORADA REGULAR',
             status: 'AGENDADO',
             local: timeCasa.estadio || `Estádio ${timeCasa.cidade}`,
@@ -204,8 +204,8 @@ export async function obterJogosPorConferencia(campeonatoId: number) {
   })
 
   for (const jogo of jogos) {
-    const conferenciaCasa = await obterConferenciaPorTime(jogo.timeCasa.nome)
-    
+    const conferenciaCasa = jogo.timeCasa ? await obterConferenciaPorTime(jogo.timeCasa.nome) : null
+
     if (conferenciaCasa) {
       jogosPorConferencia[conferenciaCasa] = (jogosPorConferencia[conferenciaCasa] || 0) + 1
     }
@@ -221,11 +221,11 @@ async function obterConferenciaPorTime(nomeTime: string): Promise<string | null>
         where: { tipo: regionalTipo },
         include: { conferencia: true }
       })
-      
+
       return regional?.conferencia?.tipo || null
     }
   }
-  
+
   return null
 }
 
@@ -281,8 +281,8 @@ export async function validarTemporadaRegular(campeonatoId: number) {
       },
       jogosPorTime: Object.fromEntries(jogosPorTime),
       validacao: {
-        balanceado: (maxJogos - minJogos) <= 1, 
-        completo: minJogos >= 3 
+        balanceado: (maxJogos - minJogos) <= 1,
+        completo: minJogos >= 3
       }
     }
 

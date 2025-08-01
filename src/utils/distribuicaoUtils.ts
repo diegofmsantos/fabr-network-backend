@@ -2,7 +2,6 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-
 export async function buscarDistribuicaoCompleta(campeonatoId: number) {
   const distribuicao = await prisma.distribuicaoTime.findMany({
     where: { campeonatoId },
@@ -114,7 +113,7 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
     const placarCasa = jogo.placarCasa || 0;
     const placarVisitante = jogo.placarVisitante || 0;
 
-    if (timeIds.includes(jogo.timeCasaId)) {
+    if (jogo.timeCasaId && timeIds.includes(jogo.timeCasaId)) {
       const stats = estatisticas.get(jogo.timeCasaId)!;
       stats.jogos++;
       stats.pontosPro += placarCasa;
@@ -127,7 +126,7 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
       }
     }
 
-    if (timeIds.includes(jogo.timeVisitanteId)) {
+    if (jogo.timeVisitanteId && timeIds.includes(jogo.timeVisitanteId)) {
       const stats = estatisticas.get(jogo.timeVisitanteId)!;
       stats.jogos++;
       stats.pontosPro += placarVisitante;

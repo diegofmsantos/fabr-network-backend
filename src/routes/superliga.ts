@@ -1,8 +1,7 @@
 import express, { Request, Response } from 'express'
 import { prisma } from '../libs/prisma'
-import { gerarFinalNacional } from '../utils/superligaRanking'
 import { SUPERLIGA_CONFIG } from '../types'
-import { distribuirTimesAutomaticamente, simularResultadosPlayoffs } from '../utils/superligaUtils'
+import { distribuirTimesAutomaticamente } from '../utils/superligaUtils'
 import { gerarJogosTemporadaRegular } from '../utils/superligaJogosUtils'
 
 const superligaRouter = express.Router()
@@ -530,12 +529,10 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
       return
     }
 
-    // ✅ CONSTRUIR FILTROS DINAMICAMENTE
     const where: any = {
       campeonatoId: superliga.id
     }
 
-    // Filtro por conferência
     if (conferencia && typeof conferencia === 'string') {
       const conf = await prisma.conferencia.findFirst({
         where: {
@@ -548,23 +545,19 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
       }
     }
 
-    // Filtro por fase(s) - pode ser uma string com vírgulas
     if (fase && typeof fase === 'string') {
       const fases = fase.split(',').map(f => f.trim())
       where.fase = fases.length === 1 ? fases[0] : { in: fases }
     }
 
-    // Filtro por rodada
     if (rodada) {
       where.rodada = parseInt(rodada as string)
     }
 
-    // Filtro por status
     if (status && typeof status === 'string') {
       where.status = status
     }
 
-    // ✅ BUSCA ÚNICA NA TABELA JOGO
     const jogos = await prisma.jogo.findMany({
       where,
       include: {
@@ -588,7 +581,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
             logo: true
           }
         },
-        // ✅ CORRIGIR: usar conferenciaRelacao ao invés de conferencia
         conferenciaRelacao: {
           select: {
             id: true,
@@ -596,7 +588,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
             tipo: true
           }
         },
-        // ✅ CORRIGIR: usar regionalRelacao ao invés de regional
         regionalRelacao: {
           select: {
             id: true,
@@ -615,7 +606,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
 
     console.log(`🎯 Encontrados ${jogos.length} jogos para temporada ${temporada}`)
 
-    // ✅ FORMATAÇÃO ÚNICA PARA TODOS OS JOGOS
     const jogosFormatados = jogos.map(jogo => ({
       id: jogo.id,
       timeCasa: jogo.timeCasa,
@@ -628,18 +618,15 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
       placarCasa: jogo.placarCasa,
       placarVisitante: jogo.placarVisitante,
       observacoes: jogo.observacoes,
-      nome: jogo.nome, // Para playoffs com nomes especiais
-      timeVencedorId: jogo.timeVencedorId, // Para playoffs
+      nome: jogo.nome, 
+      timeVencedorId: jogo.timeVencedorId, 
       conferencia: jogo.conferencia,
       regional: jogo.regional
     }))
 
-    // ✅ RESPOSTA CONSISTENTE
     if (fase && typeof fase === 'string' && fase.includes('WILD CARD,SEMIFINAL')) {
-      // Para consultas de playoffs específicas, retornar array direto
       res.json(jogosFormatados)
     } else {
-      // Para consultas gerais, retornar objeto com metadados
       res.json({
         jogos: jogosFormatados,
         total: jogosFormatados.length,
@@ -816,7 +803,6 @@ superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) =
       return
     }
 
-    // ✅ BUSCAR APENAS JOGOS DE PLAYOFF NA TABELA ÚNICA
     const playoffJogos = await prisma.jogo.findMany({
       where: {
         campeonatoId: superliga.id,
@@ -845,7 +831,6 @@ superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) =
             logo: true
           }
         },
-        // ✅ USAR O NOME CORRETO DA RELAÇÃO
         conferenciaRelacao: {
           select: {
             id: true,
@@ -862,17 +847,14 @@ superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) =
 
     console.log(`🎯 Retornando ${playoffJogos.length} jogos de playoff para o frontend`)
 
-    // ✅ FORMATAÇÃO COMPATÍVEL COM FRONTEND EXISTENTE
     const jogosFormatados = playoffJogos.map(jogo => {
-      // Determinar o vencedor baseado no timeVencedorId
       let timeVencedor = null
       if (jogo.timeVencedorId) {
-        timeVencedor = jogo.timeVencedorId === jogo.timeCasa.id ? jogo.timeCasa : jogo.timeVisitante
+        timeVencedor = jogo.timeVencedorId === jogo.timeCasa?.id ? jogo.timeCasa : jogo.timeVisitante
       }
 
       return {
         id: jogo.id,
-        // ✅ COMPATIBILIDADE: manter nomes antigos para o frontend
         timeClassificado1: jogo.timeCasa,
         timeClassificado2: jogo.timeVisitante,
         placarTime1: jogo.placarCasa,
@@ -926,50 +908,6 @@ superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Respo
   }
 })
 
-superligaRouter.post('/:temporada/gerar-fase-nacional', async (req: Request, res: Response) => {
-  try {
-    const { temporada } = req.params
-
-    const superliga = await buscarSuperligaPorTemporada(temporada)
-    if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
-    } else {
-      const resultado = await gerarFinalNacional(superliga.id)
-
-      res.status(201).json({
-        message: 'Fase nacional gerada com sucesso!',
-        ...resultado
-      })
-    }
-  } catch (error) {
-    console.error('Erro ao gerar fase nacional:', error)
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Erro ao gerar final nacional'
-    })
-  }
-})
-
-superligaRouter.post('/:temporada/simular-playoffs', async (req: Request, res: Response) => {
-  try {
-    const { temporada } = req.params
-
-    const superliga = await buscarSuperligaPorTemporada(temporada)
-    if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
-    } else {
-      const resultado = await simularResultadosPlayoffs(superliga.id)
-
-      res.json({
-        ...resultado
-      })
-    }
-  } catch (error) {
-    console.error('Erro ao simular playoffs:', error)
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Erro ao simular playoffs'
-    })
-  }
-})
 
 superligaRouter.delete('/:temporada', async (req: Request, res: Response) => {
   try {
@@ -1231,7 +1169,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
       return
     }
 
-    // Construir filtros dinâmicos
     const whereConditions: any = {
       campeonatoId: superliga.id
     }
@@ -1313,7 +1250,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
     console.log(`🔍 [SUPERLIGA] Buscando jogos para temporada ${temporada}`)
     console.log(`📊 [SUPERLIGA] Filtros recebidos:`, { status, fase, rodada, conferencia, regional, timeId, limite })
 
-    // ✅ BUSCAR A SUPERLIGA
     const superliga = await prisma.campeonato.findFirst({
       where: {
         temporada: temporada,
@@ -1341,12 +1277,10 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
     console.log(`✅ [SUPERLIGA] Encontrada: ${superliga.nome} (ID: ${superliga.id})`)
     console.log(`📊 [SUPERLIGA] Total de jogos no banco: ${superliga._count.jogos}`)
 
-    // ✅ CONSTRUIR FILTROS DE BUSCA
     const whereClause: any = {
       campeonatoId: superliga.id
     }
 
-    // Aplicar filtros opcionais
     if (status && status !== 'todos') {
       whereClause.status = status
       console.log(`🔍 [SUPERLIGA] Filtro status: ${status}`)
@@ -1383,7 +1317,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
 
     console.log(`🔍 [SUPERLIGA] Query final:`, JSON.stringify(whereClause, null, 2))
 
-    // ✅ BUSCAR JOGOS COM RELACIONAMENTOS
     const jogos = await prisma.jogo.findMany({
       where: whereClause,
       include: {
@@ -1419,7 +1352,6 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
             isSuperliga: true
           }
         },
-        // ✅ INCLUIR ESTATÍSTICAS SE NECESSÁRIO
         estatisticas: {
           select: {
             id: true,
@@ -1441,7 +1373,7 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
               }
             }
           },
-          take: 50 // Limitar para performance
+          take: 50 
         }
       },
       orderBy: [
@@ -1449,7 +1381,7 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
         { dataJogo: 'asc' },
         { id: 'asc' }
       ],
-      take: limite ? Math.min(parseInt(limite as string), 100) : undefined // Máximo 100 jogos
+      take: limite ? Math.min(parseInt(limite as string), 100) : undefined 
     })
 
     console.log(`✅ [SUPERLIGA] Encontrados ${jogos.length} jogos`)
@@ -1457,13 +1389,12 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
       id: j.id,
       rodada: j.rodada,
       fase: j.fase,
-      timeCasa: j.timeCasa.sigla,
-      timeVisitante: j.timeVisitante.sigla,
+      timeCasa: j.timeCasa?.sigla,
+      timeVisitante: j.timeVisitante?.sigla,
       status: j.status,
       data: j.dataJogo
     })))
 
-    // ✅ RESPOSTA COM LOGS PARA DEBUG
     res.json({
       jogos,
       meta: {

@@ -84,327 +84,7 @@ adminRouter.get('/transferencias-json', (req: Request, res: Response) => {
     }
 });
 
-adminRouter.post('/iniciar-temporada/:ano', async (req, res) => {
-    const result = await prisma.$transaction(async (tx) => {
-        try {
-            const { ano } = req.params;
-            const anoAnterior = (parseInt(ano) - 1).toString();
-
-            interface TimeChange {
-                timeId: number;
-                nome?: string;
-                sigla?: string;
-                cor?: string;
-                instagram?: string;
-                instagram2?: string;
-                logo?: string;
-                capacete?: string;
-                presidente?: string;
-                head_coach?: string;
-                instagram_coach?: string
-                coord_ofen?: string;
-                coord_defen?: string;
-            }
-
-            interface Transferencia {
-                jogadorId: number;
-                jogadorNome?: string;
-                timeOrigemId?: number;
-                timeOrigemNome?: string;
-                novoTimeId: number;
-                novoTimeNome?: string;
-                novaPosicao?: string;
-                novoSetor?: string;
-                novoNumero?: number;
-                novaCamisa?: string;
-            }
-
-            const timesAnoAnterior = await tx.time.findMany({
-                where: { temporada: anoAnterior },
-            });
-
-            if (timesAnoAnterior.length === 0) {
-                throw new Error(`Nenhum time encontrado na temporada ${anoAnterior}`);
-            }
-
-            const mapeamentoIds = new Map();
-            const mapeamentoNomes = new Map();
-
-            const timesNovos = [];
-            for (const time of timesAnoAnterior) {
-                const timeId = time.id;
-                const nomeAntigo = time.nome;
-
-                const timeChanges: TimeChange[] = req.body.timeChanges || [];
-                const timeChange = timeChanges.find((tc: TimeChange) => tc.timeId === timeId);
-
-                const nomeNovo = timeChange?.nome || time.nome;
-
-                const novoTime = await tx.time.create({
-                    data: {
-                        nome: nomeNovo,
-                        sigla: timeChange?.sigla || time.sigla,
-                        cor: timeChange?.cor || time.cor,
-                        cidade: time.cidade,
-                        bandeira_estado: time.bandeira_estado,
-                        fundacao: time.fundacao,
-                        logo: timeChange?.logo || time.logo,
-                        capacete: timeChange?.capacete || time.capacete,
-                        instagram: timeChange?.instagram || time.instagram,
-                        instagram2: timeChange?.instagram2 || time.instagram2,
-                        estadio: time.estadio,
-                        presidente: timeChange?.presidente || time.presidente,
-                        head_coach: timeChange?.head_coach || time.head_coach,
-                        instagram_coach: time.instagram_coach,
-                        coord_ofen: timeChange?.coord_ofen || time.coord_ofen,
-                        coord_defen: timeChange?.coord_defen || time.coord_defen,
-                        titulos: time.titulos as any,
-                        temporada: ano,
-                    },
-                });
-
-                mapeamentoIds.set(timeId, novoTime.id);
-
-                if (nomeAntigo !== nomeNovo) {
-                    mapeamentoNomes.set(nomeAntigo, {
-                        novoNome: nomeNovo,
-                        novoId: novoTime.id
-                    });
-                }
-
-                timesNovos.push(novoTime);
-            }
-
-            const jogadoresTimesAnoAnterior = await tx.jogadorTime.findMany({
-                where: { temporada: anoAnterior },
-                include: { jogador: true, time: true },
-            });
-
-            const jogadoresProcessados = new Set<number>();
-
-            const transferencias = req.body.transferencias || [];
-
-            for (const transferencia of transferencias) {
-                try {
-                    const jogadorId = transferencia.jogadorId;
-
-                    if (jogadoresProcessados.has(jogadorId)) {
-                        continue;
-                    }
-
-                    const jogador = await tx.jogador.findUnique({
-                        where: { id: jogadorId }
-                    });
-
-                    if (!jogador) {
-                        continue;
-                    }
-
-                    const relacaoAtual = await tx.jogadorTime.findFirst({
-                        where: {
-                            jogadorId: jogadorId,
-                            temporada: anoAnterior
-                        },
-                        include: { time: true }
-                    });
-
-                    if (!relacaoAtual) {
-                        continue;
-                    }
-
-                    let timeDestino = null;
-
-                    if (transferencia.novoTimeId) {
-                        const novoId = mapeamentoIds.get(transferencia.novoTimeId);
-                        if (novoId) {
-                            timeDestino = await tx.time.findUnique({
-                                where: { id: novoId }
-                            });
-                        }
-                    }
-
-                    if (!timeDestino && transferencia.novoTimeNome) {
-                        timeDestino = await tx.time.findFirst({
-                            where: {
-                                nome: transferencia.novoTimeNome,
-                                temporada: ano
-                            }
-                        });
-
-                        if (timeDestino) {
-                        }
-                    }
-
-                    if (!timeDestino && transferencia.novoTimeNome) {
-                        for (const [antigo, info] of mapeamentoNomes.entries()) {
-                            if (info.novoNome === transferencia.novoTimeNome) {
-                                timeDestino = await tx.time.findUnique({
-                                    where: { id: info.novoId }
-                                });
-                                if (timeDestino) {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (!timeDestino) {
-                        continue;
-                    }
-
-                    if (transferencia.novaPosicao || transferencia.novoSetor) {
-                        const dadosAtualizacao: { posicao?: string, setor?: string } = {};
-
-                        if (transferencia.novaPosicao) dadosAtualizacao.posicao = transferencia.novaPosicao;
-                        if (transferencia.novoSetor) dadosAtualizacao.setor = transferencia.novoSetor;
-
-                        await tx.jogador.update({
-                            where: { id: jogadorId },
-                            data: dadosAtualizacao
-                        });
-                    }
-
-                    const novoVinculo = await tx.jogadorTime.create({
-                        data: {
-                            jogadorId: jogadorId,
-                            timeId: timeDestino.id,
-                            temporada: ano,
-                            numero: transferencia.novoNumero || relacaoAtual.numero,
-                            camisa: transferencia.novaCamisa || relacaoAtual.camisa,
-                            estatisticas: {}
-                        }
-                    });
-
-                    jogadoresProcessados.add(jogadorId);
-
-                } catch (error) {
-                    console.error(`Erro ao processar transferência:`, error);
-                }
-            }
-
-            let jogadoresRegularesProcessados = 0;
-
-            for (const jt of jogadoresTimesAnoAnterior) {
-                try {
-                    const jogadorId = jt.jogadorId;
-
-                    if (jogadoresProcessados.has(jogadorId)) {
-                        continue;
-                    }
-
-                    const timeOriginalId = jt.timeId;
-                    const novoTimeId = mapeamentoIds.get(timeOriginalId);
-
-                    if (!novoTimeId) {
-                        console.error(`Não foi encontrado novo ID para o time original ${timeOriginalId}`);
-                        continue;
-                    }
-
-                    await tx.jogadorTime.create({
-                        data: {
-                            jogadorId: jogadorId,
-                            timeId: novoTimeId,
-                            temporada: ano,
-                            numero: jt.numero,
-                            camisa: jt.camisa,
-                            estatisticas: {}
-                        }
-                    });
-
-                    jogadoresRegularesProcessados++;
-
-                    jogadoresProcessados.add(jogadorId);
-
-                } catch (error) {
-                    console.error(`Erro ao processar jogador regular:`, error);
-                }
-            }
-
-            const saveTransferenciasToJson = async (
-                transferencias: Transferencia[],
-                anoOrigem: string,
-                anoDestino: string
-            ): Promise<number> => {
-                try {
-                    const dirPath = path.join(process.cwd(), 'public', 'data');
-
-                    if (!fs.existsSync(dirPath)) {
-                        console.log(`Criando diretório: ${dirPath}`);
-                        fs.mkdirSync(dirPath, { recursive: true });
-                    }
-
-                    const transferenciasFormatadas = [];
-
-                    for (const transferencia of transferencias) {
-                        const jogador = await prisma.jogador.findUnique({
-                            where: { id: transferencia.jogadorId }
-                        });
-
-                        const timeOrigem = transferencia.timeOrigemId ?
-                            await prisma.time.findUnique({ where: { id: transferencia.timeOrigemId } }) :
-                            null;
-
-                        const timeDestino = await prisma.time.findUnique({
-                            where: { id: transferencia.novoTimeId }
-                        });
-
-                        transferenciasFormatadas.push({
-                            id: transferencia.jogadorId,
-                            jogadorNome: jogador?.nome || transferencia.jogadorNome,
-                            timeOrigemId: transferencia.timeOrigemId,
-                            timeOrigemNome: timeOrigem?.nome || '',
-                            timeOrigemSigla: timeOrigem?.sigla || '',
-                            timeDestinoId: transferencia.novoTimeId,
-                            timeDestinoNome: timeDestino?.nome || transferencia.novoTimeNome,
-                            timeDestinoSigla: timeDestino?.sigla || '',
-                            novaPosicao: transferencia.novaPosicao || null,
-                            novoSetor: transferencia.novoSetor || null,
-                            novoNumero: transferencia.novoNumero || null,
-                            novaCamisa: transferencia.novaCamisa || null,
-                            data: new Date().toISOString()
-                        });
-                    }
-
-                    const filePath = path.join(dirPath, `transferencias_${anoOrigem}_${anoDestino}.json`);
-                    console.log(`Salvando transferências em: ${filePath}`);
-
-                    fs.writeFileSync(filePath, JSON.stringify(transferenciasFormatadas, null, 2));
-                    console.log(`${transferenciasFormatadas.length} transferências salvas com sucesso em ${filePath}`);
-                    return transferenciasFormatadas.length;
-                } catch (error) {
-                    console.error('Erro ao salvar transferências em JSON:', error);
-                    return 0;
-                }
-            };
-
-            const totalSalvo = await saveTransferenciasToJson(transferencias, anoAnterior, ano);
-            console.log(`Total de ${totalSalvo} transferências salvas em JSON`);
-            const jogadoresNovaTemporada = await tx.jogadorTime.count({
-                where: { temporada: ano }
-            });
-
-            console.log(`Contagem final: ${jogadoresNovaTemporada} jogadores na temporada ${ano}`);
-
-            return {
-                message: `Temporada ${ano} iniciada com sucesso!`,
-                times: 0,
-                jogadores: 0,
-                transferencias: totalSalvo
-            };
-
-        } catch (error) {
-            console.error(`Erro ao iniciar temporada:`, error);
-            throw error;
-        }
-    }, {
-        timeout: 120000,
-    });
-
-    res.status(200).json(result);
-});
-
 adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) => {
-    console.log('Rota /importar-times chamada')
     try {
         if (!req.file) {
             console.log('Nenhum arquivo enviado');
@@ -777,8 +457,6 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
     }
 })
 
-// SUBSTITUA A FUNÇÃO COMPLETA adminRouter.post('/importar-agenda-jogos') em src/routes/admin.ts
-
 adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req: Request, res: Response) => {
     try {
         console.log('📋 Iniciando importação de agenda de jogos...')
@@ -790,7 +468,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
         console.log(`Arquivo recebido: ${req.file.path}`)
 
-        // ✅ BUSCAR SUPERLIGA
         const superliga = await prisma.campeonato.findFirst({
             where: {
                 temporada: '2025',
@@ -805,7 +482,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
         console.log(`✅ Superliga encontrada: ID ${superliga.id}`)
 
-        // ✅ LER PLANILHA
         const workbook = xlsx.readFile(req.file.path)
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
@@ -818,7 +494,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             return
         }
 
-        // ✅ BUSCAR TODOS OS TIMES REAIS
         const times = await prisma.time.findMany({
             where: { temporada: '2025' },
             select: { id: true, nome: true, sigla: true }
@@ -826,67 +501,26 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
         console.log(`📋 Times encontrados no banco: ${times.length}`)
 
-        // ✅ CRIAR MAPA DE TIMES PARA BUSCA RÁPIDA
         const mapaTimes = new Map<string, { id: number; nome: string; sigla: string }>()
         times.forEach(time => {
             mapaTimes.set(time.nome.toLowerCase().trim(), time)
         })
 
-        // ✅ VARIÁVEIS DE CONTROLE
         const resultados = {
             jogosImportados: 0,
             jogosPulados: 0,
+            jogosPlayoffs: 0,
             erros: [] as Array<{ linha: number; erro: string }>,
             warnings: [] as Array<{ linha: number; warning: string }>
         }
 
         console.log('🚀 Iniciando processamento dos jogos...')
 
-        // ✅ PROCESSAR CADA JOGO DA PLANILHA
         for (let i = 0; i < jogosRaw.length; i++) {
             const jogoData = jogosRaw[i] as any
             const linha = i + 1
 
             try {
-                // ✅ VERIFICAR SE OS TIMES ESTÃO PREENCHIDOS
-                const nomeTimeCasa = jogoData.time_mandante?.toString()?.trim() || ''
-                const nomeTimeVisitante = jogoData.time_visitante?.toString()?.trim() || ''
-
-                // ✅ PULAR LINHAS COM TIMES VAZIOS (PLAYOFFS)
-                if (!nomeTimeCasa || !nomeTimeVisitante ||
-                    nomeTimeCasa === '' || nomeTimeVisitante === '' ||
-                    nomeTimeCasa.toLowerCase() === 'tbd' || nomeTimeVisitante.toLowerCase() === 'tbd' ||
-                    nomeTimeCasa.toLowerCase().includes('a definir') || nomeTimeVisitante.toLowerCase().includes('a definir')) {
-
-                    resultados.jogosPulados++
-                    resultados.warnings.push({
-                        linha,
-                        warning: `Jogo ${jogoData.id_jogo || linha} pulado - times não definidos (provavelmente playoff)`
-                    })
-                    continue
-                }
-
-                // ✅ BUSCAR IDS DOS TIMES
-                const timeCasa = mapaTimes.get(nomeTimeCasa.toLowerCase())
-                const timeVisitante = mapaTimes.get(nomeTimeVisitante.toLowerCase())
-
-                if (!timeCasa) {
-                    resultados.erros.push({
-                        linha,
-                        erro: `Time mandante não encontrado: "${nomeTimeCasa}"`
-                    })
-                    continue
-                }
-
-                if (!timeVisitante) {
-                    resultados.erros.push({
-                        linha,
-                        erro: `Time visitante não encontrado: "${nomeTimeVisitante}"`
-                    })
-                    continue
-                }
-
-                // ✅ PREPARAR DADOS DO JOGO
                 const dataJogo = new Date(jogoData.data)
                 if (isNaN(dataJogo.getTime())) {
                     resultados.erros.push({
@@ -896,29 +530,82 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                     continue
                 }
 
-                // ✅ CRIAR JOGO NO BANCO DE DADOS
-                await prisma.jogo.create({
-                    data: {
-                        campeonatoId: superliga.id,
-                        timeCasaId: timeCasa.id,
-                        timeVisitanteId: timeVisitante.id,
-                        dataJogo: dataJogo,
-                        local: jogoData.local || timeCasa.nome,
-                        rodada: parseInt(jogoData.rodada?.toString() || '1'),
-                        fase: jogoData.fase || 'TEMPORADA REGULAR',
-                        status: 'AGENDADO',
-                        observacoes: jogoData.observacoes || null,
-                        conferencia: jogoData.conferencia || null,
-                        regional: jogoData.regional || null,
-                        temporada: '2025'
+                const nomeTimeCasa = jogoData.time_mandante?.toString()?.trim() || ''
+                const nomeTimeVisitante = jogoData.time_visitante?.toString()?.trim() || ''
+                const isJogoPlayoff = !nomeTimeCasa || !nomeTimeVisitante ||
+                    nomeTimeCasa === '' || nomeTimeVisitante === '' ||
+                    nomeTimeCasa.toLowerCase() === 'tbd' || nomeTimeVisitante.toLowerCase() === 'tbd' ||
+                    nomeTimeCasa.toLowerCase().includes('a definir') || nomeTimeVisitante.toLowerCase().includes('a definir')
+
+                if (isJogoPlayoff) {
+                    await prisma.jogo.create({
+                        data: {
+                            campeonatoId: superliga.id,
+                            timeCasaId: null,
+                            timeVisitanteId: null,
+                            dataJogo: dataJogo,
+                            local: jogoData.local || 'A definir',
+                            rodada: parseInt(jogoData.rodada?.toString() || '1'),
+                            fase: jogoData.fase || 'WILD CARD',
+                            status: 'AGENDADO',
+                            observacoes: jogoData.observacoes || 'Aguardando definição dos times',
+                            conferencia: jogoData.conferencia || null,
+                            regional: jogoData.regional || null,
+                            temporada: '2025'
+                        }
+                    })
+
+                    resultados.jogosPlayoffs++
+                    resultados.warnings.push({
+                        linha,
+                        warning: `Jogo ${jogoData.id_jogo || linha} criado como playoff - times serão definidos posteriormente`
+                    })
+
+                    console.log(`🏆 Jogo playoff criado: ID ${jogoData.id_jogo || linha} - times a definir`)
+
+                } else {
+                    const timeCasa = mapaTimes.get(nomeTimeCasa.toLowerCase())
+                    const timeVisitante = mapaTimes.get(nomeTimeVisitante.toLowerCase())
+
+                    if (!timeCasa) {
+                        resultados.erros.push({
+                            linha,
+                            erro: `Time mandante não encontrado: "${nomeTimeCasa}"`
+                        })
+                        continue
                     }
-                })
 
-                resultados.jogosImportados++
+                    if (!timeVisitante) {
+                        resultados.erros.push({
+                            linha,
+                            erro: `Time visitante não encontrado: "${nomeTimeVisitante}"`
+                        })
+                        continue
+                    }
 
-                // ✅ LOG DE PROGRESSO A CADA 10 JOGOS
-                if ((resultados.jogosImportados) % 10 === 0) {
-                    console.log(`📊 Processados: ${resultados.jogosImportados} jogos importados, ${resultados.jogosPulados} pulados`)
+                    await prisma.jogo.create({
+                        data: {
+                            campeonatoId: superliga.id,
+                            timeCasaId: timeCasa.id,
+                            timeVisitanteId: timeVisitante.id,
+                            dataJogo: dataJogo,
+                            local: jogoData.local || timeCasa.nome,
+                            rodada: parseInt(jogoData.rodada?.toString() || '1'),
+                            fase: jogoData.fase || 'TEMPORADA REGULAR',
+                            status: 'AGENDADO',
+                            observacoes: jogoData.observacoes || null,
+                            conferencia: jogoData.conferencia || null,
+                            regional: jogoData.regional || null,
+                            temporada: '2025'
+                        }
+                    })
+
+                    resultados.jogosImportados++
+                    console.log(`✅ Jogo temporada regular: ${timeCasa.sigla} vs ${timeVisitante.sigla}`)
+                }
+
+                if ((resultados.jogosImportados + resultados.jogosPlayoffs) % 10 === 0) {
+                    console.log(`📊 Processados: ${resultados.jogosImportados} temporada regular, ${resultados.jogosPlayoffs} playoffs`)
                 }
 
             } catch (error) {
@@ -930,18 +617,18 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             }
         }
 
-        // ✅ LIMPAR ARQUIVO TEMPORÁRIO
         try {
             fs.unlinkSync(req.file.path)
         } catch (cleanupError) {
             console.warn('⚠️ Não foi possível remover arquivo temporário:', cleanupError)
         }
 
-        // ✅ RESPOSTA FINAL
         const resposta = {
             message: `Agenda importada com sucesso!`,
             resumo: {
-                jogosImportados: resultados.jogosImportados,
+                jogosTemporadaRegular: resultados.jogosImportados,
+                jogosPlayoffs: resultados.jogosPlayoffs,
+                totalJogos: resultados.jogosImportados + resultados.jogosPlayoffs,
                 jogosPulados: resultados.jogosPulados,
                 jogosComErro: resultados.erros.length,
                 totalProcessado: jogosRaw.length
@@ -951,12 +638,13 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                 erros: resultados.erros.length > 0 ? resultados.erros : undefined,
                 warnings: resultados.warnings.length > 0 ? resultados.warnings : undefined
             },
-            proximaEtapa: 'Importe os resultados da temporada regular. Os playoffs serão criados conforme você importar seus resultados.'
+            proximaEtapa: 'Importe os resultados da temporada regular. Os playoffs serão atualizados conforme você importar seus resultados.'
         }
 
         console.log('✅ Importação da agenda finalizada:')
-        console.log(`   📊 Jogos importados: ${resultados.jogosImportados}`)
-        console.log(`   ⏭️ Jogos pulados (playoffs): ${resultados.jogosPulados}`)
+        console.log(`   📊 Jogos temporada regular: ${resultados.jogosImportados}`)
+        console.log(`   🏆 Jogos playoffs: ${resultados.jogosPlayoffs}`)
+        console.log(`   ⏭️ Jogos pulados: ${resultados.jogosPulados}`)
         console.log(`   ❌ Erros: ${resultados.erros.length}`)
         console.log(`   ⚠️ Warnings: ${resultados.warnings.length}`)
 
@@ -965,7 +653,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
     } catch (error) {
         console.error('❌ Erro na importação da agenda:', error)
 
-        // Limpar arquivo em caso de erro
         if (req.file?.path) {
             try {
                 fs.unlinkSync(req.file.path)
@@ -1002,7 +689,6 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
             return;
         }
 
-        // ✅ INSERIR ESTA VALIDAÇÃO AQUI (ANTES DO console.log e workbook)
         console.log('🔍 Validando status do jogo...');
 
         const jogo = await prisma.jogo.findUnique({
@@ -1024,17 +710,16 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
             return;
         }
 
-        // ✅ VALIDAÇÃO CRÍTICA: Só permitir estatísticas para jogos FINALIZADOS
         if (jogo.status !== 'FINALIZADO') {
             console.error(`❌ Tentativa de inserir estatísticas para jogo ${id_jogo} com status: ${jogo.status}`);
-            console.error(`   Jogo: ${jogo.timeCasa.nome} vs ${jogo.timeVisitante.nome}`);
+            console.error(`   Jogo: ${jogo.timeCasa?.nome || 'A definir'} vs ${jogo.timeVisitante?.nome || 'A Definir'}`);
 
             res.status(400).json({
                 error: `Não é possível inserir estatísticas para jogo com status: ${jogo.status}`,
                 detalhes: {
                     jogoId: id_jogo,
                     status: jogo.status,
-                    confronto: `${jogo.timeCasa.nome} vs ${jogo.timeVisitante.nome}`,
+                    confronto: `${jogo.timeCasa?.nome || 'A definir'} vs ${jogo.timeVisitante?.nome || 'A definir'}`,
                     data: jogo.dataJogo,
                     statusPermitido: 'FINALIZADO'
                 }
@@ -1044,8 +729,7 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
 
         console.log(`✅ Jogo ${id_jogo} validado para inserção de estatísticas`);
         console.log(`   Status: ${jogo.status}`);
-        console.log(`   Confronto: ${jogo.timeCasa.sigla} vs ${jogo.timeVisitante.sigla}`);
-        // ✅ FIM DA VALIDAÇÃO
+        console.log(`   Confronto: ${jogo.timeCasa?.sigla} vs ${jogo.timeVisitante?.sigla}`);
 
         console.log('📊 INICIANDO DUPLA INSERÇÃO DE ESTATÍSTICAS...');
         console.log(`🎯 Jogo: ${id_jogo}, Data: ${data_jogo}`);
@@ -1202,7 +886,7 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                             jogoId: Number(id_jogo),
                             jogadorId: jogador.id,
                             timeId: jogadorTime.timeId,
-                            campeonatoId: superliga.id, // ✅ ADICIONAR ESTA LINHA
+                            campeonatoId: superliga.id,
                             estatisticas: estatisticasEstruturadas,
                             temporada: temporada,
                             rodada: Number(stat.rodada || 1),
@@ -1393,324 +1077,6 @@ adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
     }
 })
 
-adminRouter.post('/reprocessar-jogo', upload.single('arquivo'), async (req, res) => {
-    try {
-        if (!req.file) {
-            res.status(400).json({ error: 'Nenhum arquivo enviado' });
-            return;
-        }
-
-        const { id_jogo, data_jogo, force } = req.body;
-
-        if (!id_jogo || !data_jogo) {
-            res.status(400).json({ error: 'ID do jogo e data são obrigatórios' });
-            return;
-        }
-
-
-        const workbook = xlsx.readFile(req.file.path);
-        const sheetName = workbook.SheetNames[0];
-        const statsSheet = workbook.Sheets[sheetName];
-
-        const estatisticasJogo = xlsx.utils.sheet_to_json(statsSheet) as any[];
-
-        console.log(`Reprocessando estatísticas de ${estatisticasJogo.length} jogadores para o jogo ${id_jogo}`);
-
-        const resultados = {
-            sucesso: 0,
-            erros: [] as any[]
-        };
-
-
-        let estatisticasAnteriores: Array<{
-            jogadorId: number;
-            timeId: number;
-            temporada: string;
-            estatisticas: any;
-        }> = [];
-
-
-
-        await prisma.$transaction(async (tx) => {
-
-            if (estatisticasAnteriores.length > 0) {
-                console.log(`Revertendo estatísticas anteriores do jogo ${id_jogo}`);
-
-                for (const estatAnterior of estatisticasAnteriores) {
-                    try {
-                        const jogador = await tx.jogador.findUnique({
-                            where: { id: estatAnterior.jogadorId },
-                            include: {
-                                times: {
-                                    where: {
-                                        temporada: estatAnterior.temporada,
-                                        timeId: estatAnterior.timeId
-                                    }
-                                }
-                            }
-                        });
-
-                        if (!jogador || !jogador.times || jogador.times.length === 0) {
-                            console.warn(`Jogador ${estatAnterior.jogadorId} não encontrado para reverter estatísticas`);
-                            continue;
-                        }
-
-                        const jogadorTime = jogador.times[0];
-                        const estatisticasAtuais = jogadorTime.estatisticas as any;
-                        const novasEstatisticas = {
-                            passe: {
-                                passes_completos: Math.max(0, (estatisticasAtuais.passe?.passes_completos || 0) - (estatAnterior.estatisticas.passe?.passes_completos || 0)),
-                                passes_tentados: Math.max(0, (estatisticasAtuais.passe?.passes_tentados || 0) - (estatAnterior.estatisticas.passe?.passes_tentados || 0)),
-                                jardas_de_passe: Math.max(0, (estatisticasAtuais.passe?.jardas_de_passe || 0) - (estatAnterior.estatisticas.passe?.jardas_de_passe || 0)),
-                                td_passados: Math.max(0, (estatisticasAtuais.passe?.td_passados || 0) - (estatAnterior.estatisticas.passe?.td_passados || 0)),
-                                interceptacoes_sofridas: Math.max(0, (estatisticasAtuais.passe?.interceptacoes_sofridas || 0) - (estatAnterior.estatisticas.passe?.interceptacoes_sofridas || 0)),
-                                sacks_sofridos: Math.max(0, (estatisticasAtuais.passe?.sacks_sofridos || 0) - (estatAnterior.estatisticas.passe?.sacks_sofridos || 0)),
-                                fumble_de_passador: Math.max(0, (estatisticasAtuais.passe?.fumble_de_passador || 0) - (estatAnterior.estatisticas.passe?.fumble_de_passador || 0))
-                            },
-                            corrida: {
-                                corridas: Math.max(0, (estatisticasAtuais.corrida?.corridas || 0) - (estatAnterior.estatisticas.corrida?.corridas || 0)),
-                                jardas_corridas: Math.max(0, (estatisticasAtuais.corrida?.jardas_corridas || 0) - (estatAnterior.estatisticas.corrida?.jardas_corridas || 0)),
-                                tds_corridos: Math.max(0, (estatisticasAtuais.corrida?.tds_corridos || 0) - (estatAnterior.estatisticas.corrida?.tds_corridos || 0)),
-                                fumble_de_corredor: Math.max(0, (estatisticasAtuais.corrida?.fumble_de_corredor || 0) - (estatAnterior.estatisticas.corrida?.fumble_de_corredor || 0))
-                            },
-                            recepcao: {
-                                recepcoes: Math.max(0, (estatisticasAtuais.recepcao?.recepcoes || 0) - (estatAnterior.estatisticas.recepcao?.recepcoes || 0)),
-                                alvo: Math.max(0, (estatisticasAtuais.recepcao?.alvo || 0) - (estatAnterior.estatisticas.recepcao?.alvo || 0)),
-                                jardas_recebidas: Math.max(0, (estatisticasAtuais.recepcao?.jardas_recebidas || 0) - (estatAnterior.estatisticas.recepcao?.jardas_recebidas || 0)),
-                                tds_recebidos: Math.max(0, (estatisticasAtuais.recepcao?.tds_recebidos || 0) - (estatAnterior.estatisticas.recepcao?.tds_recebidos || 0))
-                            },
-                            retorno: {
-                                retornos: Math.max(0, (estatisticasAtuais.retorno?.retornos || 0) - (estatAnterior.estatisticas.retorno?.retornos || 0)),
-                                jardas_retornadas: Math.max(0, (estatisticasAtuais.retorno?.jardas_retornadas || 0) - (estatAnterior.estatisticas.retorno?.jardas_retornadas || 0)),
-                                td_retornados: Math.max(0, (estatisticasAtuais.retorno?.td_retornados || 0) - (estatAnterior.estatisticas.retorno?.td_retornados || 0))
-                            },
-                            defesa: {
-                                tackles_totais: Math.max(0, (estatisticasAtuais.defesa?.tackles_totais || 0) - (estatAnterior.estatisticas.defesa?.tackles_totais || 0)),
-                                tackles_for_loss: Math.max(0, (estatisticasAtuais.defesa?.tackles_for_loss || 0) - (estatAnterior.estatisticas.defesa?.tackles_for_loss || 0)),
-                                sacks_forcado: Math.max(0, (estatisticasAtuais.defesa?.sacks_forcado || 0) - (estatAnterior.estatisticas.defesa?.sacks_forcado || 0)),
-                                fumble_forcado: Math.max(0, (estatisticasAtuais.defesa?.fumble_forcado || 0) - (estatAnterior.estatisticas.defesa?.fumble_forcado || 0)),
-                                interceptacao_forcada: Math.max(0, (estatisticasAtuais.defesa?.interceptacao_forcada || 0) - (estatAnterior.estatisticas.defesa?.interceptacao_forcada || 0)),
-                                passe_desviado: Math.max(0, (estatisticasAtuais.defesa?.passe_desviado || 0) - (estatAnterior.estatisticas.defesa?.passe_desviado || 0)),
-                                safety: Math.max(0, (estatisticasAtuais.defesa?.safety || 0) - (estatAnterior.estatisticas.defesa?.safety || 0)),
-                                td_defensivo: Math.max(0, (estatisticasAtuais.defesa?.td_defensivo || 0) - (estatAnterior.estatisticas.defesa?.td_defensivo || 0))
-                            },
-                            kicker: {
-                                xp_bons: Math.max(0, (estatisticasAtuais.kicker?.xp_bons || 0) - (estatAnterior.estatisticas.kicker?.xp_bons || 0)),
-                                tentativas_de_xp: Math.max(0, (estatisticasAtuais.kicker?.tentativas_de_xp || 0) - (estatAnterior.estatisticas.kicker?.tentativas_de_xp || 0)),
-                                fg_bons: Math.max(0, (estatisticasAtuais.kicker?.fg_bons || 0) - (estatAnterior.estatisticas.kicker?.fg_bons || 0)),
-                                tentativas_de_fg: Math.max(0, (estatisticasAtuais.kicker?.tentativas_de_fg || 0) - (estatAnterior.estatisticas.kicker?.tentativas_de_fg || 0)),
-                                fg_mais_longo: estatisticasAtuais.kicker?.fg_mais_longo || 0
-                            },
-                            punter: {
-                                punts: Math.max(0, (estatisticasAtuais.punter?.punts || 0) - (estatAnterior.estatisticas.punter?.punts || 0)),
-                                jardas_de_punt: Math.max(0, (estatisticasAtuais.punter?.jardas_de_punt || 0) - (estatAnterior.estatisticas.punter?.jardas_de_punt || 0))
-                            }
-                        };
-
-                        await tx.jogadorTime.update({
-                            where: { id: jogadorTime.id },
-                            data: {
-                                estatisticas: novasEstatisticas
-                            }
-                        });
-
-                    } catch (error) {
-                        console.error(`Erro ao reverter estatísticas para jogador ${estatAnterior.jogadorId}:`, error);
-                    }
-                }
-            }
-
-            const novasEstatisticasJogo: Array<{
-                jogadorId: number;
-                timeId: number;
-                temporada: string;
-                estatisticas: any;
-            }> = [];
-
-            for (const stat of estatisticasJogo) {
-                try {
-                    if (!stat.jogador_id && !stat.jogador_nome) {
-                        resultados.erros.push({
-                            linha: JSON.stringify(stat),
-                            erro: 'ID ou nome do jogador é obrigatório'
-                        });
-                        continue;
-                    }
-
-                    const temporada = String(stat.temporada || '2025');
-
-                    let jogador;
-                    if (stat.jogador_id) {
-                        jogador = await tx.jogador.findUnique({
-                            where: { id: parseInt(stat.jogador_id) },
-                            include: {
-                                times: {
-                                    where: { temporada: temporada },
-                                    include: { time: true }
-                                }
-                            }
-                        });
-                    }
-
-                    if (!jogador || !jogador.times || jogador.times.length === 0) {
-                        resultados.erros.push({
-                            jogador: stat.jogador_nome || stat.jogador_id,
-                            erro: 'Jogador não encontrado ou não relacionado a nenhum time'
-                        });
-                        continue;
-                    }
-
-                    const jogadorTime = jogador.times[0];
-                    const estatisticasAtuais = jogadorTime.estatisticas as any;
-
-                    const estatisticasDoJogo = {
-                        passe: {
-                            passes_completos: parseInt(stat.passes_completos) || 0,
-                            passes_tentados: parseInt(stat.passes_tentados) || 0,
-                            jardas_de_passe: parseInt(stat.jardas_de_passe) || 0,
-                            td_passados: parseInt(stat.td_passados) || 0,
-                            interceptacoes_sofridas: parseInt(stat.interceptacoes_sofridas) || 0,
-                            sacks_sofridos: parseInt(stat.sacks_sofridos) || 0,
-                            fumble_de_passador: parseInt(stat.fumble_de_passador) || 0
-                        },
-                        corrida: {
-                            corridas: parseInt(stat.corridas) || 0,
-                            jardas_corridas: parseInt(stat.jardas_corridas) || 0,
-                            tds_corridos: parseInt(stat.tds_corridos) || 0,
-                            fumble_de_corredor: parseInt(stat.fumble_de_corredor) || 0
-                        },
-                        recepcao: {
-                            recepcoes: parseInt(stat.recepcoes) || 0,
-                            alvo: parseInt(stat.alvo) || 0,
-                            jardas_recebidas: parseInt(stat.jardas_recebidas) || 0,
-                            tds_recebidos: parseInt(stat.tds_recebidos) || 0
-                        },
-                        retorno: {
-                            retornos: parseInt(stat.retornos) || 0,
-                            jardas_retornadas: parseInt(stat.jardas_retornadas) || 0,
-                            td_retornados: parseInt(stat.td_retornados) || 0
-                        },
-                        defesa: {
-                            tackles_totais: parseInt(stat.tackles_totais) || 0,
-                            tackles_for_loss: parseInt(stat.tackles_for_loss) || 0,
-                            sacks_forcado: parseInt(stat.sacks_forcado) || 0,
-                            fumble_forcado: parseInt(stat.fumble_forcado) || 0,
-                            interceptacao_forcada: parseInt(stat.interceptacao_forcada) || 0,
-                            passe_desviado: parseInt(stat.passe_desviado) || 0,
-                            safety: parseInt(stat.safety) || 0,
-                            td_defensivo: parseInt(stat.td_defensivo) || 0
-                        },
-                        kicker: {
-                            xp_bons: parseInt(stat.xp_bons) || 0,
-                            tentativas_de_xp: parseInt(stat.tentativas_de_xp) || 0,
-                            fg_bons: parseInt(stat.fg_bons) || 0,
-                            tentativas_de_fg: parseInt(stat.tentativas_de_fg) || 0,
-                            fg_mais_longo: parseInt(stat.fg_mais_longo) || 0
-                        },
-                        punter: {
-                            punts: parseInt(stat.punts) || 0,
-                            jardas_de_punt: parseInt(stat.jardas_de_punt) || 0
-                        }
-                    };
-
-                    novasEstatisticasJogo.push({
-                        jogadorId: jogador.id,
-                        timeId: jogadorTime.timeId,
-                        temporada,
-                        estatisticas: estatisticasDoJogo
-                    });
-
-                    const novasEstatisticasTotais = {
-                        passe: {
-                            passes_completos: (estatisticasAtuais.passe?.passes_completos || 0) + estatisticasDoJogo.passe.passes_completos,
-                            passes_tentados: (estatisticasAtuais.passe?.passes_tentados || 0) + estatisticasDoJogo.passe.passes_tentados,
-                            jardas_de_passe: (estatisticasAtuais.passe?.jardas_de_passe || 0) + estatisticasDoJogo.passe.jardas_de_passe,
-                            td_passados: (estatisticasAtuais.passe?.td_passados || 0) + estatisticasDoJogo.passe.td_passados,
-                            interceptacoes_sofridas: (estatisticasAtuais.passe?.interceptacoes_sofridas || 0) + estatisticasDoJogo.passe.interceptacoes_sofridas,
-                            sacks_sofridos: (estatisticasAtuais.passe?.sacks_sofridos || 0) + estatisticasDoJogo.passe.sacks_sofridos,
-                            fumble_de_passador: (estatisticasAtuais.passe?.fumble_de_passador || 0) + estatisticasDoJogo.passe.fumble_de_passador
-                        },
-                        corrida: {
-                            corridas: (estatisticasAtuais.corrida?.corridas || 0) + estatisticasDoJogo.corrida.corridas,
-                            jardas_corridas: (estatisticasAtuais.corrida?.jardas_corridas || 0) + estatisticasDoJogo.corrida.jardas_corridas,
-                            tds_corridos: (estatisticasAtuais.corrida?.tds_corridos || 0) + estatisticasDoJogo.corrida.tds_corridos,
-                            fumble_de_corredor: (estatisticasAtuais.corrida?.fumble_de_corredor || 0) + estatisticasDoJogo.corrida.fumble_de_corredor
-                        },
-                        recepcao: {
-                            recepcoes: (estatisticasAtuais.recepcao?.recepcoes || 0) + estatisticasDoJogo.recepcao.recepcoes,
-                            alvo: (estatisticasAtuais.recepcao?.alvo || 0) + estatisticasDoJogo.recepcao.alvo,
-                            jardas_recebidas: (estatisticasAtuais.recepcao?.jardas_recebidas || 0) + estatisticasDoJogo.recepcao.jardas_recebidas,
-                            tds_recebidos: (estatisticasAtuais.recepcao?.tds_recebidos || 0) + estatisticasDoJogo.recepcao.tds_recebidos
-                        },
-                        retorno: {
-                            retornos: (estatisticasAtuais.retorno?.retornos || 0) + estatisticasDoJogo.retorno.retornos,
-                            jardas_retornadas: (estatisticasAtuais.retorno?.jardas_retornadas || 0) + estatisticasDoJogo.retorno.jardas_retornadas,
-                            td_retornados: (estatisticasAtuais.retorno?.td_retornados || 0) + estatisticasDoJogo.retorno.td_retornados
-                        },
-                        defesa: {
-                            tackles_totais: (estatisticasAtuais.defesa?.tackles_totais || 0) + estatisticasDoJogo.defesa.tackles_totais,
-                            tackles_for_loss: (estatisticasAtuais.defesa?.tackles_for_loss || 0) + estatisticasDoJogo.defesa.tackles_for_loss,
-                            sacks_forcado: (estatisticasAtuais.defesa?.sacks_forcado || 0) + estatisticasDoJogo.defesa.sacks_forcado,
-                            fumble_forcado: (estatisticasAtuais.defesa?.fumble_forcado || 0) + estatisticasDoJogo.defesa.fumble_forcado,
-                            interceptacao_forcada: (estatisticasAtuais.defesa?.interceptacao_forcada || 0) + estatisticasDoJogo.defesa.interceptacao_forcada,
-                            passe_desviado: (estatisticasAtuais.defesa?.passe_desviado || 0) + estatisticasDoJogo.defesa.passe_desviado,
-                            safety: (estatisticasAtuais.defesa?.safety || 0) + estatisticasDoJogo.defesa.safety,
-                            td_defensivo: (estatisticasAtuais.defesa?.td_defensivo || 0) + estatisticasDoJogo.defesa.td_defensivo
-                        },
-                        kicker: {
-                            xp_bons: (estatisticasAtuais.kicker?.xp_bons || 0) + estatisticasDoJogo.kicker.xp_bons,
-                            tentativas_de_xp: (estatisticasAtuais.kicker?.tentativas_de_xp || 0) + estatisticasDoJogo.kicker.tentativas_de_xp,
-                            fg_bons: (estatisticasAtuais.kicker?.fg_bons || 0) + estatisticasDoJogo.kicker.fg_bons,
-                            tentativas_de_fg: (estatisticasAtuais.kicker?.tentativas_de_fg || 0) + estatisticasDoJogo.kicker.tentativas_de_fg,
-                            fg_mais_longo: Math.max(estatisticasAtuais.kicker?.fg_mais_longo || 0, estatisticasDoJogo.kicker.fg_mais_longo)
-                        },
-                        punter: {
-                            punts: (estatisticasAtuais.punter?.punts || 0) + estatisticasDoJogo.punter.punts,
-                            jardas_de_punt: (estatisticasAtuais.punter?.jardas_de_punt || 0) + estatisticasDoJogo.punter.jardas_de_punt
-                        }
-                    };
-
-                    await tx.jogadorTime.update({
-                        where: { id: jogadorTime.id },
-                        data: {
-                            estatisticas: novasEstatisticasTotais
-                        }
-                    });
-
-                    resultados.sucesso++;
-                } catch (error) {
-                    console.error(`Erro ao processar estatísticas para jogador:`, error);
-                    resultados.erros.push({
-                        jogador: stat.jogador_nome || stat.jogador_id || 'Desconhecido',
-                        erro: error instanceof Error ? error.message : 'Erro desconhecido'
-                    });
-                }
-            }
-
-
-        });
-
-        fs.unlinkSync(req.file.path);
-
-        res.status(200).json({
-            mensagem: `Estatísticas do jogo ${id_jogo} reprocessadas com sucesso para ${resultados.sucesso} jogadores`,
-            data_jogo,
-            erros: resultados.erros.length > 0 ? resultados.erros : null
-        });
-    } catch (error) {
-        console.error('Erro ao reprocessar estatísticas do jogo:', error);
-
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
-
-        res.status(500).json({
-            error: 'Erro ao reprocessar estatísticas do jogo',
-            details: error instanceof Error ? error.message : 'Erro desconhecido'
-        });
-    }
-});
-
 adminRouter.get('/jogos', async (req, res) => {
     try {
         const {
@@ -1790,8 +1156,8 @@ adminRouter.get('/jogos', async (req, res) => {
 
             const idsTimesConferencia = timesConferencia.map(t => t.id)
             jogosFiltrados = jogos.filter(jogo =>
-                idsTimesConferencia.includes(jogo.timeCasaId) ||
-                idsTimesConferencia.includes(jogo.timeVisitanteId)
+                (jogo.timeCasaId && idsTimesConferencia.includes(jogo.timeCasaId)) ||
+                (jogo.timeVisitanteId && idsTimesConferencia.includes(jogo.timeVisitanteId))
             )
         }
 
@@ -1927,7 +1293,7 @@ adminRouter.put('/jogos/:id/resultado', async (req, res) => {
             }
         })
 
-        console.log(`Resultado atualizado: ${jogoAtualizado.timeCasa.nome} ${placarCasa} x ${placarVisitante} ${jogoAtualizado.timeVisitante.nome}`)
+        console.log(`Resultado atualizado: ${jogoAtualizado.timeCasa?.nome} ${placarCasa} x ${placarVisitante} ${jogoAtualizado.timeVisitante?.nome}`)
 
         res.json({
             message: 'Resultado atualizado com sucesso',
@@ -2052,13 +1418,22 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
         const resultadosSheet = workbook.Sheets[sheetName]
         const resultadosRaw = xlsx.utils.sheet_to_json(resultadosSheet) as any[]
 
+        const times = await prisma.time.findMany({
+            where: { temporada: '2025' },
+            select: { id: true, nome: true, sigla: true }
+        })
+
+        const mapaTimes = new Map<string, { id: number; nome: string; sigla: string }>()
+        times.forEach(time => {
+            mapaTimes.set(time.nome.toLowerCase().trim(), time)
+        })
+
         const resultados = {
             sucesso: 0,
             erros: [] as any[],
             jogosPulados: 0
         }
 
-        // ✅ PROCESSAMENTO ÚNICO PARA TODOS OS JOGOS (TEMPORADA REGULAR + PLAYOFFS)
         for (const resultado of resultadosRaw) {
             try {
                 const jogoId = parseInt(resultado.id_jogo)
@@ -2088,8 +1463,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                     continue
                 }
 
-                // ✅ VERIFICAR SE TIMES ESTÃO DEFINIDOS (não são TBD)
-                if (jogo.timeCasa.nome.includes('TBD') || jogo.timeVisitante.nome.includes('TBD')) {
+                if (jogo.timeCasa?.nome.includes('TBD') || jogo.timeVisitante?.nome.includes('TBD')) {
                     console.log(`⏭️  Pulando jogo ${jogoId} - Times ainda não definidos (TBD)`)
                     resultados.jogosPulados++
                     continue
@@ -2099,7 +1473,6 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                 const placarVisitante = parseInt(resultado.placar_visitante)
                 const statusPlanilha = resultado.status || 'FINALIZADO'
 
-                // Validar placares para jogos finalizados
                 if (statusPlanilha === 'FINALIZADO' && (isNaN(placarCasa) || isNaN(placarVisitante))) {
                     resultados.erros.push({
                         linha: jogoId,
@@ -2108,13 +1481,11 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                     continue
                 }
 
-                // ✅ DETERMINAR VENCEDOR (para playoffs)
                 let timeVencedorId = null
                 if (statusPlanilha === 'FINALIZADO' && jogo.fase !== 'TEMPORADA REGULAR') {
                     timeVencedorId = placarCasa > placarVisitante ? jogo.timeCasaId : jogo.timeVisitanteId
                 }
 
-                // ✅ ATUALIZAR JOGO (MESMO PROCESSO PARA TODOS)
                 const updateData: any = {
                     status: statusPlanilha,
                     observacoes: resultado.observacoes || null
@@ -2123,6 +1494,23 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                 if (statusPlanilha === 'FINALIZADO') {
                     updateData.placarCasa = placarCasa
                     updateData.placarVisitante = placarVisitante
+
+                    if (!jogo.timeCasaId || !jogo.timeVisitanteId) {
+                        const nomeTimeCasa = resultado.time_mandante?.toString()?.trim()
+                        const nomeTimeVisitante = resultado.time_visitante?.toString()?.trim()
+
+                        if (nomeTimeCasa && nomeTimeVisitante) {
+                            const timeCasa = mapaTimes.get(nomeTimeCasa.toLowerCase())
+                            const timeVisitante = mapaTimes.get(nomeTimeVisitante.toLowerCase())
+
+                            if (timeCasa && timeVisitante) {
+                                updateData.timeCasaId = timeCasa.id
+                                updateData.timeVisitanteId = timeVisitante.id
+                                console.log(`🏆 Atualizando times do playoff: ${timeCasa.nome} vs ${timeVisitante.nome}`)
+                            }
+                        }
+                    }
+
                     if (timeVencedorId) {
                         updateData.timeVencedorId = timeVencedorId
                     }
@@ -2136,11 +1524,6 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                 resultados.sucesso++
                 console.log(`✅ Jogo ${jogoId} (${jogo.fase}): ${placarCasa} x ${placarVisitante}`)
 
-                // ✅ DEFINIR PRÓXIMOS JOGOS DE PLAYOFF (se necessário)
-                if (statusPlanilha === 'FINALIZADO' && jogo.fase !== 'TEMPORADA REGULAR') {
-                    await definirProximosJogosPlayoff(jogo, timeVencedorId!)
-                }
-
             } catch (error) {
                 resultados.erros.push({
                     linha: resultado.id_jogo,
@@ -2148,9 +1531,6 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                 })
             }
         }
-
-        // Verificar se temporada regular foi finalizada
-        await verificarFinalizacaoTemporadaRegular()
 
         res.json({
             message: 'Importação concluída',
@@ -2172,212 +1552,6 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
         }
     }
 })
-
-// ✅ FUNÇÃO PARA DEFINIR PRÓXIMOS JOGOS DE PLAYOFF
-async function definirProximosJogosPlayoff(jogoFinalizado: any, timeVencedorId: number) {
-    try {
-        const { fase, campeonatoId, conferenciaId } = jogoFinalizado
-
-        console.log(`🔄 Definindo próximos jogos após ${fase}...`)
-
-        switch (fase) {
-            case 'WILD CARD':
-                await definirSemifinaisConferencia(campeonatoId, conferenciaId, timeVencedorId)
-                break
-
-            case 'SEMIFINAL DE CONFERÊNCIA':
-                await definirFinalConferencia(campeonatoId, conferenciaId, timeVencedorId)
-                break
-
-            case 'FINAL DE CONFERÊNCIA':
-                await definirSemifinaisNacionais(campeonatoId, timeVencedorId)
-                break
-
-            case 'SEMIFINAL NACIONAL':
-                await definirFinalNacional(campeonatoId, timeVencedorId)
-                break
-        }
-    } catch (error) {
-        console.error(`⚠️ Erro ao definir próximos jogos após ${jogoFinalizado.fase}:`, error)
-    }
-}
-
-// ✅ FUNÇÕES AUXILIARES PARA DEFINIR PRÓXIMOS JOGOS
-async function definirSemifinaisConferencia(campeonatoId: number, conferenciaId: number, vencedorId: number) {
-    // Buscar próximo jogo de semifinal da mesma conferência que está com TBD
-    const proximoJogo = await prisma.jogo.findFirst({
-        where: {
-            campeonatoId,
-            conferenciaId,
-            fase: 'SEMIFINAL DE CONFERÊNCIA',
-            OR: [
-                { timeCasa: { nome: { contains: 'TBD' } } },
-                { timeVisitante: { nome: { contains: 'TBD' } } }
-            ]
-        },
-        include: {
-            timeCasa: true,
-            timeVisitante: true
-        }
-    })
-
-    if (proximoJogo) {
-        if (proximoJogo.timeCasa.nome.includes('TBD')) {
-            await prisma.jogo.update({
-                where: { id: proximoJogo.id },
-                data: { timeCasaId: vencedorId }
-            })
-        } else if (proximoJogo.timeVisitante.nome.includes('TBD')) {
-            await prisma.jogo.update({
-                where: { id: proximoJogo.id },
-                data: { timeVisitanteId: vencedorId }
-            })
-        }
-        console.log(`   ➡️  Time ${vencedorId} classificado para Semifinal de Conferência (Jogo ${proximoJogo.id})`)
-    }
-}
-
-async function definirFinalConferencia(campeonatoId: number, conferenciaId: number, vencedorId: number) {
-    const proximoJogo = await prisma.jogo.findFirst({
-        where: {
-            campeonatoId,
-            conferenciaId,
-            fase: 'FINAL DE CONFERÊNCIA',
-            OR: [
-                { timeCasa: { nome: { contains: 'TBD' } } },
-                { timeVisitante: { nome: { contains: 'TBD' } } }
-            ]
-        },
-        include: {
-            timeCasa: true,
-            timeVisitante: true
-        }
-    })
-
-    if (proximoJogo) {
-        if (proximoJogo.timeCasa.nome.includes('TBD')) {
-            await prisma.jogo.update({
-                where: { id: proximoJogo.id },
-                data: { timeCasaId: vencedorId }
-            })
-        } else if (proximoJogo.timeVisitante.nome.includes('TBD')) {
-            await prisma.jogo.update({
-                where: { id: proximoJogo.id },
-                data: { timeVisitanteId: vencedorId }
-            })
-        }
-        console.log(`   ➡️  Time ${vencedorId} classificado para Final de Conferência (Jogo ${proximoJogo.id})`)
-    }
-}
-
-async function definirSemifinaisNacionais(campeonatoId: number, vencedorId: number) {
-    const proximoJogo = await prisma.jogo.findFirst({
-        where: {
-            campeonatoId,
-            fase: 'SEMIFINAL NACIONAL',
-            OR: [
-                { timeCasa: { nome: { contains: 'TBD' } } },
-                { timeVisitante: { nome: { contains: 'TBD' } } }
-            ]
-        },
-        include: {
-            timeCasa: true,
-            timeVisitante: true
-        }
-    })
-
-    if (proximoJogo) {
-        if (proximoJogo.timeCasa.nome.includes('TBD')) {
-            await prisma.jogo.update({
-                where: { id: proximoJogo.id },
-                data: { timeCasaId: vencedorId }
-            })
-        } else if (proximoJogo.timeVisitante.nome.includes('TBD')) {
-            await prisma.jogo.update({
-                where: { id: proximoJogo.id },
-                data: { timeVisitanteId: vencedorId }
-            })
-        }
-        console.log(`   ➡️  Time ${vencedorId} classificado para Semifinal Nacional (Jogo ${proximoJogo.id})`)
-    }
-}
-
-async function definirFinalNacional(campeonatoId: number, vencedorId: number) {
-    const proximoJogo = await prisma.jogo.findFirst({
-        where: {
-            campeonatoId,
-            fase: 'FINAL NACIONAL',
-            OR: [
-                { timeCasa: { nome: { contains: 'TBD' } } },
-                { timeVisitante: { nome: { contains: 'TBD' } } }
-            ]
-        },
-        include: {
-            timeCasa: true,
-            timeVisitante: true
-        }
-    })
-
-    if (proximoJogo) {
-        if (proximoJogo.timeCasa.nome.includes('TBD')) {
-            await prisma.jogo.update({
-                where: { id: proximoJogo.id },
-                data: { timeCasaId: vencedorId }
-            })
-        } else if (proximoJogo.timeVisitante.nome.includes('TBD')) {
-            await prisma.jogo.update({
-                where: { id: proximoJogo.id },
-                data: { timeVisitanteId: vencedorId }
-            })
-        }
-        console.log(`   ➡️  Time ${vencedorId} classificado para Final Nacional (Jogo ${proximoJogo.id})`)
-    }
-}
-
-// ✅ VERIFICAR SE TEMPORADA REGULAR FOI FINALIZADA
-async function verificarFinalizacaoTemporadaRegular() {
-    try {
-        const superliga = await prisma.campeonato.findFirst({
-            where: { temporada: '2025', isSuperliga: true }
-        })
-
-        if (!superliga) return
-
-        const totalJogosTemporada = await prisma.jogo.count({
-            where: {
-                campeonatoId: superliga.id,
-                fase: 'TEMPORADA REGULAR'
-            }
-        })
-
-        const jogosFinalizados = await prisma.jogo.count({
-            where: {
-                campeonatoId: superliga.id,
-                fase: 'TEMPORADA REGULAR',
-                status: 'FINALIZADO'
-            }
-        })
-
-        console.log(`📊 Status Temporada Regular: ${jogosFinalizados}/${totalJogosTemporada} jogos finalizados`)
-
-        if (totalJogosTemporada > 0 && jogosFinalizados === totalJogosTemporada) {
-            console.log('🏆 TEMPORADA REGULAR FINALIZADA!')
-
-            await prisma.campeonato.update({
-                where: { id: superliga.id },
-                data: {
-                    status: 'PLAYOFFS',
-                    configSuperliga: {
-                        faseAtual: 'PLAYOFFS',
-                        temporadaRegularFinalizada: new Date().toISOString()
-                    } as any
-                }
-            })
-        }
-    } catch (error) {
-        console.error('Erro ao verificar finalização da temporada regular:', error)
-    }
-}
 
 adminRouter.get('/status-superliga/:temporada', async (req: Request, res: Response): Promise<void> => {
     try {
@@ -2627,7 +1801,6 @@ adminRouter.post('/reset-database', async (req, res) => {
 
         console.log('🔄 Resetando sequences...')
 
-        // ✅ CORRIGIDO: Usando prisma.$executeRaw e removendo PlayoffJogo_id_seq inexistente
         try {
             await prisma.$executeRaw`ALTER SEQUENCE "Time_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "Jogador_id_seq" RESTART WITH 1`
@@ -2637,17 +1810,14 @@ adminRouter.post('/reset-database', async (req, res) => {
             await prisma.$executeRaw`ALTER SEQUENCE "Conferencia_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "Regional_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "DistribuicaoTime_id_seq" RESTART WITH 1`
-            // ✅ REMOVIDO: await prisma.$executeRaw`ALTER SEQUENCE "PlayoffJogo_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "Jogo_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "EstatisticaJogo_id_seq" RESTART WITH 1`
 
             console.log('✅ Sequences resetadas com sucesso!')
         } catch (error) {
             console.error('⚠️ Erro ao resetar sequences:', error)
-            // Continua mesmo com erro (algumas sequences podem não existir)
         }
 
-        // Verificação final
         const counts = await Promise.all([
             prisma.time.count(),
             prisma.jogador.count(),
@@ -2698,7 +1868,6 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
 
         console.log(`Atualizando jogo ${id} com dados:`, req.body)
 
-        // Verificar se o jogo existe
         const jogoExistente = await prisma.jogo.findUnique({
             where: { id: parseInt(id) },
             include: {
@@ -2712,10 +1881,8 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
             return
         }
 
-        // Preparar dados para atualização
         const dadosAtualizacao: any = {}
 
-        // Atualizar placar se fornecido
         if (placarCasa !== undefined) {
             if (placarCasa < 0) {
                 res.status(400).json({ error: 'Placar casa não pode ser negativo' })
@@ -2732,7 +1899,6 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
             dadosAtualizacao.placarVisitante = parseInt(placarVisitante)
         }
 
-        // Atualizar data se fornecida
         if (dataJogo) {
             try {
                 const novaData = new Date(dataJogo)
@@ -2747,17 +1913,14 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
             }
         }
 
-        // Atualizar local se fornecido
         if (local !== undefined) {
             dadosAtualizacao.local = local.trim() || null
         }
 
-        // Atualizar observações se fornecidas
         if (observacoes !== undefined) {
             dadosAtualizacao.observacoes = observacoes.trim() || null
         }
 
-        // Atualizar status se fornecido
         if (status) {
             const statusValidos = ['AGENDADO', 'AO VIVO', 'FINALIZADO', 'ADIADO', 'CANCELADO']
             if (!statusValidos.includes(status)) {
@@ -2770,13 +1933,11 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
             dadosAtualizacao.status = status
         }
 
-        // Se não há nada para atualizar
         if (Object.keys(dadosAtualizacao).length === 0) {
             res.status(400).json({ error: 'Nenhum dado fornecido para atualização' })
             return
         }
 
-        // Atualizar o jogo
         const jogoAtualizado = await prisma.jogo.update({
             where: { id: parseInt(id) },
             data: dadosAtualizacao,
@@ -2810,7 +1971,7 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
         })
 
         console.log(`✅ Jogo ${id} atualizado com sucesso:`)
-        console.log(`   ${jogoAtualizado.timeCasa.sigla} vs ${jogoAtualizado.timeVisitante.sigla}`)
+        console.log(`   ${jogoAtualizado.timeCasa?.sigla} vs ${jogoAtualizado.timeVisitante?.sigla}`)
         console.log(`   Data: ${jogoAtualizado.dataJogo}`)
         console.log(`   Local: ${jogoAtualizado.local || 'Não definido'}`)
         console.log(`   Status: ${jogoAtualizado.status}`)

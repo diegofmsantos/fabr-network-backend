@@ -10,11 +10,7 @@
     "build": "tsup src",
     "start": "node dist/server.js",
     "postinstall": "prisma generate",
-    "reset-db": "npx ts-node scripts/reset-sequences.ts",
-    "generate:resultados-fins-de-semana": "npx ts-node scripts/gerar-resultados-por-fim-de-semana.ts",
-    "generate:estatisticas-fins-de-semana": "npx ts-node scripts/gerar-estatisticas-por-fim-de-semana.ts",
-    "generate:resultados-playoffs": "npx ts-node scripts/gerar-resultados-playoffs.ts",
-    "generate:estatisticas-playoffs": "npx ts-node scripts/gerar-estatisticas-playoffs.ts"
+    "reset-db": "npx ts-node scripts/reset-sequences.ts"
   },
   "author": "",
   "license": "ISC",

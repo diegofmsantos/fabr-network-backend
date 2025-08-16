@@ -10,19 +10,7 @@ const prisma = new PrismaClient()
 
 export const adminRouter = express.Router()
 
-const uploadDir = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (_req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
+const storage = multer.memoryStorage()
 
 const upload = multer({
     storage,
@@ -92,9 +80,7 @@ adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) =
             return;
         }
 
-        console.log('Arquivo recebido:', req.file.path);
-
-        const workbook = xlsx.readFile(req.file.path);
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const timeSheet = workbook.Sheets[sheetName];
 
@@ -186,8 +172,6 @@ adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) =
             }
         }
 
-        fs.unlinkSync(req.file.path);
-
         res.status(200).json({
             mensagem: `Processamento concluído: ${resultados.sucesso} times importados com sucesso`,
             erros: resultados.erros.length > 0 ? resultados.erros : null
@@ -195,9 +179,6 @@ adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) =
     } catch (error) {
         console.error('Erro ao processar planilha de times:', error);
 
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path);
-        }
 
         res.status(500).json({
             error: 'Erro ao processar a planilha de times',
@@ -217,7 +198,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
 
         console.log(`📁 Arquivo recebido: ${req.file.originalname} (${req.file.size} bytes)`)
 
-        const workbook = xlsx.readFile(req.file.path)
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' })
         const planilha = workbook.Sheets[workbook.SheetNames[0]]
         const dadosJogadores = xlsx.utils.sheet_to_json(planilha)
 
@@ -394,10 +375,6 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
             }
         }
 
-        if (fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path)
-        }
-
         console.log('\n' + '='.repeat(60))
         console.log('📊 RELATÓRIO FINAL DA IMPORTAÇÃO DE JOGADORES')
         console.log('='.repeat(60))
@@ -446,10 +423,6 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
     } catch (error) {
         console.error('❌ Erro crítico na importação de jogadores:', error)
 
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path)
-        }
-
         res.status(500).json({
             error: 'Erro crítico ao processar a planilha de jogadores',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -466,8 +439,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             return
         }
 
-        console.log(`Arquivo recebido: ${req.file.path}`)
-
         const superliga = await prisma.campeonato.findFirst({
             where: {
                 temporada: '2025',
@@ -482,7 +453,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
         console.log(`✅ Superliga encontrada: ID ${superliga.id}`)
 
-        const workbook = xlsx.readFile(req.file.path)
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' })
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
         const jogosRaw = xlsx.utils.sheet_to_json(worksheet)
@@ -617,12 +588,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             }
         }
 
-        try {
-            fs.unlinkSync(req.file.path)
-        } catch (cleanupError) {
-            console.warn('⚠️ Não foi possível remover arquivo temporário:', cleanupError)
-        }
-
         const resposta = {
             message: `Agenda importada com sucesso!`,
             resumo: {
@@ -652,12 +617,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 
     } catch (error) {
         console.error('❌ Erro na importação da agenda:', error)
-
-        if (req.file?.path) {
-            try {
-                fs.unlinkSync(req.file.path)
-            } catch { }
-        }
 
         res.status(500).json({
             error: 'Erro interno do servidor',
@@ -734,7 +693,7 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
         console.log('📊 INICIANDO DUPLA INSERÇÃO DE ESTATÍSTICAS...');
         console.log(`🎯 Jogo: ${id_jogo}, Data: ${data_jogo}`);
 
-        const workbook = xlsx.readFile(req.file.path);
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const statsSheet = workbook.Sheets[sheetName];
 
@@ -1411,9 +1370,8 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
         }
 
         console.log('📋 Iniciando importação de resultados (FLUXO SIMPLIFICADO)...')
-        console.log('Arquivo recebido:', req.file.path)
 
-        const workbook = xlsx.readFile(req.file.path)
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' })
         const sheetName = workbook.SheetNames[0]
         const resultadosSheet = workbook.Sheets[sheetName]
         const resultadosRaw = xlsx.utils.sheet_to_json(resultadosSheet) as any[]
@@ -1547,9 +1505,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
     } finally {
-        if (req.file?.path) {
-            fs.unlinkSync(req.file.path)
-        }
+
     }
 })
 

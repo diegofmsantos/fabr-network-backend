@@ -1,6 +1,6 @@
 // ==================== BASE TYPES ====================
 
-import { Conferencia, PlayoffJogo, Regional } from "@prisma/client"
+import { Conferencia, Regional } from "@prisma/client"
 
 export interface BaseEntity {
   id: number
@@ -1630,11 +1630,6 @@ export interface ClassificacaoTime {
 
 // Interface PlayoffBracket já existe no arquivo, não precisa redeclarar
 
-export interface FaseNacional {
-  semifinais: PlayoffJogo[]
-  final: PlayoffJogo
-  campeao?: Time
-}
 
 export interface SuperligaStatus {
   campeonatoId: number
@@ -1753,11 +1748,6 @@ export interface RegionalViewProps {
   }
   classificacao: ClassificacaoTime[]
   jogos: Jogo[]
-}
-
-export interface PlayoffBracketViewProps {
-  bracket: PlayoffBracket  // Usando a interface que já existe
-  onUpdateJogo?: (jogo: PlayoffJogo) => void
 }
 
 // ==================== TYPES PARA FORMULÁRIOS ====================

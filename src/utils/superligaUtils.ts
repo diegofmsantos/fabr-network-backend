@@ -57,7 +57,7 @@ export async function distribuirTimesAutomaticamente(campeonatoId: number, tempo
             'CENTRO NORTE': {
                 regionais: {
                     'CERRADO': ['Rondonópolis Hawks', 'Cuiabá Arsenal', 'Tubarões do Cerrado'],
-                    'AMAZONIA': ['Porto Velho Miners', 'Manaus FA', 'São Raimundo Cavaliers']
+                    'AMAZONIA': ['Porto Velho Miners', 'Manaus FA', 'Manaus Cavaliers']
                 }
             }
         }

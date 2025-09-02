@@ -89,7 +89,7 @@ superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
         id: jogo.id,
         timeCasa: jogo.timeCasa,
         timeVisitante: jogo.timeVisitante,
-        dataJogo: jogo.dataJogo,
+        dataJogo: jogo.dataJogo ? new Date(jogo.dataJogo).toISOString() : null,
         status: jogo.status,
         placarCasa: jogo.placarCasa,
         placarVisitante: jogo.placarVisitante,

@@ -431,6 +431,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
 })
 
 adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req: Request, res: Response) => {
+
     try {
         console.log('📋 Iniciando importação de agenda de jogos...')
 
@@ -492,7 +493,10 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             const linha = i + 1
 
             try {
-                const dataJogo = new Date(jogoData.data)
+                const dataJogo = jogoData.data instanceof Date ? jogoData.data :
+                    typeof jogoData.data === 'number' ?
+                        new Date((jogoData.data - 25569) * 86400 * 1000) :
+                        new Date(jogoData.data)
                 if (isNaN(dataJogo.getTime())) {
                     resultados.erros.push({
                         linha,

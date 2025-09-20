@@ -1,15 +1,13 @@
-// scripts/reset-sequences.ts - VERSÃO CORRIGIDA
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
 async function resetDatabase() {
   console.log('🚀 INICIANDO RESET COMPLETO DO BANCO DE DADOS')
-  console.log('⚠️ Esta operação vai remover TODOS os dados!')
+  console.log('⚠️ Esta operação vai remover TODOS os dados (exceto matérias)!')
   console.log('')
 
   try {
-    // 1. Limpar dados de todas as tabelas na ordem correta (relacionamentos)
     console.log('📊 Limpando dados das tabelas...')
 
     await prisma.estatisticaJogo.deleteMany()
@@ -39,23 +37,15 @@ async function resetDatabase() {
     await prisma.time.deleteMany()
     console.log('   ✅ Time limpa')
 
-    await prisma.materia.deleteMany()
-    console.log('   ✅ Materia limpa')
+    console.log('   📰 Materia preservada (não será resetada)')
 
-    // 2. Resetar todas as sequences (IDs voltam para 1)
     console.log('🔄 Resetando sequences...')
     console.log('⚠️ Algumas sequences podem não existir ainda (normal em banco novo)')
 
-    // ✅ SEQUENCES CORRIGIDAS - REMOVIDA A INEXISTENTE PlayoffJogo_id_seq
-
-    console.log('🔄 Resetando sequences...')
-
     try {
-      // ✅ CORRIGIDO: Sintaxe padronizada e sequence inexistente removida
       await prisma.$executeRaw`ALTER SEQUENCE "Time_id_seq" RESTART WITH 1`
       await prisma.$executeRaw`ALTER SEQUENCE "Jogador_id_seq" RESTART WITH 1`
       await prisma.$executeRaw`ALTER SEQUENCE "JogadorTime_id_seq" RESTART WITH 1`
-      await prisma.$executeRaw`ALTER SEQUENCE "Materia_id_seq" RESTART WITH 1`
       await prisma.$executeRaw`ALTER SEQUENCE "Campeonato_id_seq" RESTART WITH 1`
       await prisma.$executeRaw`ALTER SEQUENCE "Conferencia_id_seq" RESTART WITH 1`
       await prisma.$executeRaw`ALTER SEQUENCE "Regional_id_seq" RESTART WITH 1`
@@ -66,12 +56,8 @@ async function resetDatabase() {
       console.log('✅ Sequences resetadas com sucesso!')
     } catch (error) {
       console.error('⚠️ Erro ao resetar sequences:', error)
-      // Continua mesmo com erro (algumas sequences podem não existir)
     }
 
-    console.log('✅ Sequences resetadas com sucesso!')
-
-    // 3. Verificação final expandida
     console.log('🔍 Verificando limpeza...')
 
     const counts = await Promise.all([
@@ -84,8 +70,10 @@ async function resetDatabase() {
       prisma.distribuicaoTime.count(),
       prisma.jogo.count(),
       prisma.estatisticaJogo.count(),
-      prisma.materia.count(),
     ])
+
+    // 🔧 CONTAR MATÉRIAS SEPARADAMENTE PARA MOSTRAR QUE FORAM PRESERVADAS
+    const materiasCount = await prisma.materia.count()
 
     console.log('📊 Contagem final:')
     console.log(`   Times: ${counts[0]}`)
@@ -97,10 +85,10 @@ async function resetDatabase() {
     console.log(`   Distribuições: ${counts[6]}`)
     console.log(`   Jogos: ${counts[7]}`)
     console.log(`   Estatísticas: ${counts[8]}`)
-    console.log(`   Matérias: ${counts[9]}`)
+    console.log(`   📰 Matérias: ${materiasCount} (preservadas)`)
 
     if (counts.every(count => count === 0)) {
-      console.log('🎉 BANCO ZERADO COM SUCESSO!')
+      console.log('🎉 BANCO ZERADO COM SUCESSO (matérias preservadas)!')
       console.log('✨ Pronto para novos dados!')
       console.log('')
       console.log('📋 Próximos passos recomendados:')
@@ -109,12 +97,14 @@ async function resetDatabase() {
       console.log('   3. Criar Superliga: frontend admin → Superliga/Criar')
       console.log('   4. Importar Agenda: frontend admin → Agenda')
       console.log('   5. Importar Resultados: frontend admin → Resultados')
+      console.log('')
+      console.log(`📰 Matérias: ${materiasCount} registros preservados`)
     } else {
       console.log('⚠️ Atenção: Alguns dados podem não ter sido removidos')
 
       const tableNames = [
         'Times', 'Jogadores', 'Jogador-Time', 'Campeonatos',
-        'Conferências', 'Regionais', 'Distribuições', 'Jogos', 'Estatísticas', 'Matérias'
+        'Conferências', 'Regionais', 'Distribuições', 'Jogos', 'Estatísticas'
       ]
 
       counts.forEach((count, index) => {
@@ -122,12 +112,13 @@ async function resetDatabase() {
           console.log(`   ⚠️ ${tableNames[index]}: ${count} registros restantes`)
         }
       })
+
+      console.log(`   📰 Matérias: ${materiasCount} registros preservados`)
     }
 
   } catch (error) {
     console.error('❌ Erro ao resetar banco:', error)
 
-    // ✅ INFORMAÇÕES ÚTEIS PARA DEBUG
     if (error instanceof Error) {
       console.error('📝 Detalhes do erro:', error.message)
 
@@ -146,7 +137,6 @@ async function resetDatabase() {
   }
 }
 
-// ✅ VERIFICAR ARGUMENTOS DA LINHA DE COMANDO
 const args = process.argv.slice(2)
 
 if (args.includes('--help') || args.includes('-h')) {
@@ -156,9 +146,10 @@ if (args.includes('--help') || args.includes('-h')) {
   console.log('  npm run reset-db --help   # Mostrar esta ajuda')
   console.log('')
   console.log('🔍 O que o script faz:')
-  console.log('  - Remove todos os dados de todas as tabelas')
+  console.log('  - Remove todos os dados de todas as tabelas (EXCETO MATÉRIAS)')
   console.log('  - Reseta todas as sequences (IDs voltam para 1)')
   console.log('  - Mantém a estrutura das tabelas intacta')
+  console.log('  - Preserva as matérias/notícias')
   console.log('  - Prepara o banco para novos dados')
 } else {
   resetDatabase()

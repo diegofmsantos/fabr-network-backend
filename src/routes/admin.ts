@@ -1756,16 +1756,12 @@ adminRouter.post('/reset-database', async (req, res) => {
         await prisma.time.deleteMany()
         console.log('   ✅ Time limpa')
 
-        await prisma.materia.deleteMany()
-        console.log('   ✅ Materia limpa')
-
         console.log('🔄 Resetando sequences...')
 
         try {
             await prisma.$executeRaw`ALTER SEQUENCE "Time_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "Jogador_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "JogadorTime_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "Materia_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "Campeonato_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "Conferencia_id_seq" RESTART WITH 1`
             await prisma.$executeRaw`ALTER SEQUENCE "Regional_id_seq" RESTART WITH 1`
@@ -1781,26 +1777,44 @@ adminRouter.post('/reset-database', async (req, res) => {
         const counts = await Promise.all([
             prisma.time.count(),
             prisma.jogador.count(),
+            prisma.jogadorTime.count(),
             prisma.campeonato.count(),
-            prisma.jogo.count()
+            prisma.conferencia.count(),
+            prisma.regional.count(),
+            prisma.distribuicaoTime.count(),
+            prisma.jogo.count(),
+            prisma.estatisticaJogo.count(),
         ])
 
         console.log('📊 Verificação final:')
         console.log(`   Times: ${counts[0]}`)
         console.log(`   Jogadores: ${counts[1]}`)
-        console.log(`   Campeonatos: ${counts[2]}`)
-        console.log(`   Jogos: ${counts[3]}`)
+        console.log(`   Jogador-Time: ${counts[2]}`)
+        console.log(`   Campeonatos: ${counts[3]}`)
+        console.log(`   Conferências: ${counts[4]}`)
+        console.log(`   Regionais: ${counts[5]}`)
+        console.log(`   Distribuições: ${counts[6]}`)
+        console.log(`   Jogos: ${counts[7]}`)
+        console.log(`   Estatísticas: ${counts[8]}`)
+        console.log(`   📰 Matérias: PRESERVADAS`)
 
         res.json({
-            message: 'Banco de dados resetado com sucesso',
+            message: 'Banco de dados resetado com sucesso (matérias preservadas)',
             detalhes: {
-                tabelas_limpas: 10,
-                sequences_resetadas: 10,
+                tabelas_limpas: 9,
+                tabelas_preservadas: ['Materia'],
+                sequences_resetadas: 9,
                 verificacao: {
                     times: counts[0],
                     jogadores: counts[1],
-                    campeonatos: counts[2],
-                    jogos: counts[3]
+                    jogadorTime: counts[2],
+                    campeonatos: counts[3],
+                    conferencias: counts[4],
+                    regionais: counts[5],
+                    distribuicoes: counts[6],
+                    jogos: counts[7],
+                    estatisticas: counts[8],
+                    materias: 'preservadas'
                 }
             }
         })

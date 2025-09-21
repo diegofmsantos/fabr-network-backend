@@ -1723,6 +1723,357 @@ adminRouter.get('/jogadores/:jogadorId/estatisticas-jogos', async (req: Request,
     }
 })
 
+// Adicionar esta rota no arquivo src/routes/admin.ts
+
+adminRouter.put('/estatistica-jogo/:id', async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params
+        const { estatisticas } = req.body
+        const estatisticaId = parseInt(id, 10)
+
+        console.log(`🔍 [PUT] Atualizando estatística de jogo ${estatisticaId}`)
+
+        if (isNaN(estatisticaId)) {
+            res.status(400).json({ error: 'ID da estatística inválido' })
+            return
+        }
+
+        if (!estatisticas) {
+            res.status(400).json({ error: 'Estatísticas são obrigatórias' })
+            return
+        }
+
+        // Verificar se a estatística existe
+        const estatisticaExistente = await prisma.estatisticaJogo.findUnique({
+            where: { id: estatisticaId },
+            include: {
+                jogo: {
+                    select: {
+                        id: true,
+                        dataJogo: true,
+                        status: true,
+                        timeCasa: { select: { nome: true, sigla: true } },
+                        timeVisitante: { select: { nome: true, sigla: true } }
+                    }
+                },
+                jogador: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        posicao: true
+                    }
+                }
+            }
+        })
+
+        if (!estatisticaExistente) {
+            res.status(404).json({ error: 'Estatística de jogo não encontrada' })
+            return
+        }
+
+        // Validar estrutura das estatísticas
+        const estatisticasEstruturadas = {
+            passe: {
+                passes_completos: Number(estatisticas.passe?.passes_completos || 0),
+                passes_tentados: Number(estatisticas.passe?.passes_tentados || 0),
+                jardas_de_passe: Number(estatisticas.passe?.jardas_de_passe || 0),
+                td_passados: Number(estatisticas.passe?.td_passados || 0),
+                interceptacoes_sofridas: Number(estatisticas.passe?.interceptacoes_sofridas || 0),
+                sacks_sofridos: Number(estatisticas.passe?.sacks_sofridos || 0),
+                fumble_de_passador: Number(estatisticas.passe?.fumble_de_passador || 0)
+            },
+            corrida: {
+                corridas: Number(estatisticas.corrida?.corridas || 0),
+                jardas_corridas: Number(estatisticas.corrida?.jardas_corridas || 0),
+                tds_corridos: Number(estatisticas.corrida?.tds_corridos || 0),
+                fumble_de_corredor: Number(estatisticas.corrida?.fumble_de_corredor || 0)
+            },
+            recepcao: {
+                recepcoes: Number(estatisticas.recepcao?.recepcoes || 0),
+                alvo: Number(estatisticas.recepcao?.alvo || 0),
+                jardas_recebidas: Number(estatisticas.recepcao?.jardas_recebidas || 0),
+                tds_recebidos: Number(estatisticas.recepcao?.tds_recebidos || 0)
+            },
+            retorno: {
+                retornos: Number(estatisticas.retorno?.retornos || 0),
+                jardas_retornadas: Number(estatisticas.retorno?.jardas_retornadas || 0),
+                td_retornados: Number(estatisticas.retorno?.td_retornados || 0)
+            },
+            defesa: {
+                tackles_totais: Number(estatisticas.defesa?.tackles_totais || 0),
+                tackles_for_loss: Number(estatisticas.defesa?.tackles_for_loss || 0),
+                sacks_forcado: Number(estatisticas.defesa?.sacks_forcado || 0),
+                fumble_forcado: Number(estatisticas.defesa?.fumble_forcado || 0),
+                interceptacao_forcada: Number(estatisticas.defesa?.interceptacao_forcada || 0),
+                passe_desviado: Number(estatisticas.defesa?.passe_desviado || 0),
+                safety: Number(estatisticas.defesa?.safety || 0),
+                td_defensivo: Number(estatisticas.defesa?.td_defensivo || 0)
+            },
+            kicker: {
+                xp_bons: Number(estatisticas.kicker?.xp_bons || 0),
+                tentativas_de_xp: Number(estatisticas.kicker?.tentativas_de_xp || 0),
+                fg_bons: Number(estatisticas.kicker?.fg_bons || 0),
+                tentativas_de_fg: Number(estatisticas.kicker?.tentativas_de_fg || 0),
+                fg_mais_longo: Number(estatisticas.kicker?.fg_mais_longo || 0)
+            },
+            punter: {
+                punts: Number(estatisticas.punter?.punts || 0),
+                jardas_de_punt: Number(estatisticas.punter?.jardas_de_punt || 0)
+            }
+        }
+
+        // Atualizar a estatística
+        const estatisticaAtualizada = await prisma.estatisticaJogo.update({
+            where: { id: estatisticaId },
+            data: {
+                estatisticas: estatisticasEstruturadas
+            },
+            include: {
+                jogo: {
+                    include: {
+                        timeCasa: {
+                            select: {
+                                id: true,
+                                nome: true,
+                                sigla: true,
+                                cor: true,
+                                logo: true
+                            }
+                        },
+                        timeVisitante: {
+                            select: {
+                                id: true,
+                                nome: true,
+                                sigla: true,
+                                cor: true,
+                                logo: true
+                            }
+                        },
+                        campeonato: {
+                            select: {
+                                id: true,
+                                nome: true,
+                                temporada: true
+                            }
+                        }
+                    }
+                },
+                jogador: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        posicao: true,
+                        setor: true
+                    }
+                },
+                time: {
+                    select: {
+                        id: true,
+                        nome: true,
+                        sigla: true
+                    }
+                }
+            }
+        })
+
+        console.log(`✅ [PUT] Estatística ${estatisticaId} atualizada com sucesso`)
+        console.log(`   Jogador: ${estatisticaAtualizada.jogador.nome}`)
+        console.log(`   Jogo: ${estatisticaAtualizada.jogo.timeCasa?.sigla} vs ${estatisticaAtualizada.jogo.timeVisitante?.sigla}`)
+        console.log(`   Data: ${estatisticaAtualizada.jogo.dataJogo}`)
+
+        // Agora recalcular as estatísticas consolidadas do jogador
+        await recalcularEstatisticasConsolidadas(
+            estatisticaAtualizada.jogadorId,
+            estatisticaAtualizada.timeId,
+            estatisticaAtualizada.temporada || '2025'
+        )
+
+        res.json({
+            message: 'Estatística de jogo atualizada com sucesso',
+            estatistica: {
+                id: estatisticaAtualizada.id,
+                jogoId: estatisticaAtualizada.jogoId,
+                jogadorId: estatisticaAtualizada.jogadorId,
+                timeId: estatisticaAtualizada.timeId,
+                temporada: estatisticaAtualizada.temporada,
+                estatisticas: estatisticaAtualizada.estatisticas,
+                jogo: {
+                    id: estatisticaAtualizada.jogo.id,
+                    dataJogo: estatisticaAtualizada.jogo.dataJogo,
+                    status: estatisticaAtualizada.jogo.status,
+                    placarCasa: estatisticaAtualizada.jogo.placarCasa,
+                    placarVisitante: estatisticaAtualizada.jogo.placarVisitante,
+                    rodada: estatisticaAtualizada.jogo.rodada,
+                    fase: estatisticaAtualizada.jogo.fase,
+                    local: estatisticaAtualizada.jogo.local,
+                    timeCasa: estatisticaAtualizada.jogo.timeCasa,
+                    timeVisitante: estatisticaAtualizada.jogo.timeVisitante,
+                    campeonato: estatisticaAtualizada.jogo.campeonato
+                },
+                jogador: estatisticaAtualizada.jogador,
+                time: estatisticaAtualizada.time
+            }
+        })
+
+    } catch (error) {
+        console.error('❌ [PUT] Erro ao atualizar estatística de jogo:', error)
+        res.status(500).json({
+            error: 'Erro interno do servidor',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+    }
+})
+
+// Função auxiliar para recalcular estatísticas consolidadas
+async function recalcularEstatisticasConsolidadas(jogadorId: number, timeId: number, temporada: string) {
+    try {
+        console.log(`🔄 [RECALCULO] Recalculando estatísticas consolidadas para jogador ${jogadorId}`)
+
+        // Buscar todas as estatísticas de jogos do jogador na temporada
+        const todasEstatisticas = await prisma.estatisticaJogo.findMany({
+            where: {
+                jogadorId: jogadorId,
+                timeId: timeId,
+                temporada: temporada
+            },
+            select: {
+                estatisticas: true
+            }
+        })
+
+        // Somar todas as estatísticas
+        const estatisticasConsolidadas = {
+            passe: {
+                passes_completos: 0,
+                passes_tentados: 0,
+                jardas_de_passe: 0,
+                td_passados: 0,
+                interceptacoes_sofridas: 0,
+                sacks_sofridos: 0,
+                fumble_de_passador: 0
+            },
+            corrida: {
+                corridas: 0,
+                jardas_corridas: 0,
+                tds_corridos: 0,
+                fumble_de_corredor: 0
+            },
+            recepcao: {
+                recepcoes: 0,
+                alvo: 0,
+                jardas_recebidas: 0,
+                tds_recebidos: 0
+            },
+            retorno: {
+                retornos: 0,
+                jardas_retornadas: 0,
+                td_retornados: 0
+            },
+            defesa: {
+                tackles_totais: 0,
+                tackles_for_loss: 0,
+                sacks_forcado: 0,
+                fumble_forcado: 0,
+                interceptacao_forcada: 0,
+                passe_desviado: 0,
+                safety: 0,
+                td_defensivo: 0
+            },
+            kicker: {
+                xp_bons: 0,
+                tentativas_de_xp: 0,
+                fg_bons: 0,
+                tentativas_de_fg: 0,
+                fg_mais_longo: 0
+            },
+            punter: {
+                punts: 0,
+                jardas_de_punt: 0
+            }
+        }
+
+        // Somar todas as estatísticas de todos os jogos
+        todasEstatisticas.forEach(estatistica => {
+            const stats = estatistica.estatisticas as any
+
+            if (stats.passe) {
+                estatisticasConsolidadas.passe.passes_completos += stats.passe.passes_completos || 0
+                estatisticasConsolidadas.passe.passes_tentados += stats.passe.passes_tentados || 0
+                estatisticasConsolidadas.passe.jardas_de_passe += stats.passe.jardas_de_passe || 0
+                estatisticasConsolidadas.passe.td_passados += stats.passe.td_passados || 0
+                estatisticasConsolidadas.passe.interceptacoes_sofridas += stats.passe.interceptacoes_sofridas || 0
+                estatisticasConsolidadas.passe.sacks_sofridos += stats.passe.sacks_sofridos || 0
+                estatisticasConsolidadas.passe.fumble_de_passador += stats.passe.fumble_de_passador || 0
+            }
+
+            if (stats.corrida) {
+                estatisticasConsolidadas.corrida.corridas += stats.corrida.corridas || 0
+                estatisticasConsolidadas.corrida.jardas_corridas += stats.corrida.jardas_corridas || 0
+                estatisticasConsolidadas.corrida.tds_corridos += stats.corrida.tds_corridos || 0
+                estatisticasConsolidadas.corrida.fumble_de_corredor += stats.corrida.fumble_de_corredor || 0
+            }
+
+            if (stats.recepcao) {
+                estatisticasConsolidadas.recepcao.recepcoes += stats.recepcao.recepcoes || 0
+                estatisticasConsolidadas.recepcao.alvo += stats.recepcao.alvo || 0
+                estatisticasConsolidadas.recepcao.jardas_recebidas += stats.recepcao.jardas_recebidas || 0
+                estatisticasConsolidadas.recepcao.tds_recebidos += stats.recepcao.tds_recebidos || 0
+            }
+
+            if (stats.retorno) {
+                estatisticasConsolidadas.retorno.retornos += stats.retorno.retornos || 0
+                estatisticasConsolidadas.retorno.jardas_retornadas += stats.retorno.jardas_retornadas || 0
+                estatisticasConsolidadas.retorno.td_retornados += stats.retorno.td_retornados || 0
+            }
+
+            if (stats.defesa) {
+                estatisticasConsolidadas.defesa.tackles_totais += stats.defesa.tackles_totais || 0
+                estatisticasConsolidadas.defesa.tackles_for_loss += stats.defesa.tackles_for_loss || 0
+                estatisticasConsolidadas.defesa.sacks_forcado += stats.defesa.sacks_forcado || 0
+                estatisticasConsolidadas.defesa.fumble_forcado += stats.defesa.fumble_forcado || 0
+                estatisticasConsolidadas.defesa.interceptacao_forcada += stats.defesa.interceptacao_forcada || 0
+                estatisticasConsolidadas.defesa.passe_desviado += stats.defesa.passe_desviado || 0
+                estatisticasConsolidadas.defesa.safety += stats.defesa.safety || 0
+                estatisticasConsolidadas.defesa.td_defensivo += stats.defesa.td_defensivo || 0
+            }
+
+            if (stats.kicker) {
+                estatisticasConsolidadas.kicker.xp_bons += stats.kicker.xp_bons || 0
+                estatisticasConsolidadas.kicker.tentativas_de_xp += stats.kicker.tentativas_de_xp || 0
+                estatisticasConsolidadas.kicker.fg_bons += stats.kicker.fg_bons || 0
+                estatisticasConsolidadas.kicker.tentativas_de_fg += stats.kicker.tentativas_de_fg || 0
+                estatisticasConsolidadas.kicker.fg_mais_longo = Math.max(
+                    estatisticasConsolidadas.kicker.fg_mais_longo,
+                    stats.kicker.fg_mais_longo || 0
+                )
+            }
+
+            if (stats.punter) {
+                estatisticasConsolidadas.punter.punts += stats.punter.punts || 0
+                estatisticasConsolidadas.punter.jardas_de_punt += stats.punter.jardas_de_punt || 0
+            }
+        })
+
+        // Atualizar as estatísticas consolidadas na tabela JogadorTime
+        await prisma.jogadorTime.updateMany({
+            where: {
+                jogadorId: jogadorId,
+                timeId: timeId,
+                temporada: temporada
+            },
+            data: {
+                estatisticas: estatisticasConsolidadas
+            }
+        })
+
+        console.log(`✅ [RECALCULO] Estatísticas consolidadas atualizadas para jogador ${jogadorId}`)
+
+    } catch (error) {
+        console.error(`❌ [RECALCULO] Erro ao recalcular estatísticas consolidadas:`, error)
+        // Não relançar o erro para não quebrar a operação principal
+    }
+}
+
 adminRouter.post('/reset-database', async (req, res) => {
     try {
         console.log('🗑️ Iniciando reset do banco de dados via API...')

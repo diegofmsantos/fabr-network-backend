@@ -1924,24 +1924,28 @@ adminRouter.put('/estatistica-jogo/:id', async (req: Request, res: Response) => 
     }
 })
 
-// Função auxiliar para recalcular estatísticas consolidadas
-async function recalcularEstatisticasConsolidadas(jogadorId: number, timeId: number, temporada: string) {
-    try {
-        console.log(`🔄 [RECALCULO] Recalculando estatísticas consolidadas para jogador ${jogadorId}`)
+// ✅ FUNÇÃO CORRIGIDA - Substitua no arquivo /backend/src/routes/admin.ts
 
-        // Buscar todas as estatísticas de jogos do jogador na temporada
+async function recalcularEstatisticasConsolidadas(
+    jogadorId: number,
+    timeId: number,
+    temporada: string
+) {
+    console.log(`🔄 [RECALCULO] Jogador ${jogadorId}, Time ${timeId}, Temporada ${temporada}`)
+
+    try {
+        // 1. Buscar TODAS as estatísticas de jogo do jogador (do zero)
         const todasEstatisticas = await prisma.estatisticaJogo.findMany({
             where: {
-                jogadorId: jogadorId,
-                timeId: timeId,
-                temporada: temporada
-            },
-            select: {
-                estatisticas: true
+                jogadorId,
+                timeId,
+                temporada
             }
         })
 
-        // Somar todas as estatísticas
+        console.log(`📊 [RECALCULO] Encontradas ${todasEstatisticas.length} estatísticas de jogo`)
+
+        // 2. Inicializar estatísticas completamente ZERADAS
         const estatisticasConsolidadas = {
             passe: {
                 passes_completos: 0,
@@ -1992,85 +1996,94 @@ async function recalcularEstatisticasConsolidadas(jogadorId: number, timeId: num
             }
         }
 
-        // Somar todas as estatísticas de todos os jogos
-        todasEstatisticas.forEach(estatistica => {
-            const stats = estatistica.estatisticas as any
+        // 3. SOMAR todas as estatísticas de jogo (partindo do zero)
+        todasEstatisticas.forEach((est, index) => {
+            const stats = est.estatisticas as any
 
             if (stats.passe) {
-                estatisticasConsolidadas.passe.passes_completos += stats.passe.passes_completos || 0
-                estatisticasConsolidadas.passe.passes_tentados += stats.passe.passes_tentados || 0
-                estatisticasConsolidadas.passe.jardas_de_passe += stats.passe.jardas_de_passe || 0
-                estatisticasConsolidadas.passe.td_passados += stats.passe.td_passados || 0
-                estatisticasConsolidadas.passe.interceptacoes_sofridas += stats.passe.interceptacoes_sofridas || 0
-                estatisticasConsolidadas.passe.sacks_sofridos += stats.passe.sacks_sofridos || 0
-                estatisticasConsolidadas.passe.fumble_de_passador += stats.passe.fumble_de_passador || 0
+                estatisticasConsolidadas.passe.passes_completos += Number(stats.passe.passes_completos || 0)
+                estatisticasConsolidadas.passe.passes_tentados += Number(stats.passe.passes_tentados || 0)
+                estatisticasConsolidadas.passe.jardas_de_passe += Number(stats.passe.jardas_de_passe || 0)
+                estatisticasConsolidadas.passe.td_passados += Number(stats.passe.td_passados || 0)
+                estatisticasConsolidadas.passe.interceptacoes_sofridas += Number(stats.passe.interceptacoes_sofridas || 0)
+                estatisticasConsolidadas.passe.sacks_sofridos += Number(stats.passe.sacks_sofridos || 0)
+                estatisticasConsolidadas.passe.fumble_de_passador += Number(stats.passe.fumble_de_passador || 0)
             }
 
             if (stats.corrida) {
-                estatisticasConsolidadas.corrida.corridas += stats.corrida.corridas || 0
-                estatisticasConsolidadas.corrida.jardas_corridas += stats.corrida.jardas_corridas || 0
-                estatisticasConsolidadas.corrida.tds_corridos += stats.corrida.tds_corridos || 0
-                estatisticasConsolidadas.corrida.fumble_de_corredor += stats.corrida.fumble_de_corredor || 0
+                estatisticasConsolidadas.corrida.corridas += Number(stats.corrida.corridas || 0)
+                estatisticasConsolidadas.corrida.jardas_corridas += Number(stats.corrida.jardas_corridas || 0)
+                estatisticasConsolidadas.corrida.tds_corridos += Number(stats.corrida.tds_corridos || 0)
+                estatisticasConsolidadas.corrida.fumble_de_corredor += Number(stats.corrida.fumble_de_corredor || 0)
             }
 
             if (stats.recepcao) {
-                estatisticasConsolidadas.recepcao.recepcoes += stats.recepcao.recepcoes || 0
-                estatisticasConsolidadas.recepcao.alvo += stats.recepcao.alvo || 0
-                estatisticasConsolidadas.recepcao.jardas_recebidas += stats.recepcao.jardas_recebidas || 0
-                estatisticasConsolidadas.recepcao.tds_recebidos += stats.recepcao.tds_recebidos || 0
+                estatisticasConsolidadas.recepcao.recepcoes += Number(stats.recepcao.recepcoes || 0)
+                estatisticasConsolidadas.recepcao.alvo += Number(stats.recepcao.alvo || 0)
+                estatisticasConsolidadas.recepcao.jardas_recebidas += Number(stats.recepcao.jardas_recebidas || 0)
+                estatisticasConsolidadas.recepcao.tds_recebidos += Number(stats.recepcao.tds_recebidos || 0)
             }
 
             if (stats.retorno) {
-                estatisticasConsolidadas.retorno.retornos += stats.retorno.retornos || 0
-                estatisticasConsolidadas.retorno.jardas_retornadas += stats.retorno.jardas_retornadas || 0
-                estatisticasConsolidadas.retorno.td_retornados += stats.retorno.td_retornados || 0
+                estatisticasConsolidadas.retorno.retornos += Number(stats.retorno.retornos || 0)
+                estatisticasConsolidadas.retorno.jardas_retornadas += Number(stats.retorno.jardas_retornadas || 0)
+                estatisticasConsolidadas.retorno.td_retornados += Number(stats.retorno.td_retornados || 0)
             }
 
             if (stats.defesa) {
-                estatisticasConsolidadas.defesa.tackles_totais += stats.defesa.tackles_totais || 0
-                estatisticasConsolidadas.defesa.tackles_for_loss += stats.defesa.tackles_for_loss || 0
-                estatisticasConsolidadas.defesa.sacks_forcado += stats.defesa.sacks_forcado || 0
-                estatisticasConsolidadas.defesa.fumble_forcado += stats.defesa.fumble_forcado || 0
-                estatisticasConsolidadas.defesa.interceptacao_forcada += stats.defesa.interceptacao_forcada || 0
-                estatisticasConsolidadas.defesa.passe_desviado += stats.defesa.passe_desviado || 0
-                estatisticasConsolidadas.defesa.safety += stats.defesa.safety || 0
-                estatisticasConsolidadas.defesa.td_defensivo += stats.defesa.td_defensivo || 0
+                estatisticasConsolidadas.defesa.tackles_totais += Number(stats.defesa.tackles_totais || 0)
+                estatisticasConsolidadas.defesa.tackles_for_loss += Number(stats.defesa.tackles_for_loss || 0)
+                estatisticasConsolidadas.defesa.sacks_forcado += Number(stats.defesa.sacks_forcado || 0)
+                estatisticasConsolidadas.defesa.fumble_forcado += Number(stats.defesa.fumble_forcado || 0)
+                estatisticasConsolidadas.defesa.interceptacao_forcada += Number(stats.defesa.interceptacao_forcada || 0)
+                estatisticasConsolidadas.defesa.passe_desviado += Number(stats.defesa.passe_desviado || 0)
+                estatisticasConsolidadas.defesa.safety += Number(stats.defesa.safety || 0)
+                estatisticasConsolidadas.defesa.td_defensivo += Number(stats.defesa.td_defensivo || 0)
             }
 
             if (stats.kicker) {
-                estatisticasConsolidadas.kicker.xp_bons += stats.kicker.xp_bons || 0
-                estatisticasConsolidadas.kicker.tentativas_de_xp += stats.kicker.tentativas_de_xp || 0
-                estatisticasConsolidadas.kicker.fg_bons += stats.kicker.fg_bons || 0
-                estatisticasConsolidadas.kicker.tentativas_de_fg += stats.kicker.tentativas_de_fg || 0
-                estatisticasConsolidadas.kicker.fg_mais_longo = Math.max(
-                    estatisticasConsolidadas.kicker.fg_mais_longo,
-                    stats.kicker.fg_mais_longo || 0
-                )
+                estatisticasConsolidadas.kicker.xp_bons += Number(stats.kicker.xp_bons || 0)
+                estatisticasConsolidadas.kicker.tentativas_de_xp += Number(stats.kicker.tentativas_de_xp || 0)
+                estatisticasConsolidadas.kicker.fg_bons += Number(stats.kicker.fg_bons || 0)
+                estatisticasConsolidadas.kicker.tentativas_de_fg += Number(stats.kicker.tentativas_de_fg || 0)
+
+                // Para fg_mais_longo, pegar o MAIOR valor entre todos os jogos
+                const fgAtual = Number(stats.kicker.fg_mais_longo || 0)
+                if (fgAtual > estatisticasConsolidadas.kicker.fg_mais_longo) {
+                    estatisticasConsolidadas.kicker.fg_mais_longo = fgAtual
+                }
             }
 
             if (stats.punter) {
-                estatisticasConsolidadas.punter.punts += stats.punter.punts || 0
-                estatisticasConsolidadas.punter.jardas_de_punt += stats.punter.jardas_de_punt || 0
+                estatisticasConsolidadas.punter.punts += Number(stats.punter.punts || 0)
+                estatisticasConsolidadas.punter.jardas_de_punt += Number(stats.punter.jardas_de_punt || 0)
             }
         })
 
-        // Atualizar as estatísticas consolidadas na tabela JogadorTime
-        await prisma.jogadorTime.updateMany({
-            where: {
-                jogadorId: jogadorId,
-                timeId: timeId,
-                temporada: temporada
-            },
-            data: {
-                estatisticas: estatisticasConsolidadas
-            }
+        // 4. Atualizar o JogadorTime com as estatísticas RECALCULADAS DO ZERO
+        const jogadorTime = await prisma.jogadorTime.findFirst({
+            where: { jogadorId, timeId, temporada }
         })
 
-        console.log(`✅ [RECALCULO] Estatísticas consolidadas atualizadas para jogador ${jogadorId}`)
+        if (jogadorTime) {
+            await prisma.jogadorTime.update({
+                where: { id: jogadorTime.id },
+                data: { estatisticas: estatisticasConsolidadas }
+            })
+
+            console.log(`✅ [RECALCULO] Consolidado atualizado:`, {
+                jogadorId,
+                timeId,
+                fg_bons: estatisticasConsolidadas.kicker.fg_bons,
+                tentativas_de_fg: estatisticasConsolidadas.kicker.tentativas_de_fg
+            })
+        } else {
+            console.warn(`⚠️ [RECALCULO] JogadorTime não encontrado para jogador ${jogadorId}, time ${timeId}`)
+        }
 
     } catch (error) {
-        console.error(`❌ [RECALCULO] Erro ao recalcular estatísticas consolidadas:`, error)
-        // Não relançar o erro para não quebrar a operação principal
+        console.error(`❌ [RECALCULO] Erro ao recalcular estatísticas:`, error)
+        throw error
     }
 }
 

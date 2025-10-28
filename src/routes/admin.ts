@@ -1456,6 +1456,7 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
                 if (statusPlanilha === 'FINALIZADO') {
                     updateData.placarCasa = placarCasa
                     updateData.placarVisitante = placarVisitante
+                    updateData.local = resultado.local || jogo.local
 
                     if (!jogo.timeCasaId || !jogo.timeVisitanteId) {
                         const nomeTimeCasa = resultado.time_mandante?.toString()?.trim()

@@ -30,7 +30,7 @@ export interface Time extends BaseEntity {
   instagram_coach: string
   coord_ofen: string
   coord_defen: string
-  titulos: Titulo[] 
+  titulos: Titulo[]
 
   jogadores?: JogadorTime[]
 
@@ -318,7 +318,7 @@ export interface GrupoTime extends BaseEntity {
 
 export interface Jogo extends BaseEntity {
   campeonatoId: number
-  grupoId?: number 
+  grupoId?: number
   timeVisitanteId: number
   timeCasaId: number
   dataJogo: string
@@ -330,6 +330,10 @@ export interface Jogo extends BaseEntity {
   placarVisitante?: number
   observacoes?: string
   estatisticasProcessadas: boolean
+
+  videoUrl?: string
+  playByPlay?: string
+
   campeonato?: {
     id: number
     nome: string
@@ -1207,9 +1211,9 @@ export type {
 export type TipoConferencia = 'SUDESTE' | 'SUL' | 'NORDESTE' | 'CENTRO NORTE'
 
 export type TipoRegional =
-  | 'SERRAMAR' | 'CANASTRA' | 'CANTAREIRA' 
-  | 'ARAUCARIA' | 'PAMPA' 
-  | 'ATLANTICO' 
+  | 'SERRAMAR' | 'CANASTRA' | 'CANTAREIRA'
+  | 'ARAUCARIA' | 'PAMPA'
+  | 'ATLANTICO'
   | 'CERRADO' | 'AMAZONIA'
 
 export interface ConferenciaConfig {
@@ -1230,8 +1234,8 @@ export interface RegionalConfig {
 }
 
 export interface PlayoffConfig {
-  semifinalDireta: number 
-  wildcardVagas: number 
+  semifinalDireta: number
+  wildcardVagas: number
   estrutura: 'CONFERENCIA' | 'REGIONAL' | 'GERAL'
 }
 
@@ -1305,7 +1309,7 @@ export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
         nome: 'Regional Serramar',
         conferencia: 'SUDESTE',
         timesPorRegional: 4,
-        times: [] 
+        times: []
       },
       {
         tipo: 'CANASTRA',
@@ -1688,7 +1692,7 @@ export interface DistribuicaoTimeCompleta {
   conferencia: {
     id: number;
     nome: string;
-    tipo: TipoConferencia; 
+    tipo: TipoConferencia;
     icone: string;
   };
   regional: {
@@ -1723,7 +1727,7 @@ export interface ClassificacaoRegionalSuperliga {
   regionalId: number;
   regionalNome: string;
   regionalType: TipoRegional;
-  times: TimeClassificadoSuperliga[]; 
+  times: TimeClassificadoSuperliga[];
 }
 
 export interface ClassificacaoConferenciaSuperliga {

@@ -112,8 +112,8 @@ model Campeonato {
 model Jogo {
   id                      Int      @id @default(autoincrement())
   campeonatoId            Int
-  timeVisitanteId         Int? // ← 1. Tornar opcional
-  timeCasaId              Int? // ← 2. Tornar opcional
+  timeVisitanteId         Int?
+  timeCasaId              Int?
   dataJogo                DateTime
   local                   String?
   rodada                  Int
@@ -130,6 +130,8 @@ model Jogo {
   conferencia String?
   regional    String?
   temporada   String?
+  videoUrl    String? @db.Text
+  playByPlay  String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

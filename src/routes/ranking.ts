@@ -119,15 +119,14 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
                 jogadoresMap.set(key, {
                     jogadorId: est.jogadorId,
                     timeId: est.timeId,
-                    // ✅ TRATAR VALORES NULL:
                     jogador: {
                         id: est.jogador.id,
                         nome: est.jogador.nome,
-                        posicao: est.jogador.posicao || 'N/A',        // ✅ SUBSTITUIR NULL POR STRING
-                        setor: est.jogador.setor || 'N/A',            // ✅ SUBSTITUIR NULL POR STRING
-                        idade: est.jogador.idade || 0,                // ✅ SUBSTITUIR NULL POR 0
-                        altura: est.jogador.altura || 0,              // ✅ SUBSTITUIR NULL POR 0
-                        peso: est.jogador.peso || 0                   // ✅ SUBSTITUIR NULL POR 0
+                        posicao: est.jogador.posicao || 'N/A',
+                        setor: est.jogador.setor || 'N/A',
+                        idade: est.jogador.idade || 0,  
+                        altura: est.jogador.altura || 0,
+                        peso: est.jogador.peso || 0     
                     },
                     time: est.time,
                     estatisticas: {

@@ -701,20 +701,17 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
 
         console.log(`📋 Total de linhas na planilha: ${estatisticasJogo.length}`);
 
-        // 🎥 NOVIDADE: Extrair videoUrl e playByPlay da primeira linha
         let videoUrl: string | null = null;
         let playByPlay: string | null = null;
 
         if (estatisticasJogo.length > 0) {
             const primeiraLinha = estatisticasJogo[0];
 
-            // Extrair video_url (se existir)
             if (primeiraLinha.video_url && typeof primeiraLinha.video_url === 'string') {
                 videoUrl = primeiraLinha.video_url.trim();
                 console.log(`🎥 Video URL encontrado: ${videoUrl}`);
             }
 
-            // Extrair play_by_play (se existir)
             if (primeiraLinha.play_by_play && typeof primeiraLinha.play_by_play === 'string') {
                 playByPlay = primeiraLinha.play_by_play.trim();
             }
@@ -961,7 +958,6 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
             }
         }
 
-        // 🎥 NOVIDADE: Atualizar o jogo com videoUrl e playByPlay
         if (videoUrl || playByPlay) {
             console.log('🎥 Atualizando jogo com videoUrl e playByPlay...');
 
@@ -1038,7 +1034,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
             detalhes: [] as any[]
         };
 
-        // Processar cada arquivo
         for (let i = 0; i < arquivos.length; i++) {
             const arquivo = arquivos[i];
             const numeroArquivo = i + 1;
@@ -1048,7 +1043,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
             console.log(`${'='.repeat(60)}`);
 
             try {
-                // Ler planilha
                 const workbook = xlsx.read(arquivo.buffer, { type: 'buffer' });
                 const sheetName = workbook.SheetNames[0];
                 const statsSheet = workbook.Sheets[sheetName];
@@ -1058,7 +1052,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                     throw new Error('Planilha vazia');
                 }
 
-                // Extrair jogo_id da primeira linha
                 const primeiraLinha = dadosJogo[0];
                 const jogoId = primeiraLinha.jogo_id || primeiraLinha.id_jogo;
 
@@ -1068,7 +1061,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
 
                 console.log(`🎯 Jogo ID: ${jogoId}`);
 
-                // Buscar o jogo no banco
                 const jogo = await prisma.jogo.findUnique({
                     where: { id: Number(jogoId) },
                     include: {
@@ -1087,7 +1079,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
 
                 console.log(`✅ Jogo encontrado: ${jogo.timeCasa?.sigla} vs ${jogo.timeVisitante?.sigla}`);
 
-                // Extrair video_url e play_by_play da PRIMEIRA LINHA
                 let videoUrl: string | null = null;
                 let playByPlay: string | null = null;
 
@@ -1100,7 +1091,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                     playByPlay = primeiraLinha.play_by_play.trim();
                 }
 
-                // Processar estatísticas de cada jogador
                 const resultadoArquivo = {
                     sucesso: 0,
                     erros: [] as any[]
@@ -1109,12 +1099,11 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                 for (const stat of dadosJogo) {
                     try {
                         if (!stat.jogador_id && !stat.jogador_nome) {
-                            continue; // Pular linhas sem jogador
+                            continue;
                         }
 
                         const temporada = String(stat.temporada || '2025');
 
-                        // Buscar jogador
                         let jogador;
                         let jogadorTime;
 
@@ -1172,7 +1161,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                             }
                         }
 
-                        // Montar estatísticas
                         const estatisticas = {
                             passe: {
                                 passes_completos: Number(stat.passes_completos || 0),
@@ -1223,7 +1211,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                             }
                         };
 
-                        // Criar estatística jogo-a-jogo
                         await prisma.estatisticaJogo.upsert({
                             where: {
                                 jogoId_jogadorId: {
@@ -1246,7 +1233,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                             }
                         });
 
-                        // Consolidar estatísticas
                         const estatisticasAtuais = jogadorTime.estatisticas as any;
                         const estatisticasConsolidadas = {
                             passe: {
@@ -1313,7 +1299,6 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                     }
                 }
 
-                // Atualizar jogo com videoUrl e playByPlay
                 await prisma.jogo.update({
                     where: { id: Number(jogoId) },
                     data: {
@@ -1387,7 +1372,6 @@ adminRouter.post('/atualizar-video-playbyplay', upload.single('arquivo'), async 
 
         const jogoId = parseInt(id_jogo);
 
-        // Verificar se o jogo existe
         const jogo = await prisma.jogo.findUnique({
             where: { id: jogoId },
             select: {
@@ -1405,7 +1389,6 @@ adminRouter.post('/atualizar-video-playbyplay', upload.single('arquivo'), async 
 
         console.log(`✅ Jogo encontrado: ${jogo.timeCasa?.sigla} vs ${jogo.timeVisitante?.sigla}`);
 
-        // Ler planilha
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const statsSheet = workbook.Sheets[sheetName];
@@ -1413,14 +1396,12 @@ adminRouter.post('/atualizar-video-playbyplay', upload.single('arquivo'), async 
 
         console.log(`📋 Total de linhas na planilha: ${dadosJogo.length}`);
 
-        // Extrair apenas video_url e play_by_play da primeira linha
         let videoUrl: string | null = null;
         let playByPlay: string | null = null;
 
         if (dadosJogo.length > 0) {
             const primeiraLinha = dadosJogo[0];
 
-            // Extrair video_url
             if (primeiraLinha.video_url && typeof primeiraLinha.video_url === 'string') {
                 videoUrl = primeiraLinha.video_url.trim();
                 console.log(`🎥 Video URL encontrado: ${videoUrl}`);
@@ -1428,7 +1409,6 @@ adminRouter.post('/atualizar-video-playbyplay', upload.single('arquivo'), async 
                 console.log('⚠️ video_url não encontrado ou inválido na planilha');
             }
 
-            // Extrair play_by_play
             if (primeiraLinha.play_by_play && typeof primeiraLinha.play_by_play === 'string') {
                 playByPlay = primeiraLinha.play_by_play.trim();
             } else {
@@ -1439,7 +1419,6 @@ adminRouter.post('/atualizar-video-playbyplay', upload.single('arquivo'), async 
             return;
         }
 
-        // Se nenhum dos dois foi encontrado, retornar erro
         if (!videoUrl && !playByPlay) {
             res.status(400).json({
                 error: 'Nenhum dado encontrado',
@@ -1448,7 +1427,6 @@ adminRouter.post('/atualizar-video-playbyplay', upload.single('arquivo'), async 
             return;
         }
 
-        // Atualizar APENAS esses campos no banco
         await prisma.jogo.update({
             where: { id: jogoId },
             data: {
@@ -1482,13 +1460,132 @@ adminRouter.post('/atualizar-video-playbyplay', upload.single('arquivo'), async 
     }
 });
 
-// ═══════════════════════════════════════════════════════════════
-// IMPORTANTE: Esta rota segue o MESMO PADRÃO das outras:
-// - POST (não PATCH)
-// - upload.single('arquivo')
-// - req.body para parâmetros
-// - Mesmo formato de resposta
-// ═══════════════════════════════════════════════════════════════
+adminRouter.post('/atualizar-videos-lote', upload.single('arquivo'), async (req, res) => {
+    try {
+        console.log('🎥📦 Iniciando atualização em LOTE de vídeos/play-by-play...');
+
+        if (!req.file) {
+            res.status(400).json({ error: 'Nenhum arquivo enviado' });
+            return;
+        }
+
+        const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const statsSheet = workbook.Sheets[sheetName];
+        const dadosJogos = xlsx.utils.sheet_to_json(statsSheet) as any[];
+
+        console.log(`📋 Total de jogos na planilha: ${dadosJogos.length}`);
+
+        if (dadosJogos.length === 0) {
+            res.status(400).json({ error: 'Planilha vazia' });
+            return;
+        }
+
+        const resultadoGeral = {
+            totalJogos: dadosJogos.length,
+            sucessos: 0,
+            erros: 0,
+            detalhes: [] as any[]
+        };
+
+        for (let i = 0; i < dadosJogos.length; i++) {
+            const linha = dadosJogos[i];
+            const numeroLinha = i + 1;
+
+            try {
+                const jogoId = linha.jogo_id || linha.id_jogo;
+
+                if (!jogoId) {
+                    throw new Error(`Linha ${numeroLinha}: jogo_id não encontrado`);
+                }
+
+                console.log(`\n🎯 Processando jogo ID: ${jogoId} (linha ${numeroLinha}/${dadosJogos.length})`);
+
+                const jogo = await prisma.jogo.findUnique({
+                    where: { id: Number(jogoId) },
+                    select: {
+                        id: true,
+                        status: true,
+                        timeCasa: { select: { nome: true, sigla: true } },
+                        timeVisitante: { select: { nome: true, sigla: true } }
+                    }
+                });
+
+                if (!jogo) {
+                    throw new Error(`Jogo ${jogoId} não encontrado`);
+                }
+
+                console.log(`✅ Jogo encontrado: ${jogo.timeCasa?.sigla} vs ${jogo.timeVisitante?.sigla}`);
+
+                let videoUrl: string | null = null;
+                let playByPlay: string | null = null;
+
+                if (linha.video_url && typeof linha.video_url === 'string') {
+                    videoUrl = linha.video_url.trim();
+                    console.log(`   🎥 Video URL: ${videoUrl}`);
+                }
+
+                if (linha.play_by_play && typeof linha.play_by_play === 'string') {
+                    playByPlay = linha.play_by_play.trim();
+                }
+
+                if (!videoUrl && !playByPlay) {
+                    throw new Error(`Linha ${numeroLinha}: Nenhum dado encontrado (video_url e play_by_play vazios)`);
+                }
+
+                await prisma.jogo.update({
+                    where: { id: Number(jogoId) },
+                    data: {
+                        videoUrl: videoUrl,
+                        playByPlay: playByPlay
+                    }
+                });
+
+                console.log(`✅ Jogo ${jogoId} atualizado com sucesso!`);
+
+                resultadoGeral.sucessos++;
+                resultadoGeral.detalhes.push({
+                    jogoId: Number(jogoId),
+                    linha: numeroLinha,
+                    status: 'sucesso',
+                    confronto: `${jogo.timeCasa?.sigla} vs ${jogo.timeVisitante?.sigla}`,
+                    videoUrl: videoUrl ? '✅' : '❌',
+                    playByPlay: playByPlay ? '✅' : '❌'
+                });
+
+            } catch (error: any) {
+                console.error(`❌ Erro na linha ${numeroLinha}:`, error.message);
+
+                resultadoGeral.erros++;
+                resultadoGeral.detalhes.push({
+                    linha: numeroLinha,
+                    jogoId: linha.jogo_id || linha.id_jogo || 'N/A',
+                    status: 'erro',
+                    mensagem: error.message
+                });
+            }
+        }
+
+        console.log(`\n${'='.repeat(60)}`);
+        console.log('📊 RESUMO DA ATUALIZAÇÃO EM LOTE');
+        console.log(`${'='.repeat(60)}`);
+        console.log(`✅ Sucessos: ${resultadoGeral.sucessos}/${resultadoGeral.totalJogos}`);
+        console.log(`❌ Erros: ${resultadoGeral.erros}/${resultadoGeral.totalJogos}`);
+
+        res.json({
+            success: true,
+            mensagem: `Processados ${resultadoGeral.totalJogos} jogos: ${resultadoGeral.sucessos} sucessos, ${resultadoGeral.erros} erros`,
+            ...resultadoGeral
+        });
+
+    } catch (error) {
+        console.error('❌ Erro geral na atualização em lote:', error);
+        res.status(500).json({
+            error: 'Erro ao processar atualização em lote',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        });
+    }
+});
 
 adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
     try {
@@ -2240,8 +2337,6 @@ adminRouter.get('/jogadores/:jogadorId/estatisticas-jogos', async (req: Request,
     }
 })
 
-// Adicionar esta rota no arquivo src/routes/admin.ts
-
 adminRouter.put('/estatistica-jogo/:id', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
@@ -2260,7 +2355,6 @@ adminRouter.put('/estatistica-jogo/:id', async (req: Request, res: Response) => 
             return
         }
 
-        // Verificar se a estatística existe
         const estatisticaExistente = await prisma.estatisticaJogo.findUnique({
             where: { id: estatisticaId },
             include: {
@@ -2288,7 +2382,6 @@ adminRouter.put('/estatistica-jogo/:id', async (req: Request, res: Response) => 
             return
         }
 
-        // Validar estrutura das estatísticas
         const estatisticasEstruturadas = {
             passe: {
                 passes_completos: Number(estatisticas.passe?.passes_completos || 0),
@@ -2397,7 +2490,6 @@ adminRouter.put('/estatistica-jogo/:id', async (req: Request, res: Response) => 
         console.log(`   Jogo: ${estatisticaAtualizada.jogo.timeCasa?.sigla} vs ${estatisticaAtualizada.jogo.timeVisitante?.sigla}`)
         console.log(`   Data: ${estatisticaAtualizada.jogo.dataJogo}`)
 
-        // Agora recalcular as estatísticas consolidadas do jogador
         await recalcularEstatisticasConsolidadas(
             estatisticaAtualizada.jogadorId,
             estatisticaAtualizada.timeId,
@@ -2440,8 +2532,6 @@ adminRouter.put('/estatistica-jogo/:id', async (req: Request, res: Response) => 
     }
 })
 
-// ✅ FUNÇÃO CORRIGIDA - Substitua no arquivo /backend/src/routes/admin.ts
-
 async function recalcularEstatisticasConsolidadas(
     jogadorId: number,
     timeId: number,
@@ -2450,7 +2540,6 @@ async function recalcularEstatisticasConsolidadas(
     console.log(`🔄 [RECALCULO] Jogador ${jogadorId}, Time ${timeId}, Temporada ${temporada}`)
 
     try {
-        // 1. Buscar TODAS as estatísticas de jogo do jogador (do zero)
         const todasEstatisticas = await prisma.estatisticaJogo.findMany({
             where: {
                 jogadorId,
@@ -2461,7 +2550,6 @@ async function recalcularEstatisticasConsolidadas(
 
         console.log(`📊 [RECALCULO] Encontradas ${todasEstatisticas.length} estatísticas de jogo`)
 
-        // 2. Inicializar estatísticas completamente ZERADAS
         const estatisticasConsolidadas = {
             passe: {
                 passes_completos: 0,
@@ -2512,7 +2600,6 @@ async function recalcularEstatisticasConsolidadas(
             }
         }
 
-        // 3. SOMAR todas as estatísticas de jogo (partindo do zero)
         todasEstatisticas.forEach((est, index) => {
             const stats = est.estatisticas as any
 
@@ -2563,7 +2650,6 @@ async function recalcularEstatisticasConsolidadas(
                 estatisticasConsolidadas.kicker.fg_bons += Number(stats.kicker.fg_bons || 0)
                 estatisticasConsolidadas.kicker.tentativas_de_fg += Number(stats.kicker.tentativas_de_fg || 0)
 
-                // Para fg_mais_longo, pegar o MAIOR valor entre todos os jogos
                 const fgAtual = Number(stats.kicker.fg_mais_longo || 0)
                 if (fgAtual > estatisticasConsolidadas.kicker.fg_mais_longo) {
                     estatisticasConsolidadas.kicker.fg_mais_longo = fgAtual
@@ -2601,111 +2687,6 @@ async function recalcularEstatisticasConsolidadas(
         throw error
     }
 }
-
-adminRouter.post('/reset-database', async (req, res) => {
-    try {
-        console.log('🗑️ Iniciando reset do banco de dados via API...')
-
-        console.log('📊 Limpando dados das tabelas...')
-
-        await prisma.estatisticaJogo.deleteMany()
-        console.log('   ✅ EstatisticaJogo limpa')
-
-        await prisma.jogo.deleteMany()
-        console.log('   ✅ Jogo limpa')
-
-        await prisma.distribuicaoTime.deleteMany()
-        console.log('   ✅ DistribuicaoTime limpa')
-
-        await prisma.regional.deleteMany()
-        console.log('   ✅ Regional limpa')
-
-        await prisma.conferencia.deleteMany()
-        console.log('   ✅ Conferencia limpa')
-
-        await prisma.campeonato.deleteMany()
-        console.log('   ✅ Campeonato limpa')
-
-        await prisma.jogadorTime.deleteMany()
-        console.log('   ✅ JogadorTime limpa')
-
-        await prisma.jogador.deleteMany()
-        console.log('   ✅ Jogador limpa')
-
-        await prisma.time.deleteMany()
-        console.log('   ✅ Time limpa')
-
-        console.log('🔄 Resetando sequences...')
-
-        try {
-            await prisma.$executeRaw`ALTER SEQUENCE "Time_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "Jogador_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "JogadorTime_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "Campeonato_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "Conferencia_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "Regional_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "DistribuicaoTime_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "Jogo_id_seq" RESTART WITH 1`
-            await prisma.$executeRaw`ALTER SEQUENCE "EstatisticaJogo_id_seq" RESTART WITH 1`
-
-            console.log('✅ Sequences resetadas com sucesso!')
-        } catch (error) {
-            console.error('⚠️ Erro ao resetar sequences:', error)
-        }
-
-        const counts = await Promise.all([
-            prisma.time.count(),
-            prisma.jogador.count(),
-            prisma.jogadorTime.count(),
-            prisma.campeonato.count(),
-            prisma.conferencia.count(),
-            prisma.regional.count(),
-            prisma.distribuicaoTime.count(),
-            prisma.jogo.count(),
-            prisma.estatisticaJogo.count(),
-        ])
-
-        console.log('📊 Verificação final:')
-        console.log(`   Times: ${counts[0]}`)
-        console.log(`   Jogadores: ${counts[1]}`)
-        console.log(`   Jogador-Time: ${counts[2]}`)
-        console.log(`   Campeonatos: ${counts[3]}`)
-        console.log(`   Conferências: ${counts[4]}`)
-        console.log(`   Regionais: ${counts[5]}`)
-        console.log(`   Distribuições: ${counts[6]}`)
-        console.log(`   Jogos: ${counts[7]}`)
-        console.log(`   Estatísticas: ${counts[8]}`)
-        console.log(`   📰 Matérias: PRESERVADAS`)
-
-        res.json({
-            message: 'Banco de dados resetado com sucesso (matérias preservadas)',
-            detalhes: {
-                tabelas_limpas: 9,
-                tabelas_preservadas: ['Materia'],
-                sequences_resetadas: 9,
-                verificacao: {
-                    times: counts[0],
-                    jogadores: counts[1],
-                    jogadorTime: counts[2],
-                    campeonatos: counts[3],
-                    conferencias: counts[4],
-                    regionais: counts[5],
-                    distribuicoes: counts[6],
-                    jogos: counts[7],
-                    estatisticas: counts[8],
-                    materias: 'preservadas'
-                }
-            }
-        })
-
-    } catch (error) {
-        console.error('❌ Erro no reset do banco:', error)
-        res.status(500).json({
-            error: 'Erro ao resetar banco de dados',
-            details: error instanceof Error ? error.message : 'Erro desconhecido'
-        })
-    }
-})
 
 adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
     try {
@@ -2842,6 +2823,111 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
         console.error('❌ Erro ao atualizar jogo:', error)
         res.status(500).json({
             error: 'Erro interno ao atualizar jogo',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+    }
+})
+
+adminRouter.post('/reset-database', async (req, res) => {
+    try {
+        console.log('🗑️ Iniciando reset do banco de dados via API...')
+
+        console.log('📊 Limpando dados das tabelas...')
+
+        await prisma.estatisticaJogo.deleteMany()
+        console.log('   ✅ EstatisticaJogo limpa')
+
+        await prisma.jogo.deleteMany()
+        console.log('   ✅ Jogo limpa')
+
+        await prisma.distribuicaoTime.deleteMany()
+        console.log('   ✅ DistribuicaoTime limpa')
+
+        await prisma.regional.deleteMany()
+        console.log('   ✅ Regional limpa')
+
+        await prisma.conferencia.deleteMany()
+        console.log('   ✅ Conferencia limpa')
+
+        await prisma.campeonato.deleteMany()
+        console.log('   ✅ Campeonato limpa')
+
+        await prisma.jogadorTime.deleteMany()
+        console.log('   ✅ JogadorTime limpa')
+
+        await prisma.jogador.deleteMany()
+        console.log('   ✅ Jogador limpa')
+
+        await prisma.time.deleteMany()
+        console.log('   ✅ Time limpa')
+
+        console.log('🔄 Resetando sequences...')
+
+        try {
+            await prisma.$executeRaw`ALTER SEQUENCE "Time_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Jogador_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "JogadorTime_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Campeonato_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Conferencia_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Regional_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "DistribuicaoTime_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "Jogo_id_seq" RESTART WITH 1`
+            await prisma.$executeRaw`ALTER SEQUENCE "EstatisticaJogo_id_seq" RESTART WITH 1`
+
+            console.log('✅ Sequences resetadas com sucesso!')
+        } catch (error) {
+            console.error('⚠️ Erro ao resetar sequences:', error)
+        }
+
+        const counts = await Promise.all([
+            prisma.time.count(),
+            prisma.jogador.count(),
+            prisma.jogadorTime.count(),
+            prisma.campeonato.count(),
+            prisma.conferencia.count(),
+            prisma.regional.count(),
+            prisma.distribuicaoTime.count(),
+            prisma.jogo.count(),
+            prisma.estatisticaJogo.count(),
+        ])
+
+        console.log('📊 Verificação final:')
+        console.log(`   Times: ${counts[0]}`)
+        console.log(`   Jogadores: ${counts[1]}`)
+        console.log(`   Jogador-Time: ${counts[2]}`)
+        console.log(`   Campeonatos: ${counts[3]}`)
+        console.log(`   Conferências: ${counts[4]}`)
+        console.log(`   Regionais: ${counts[5]}`)
+        console.log(`   Distribuições: ${counts[6]}`)
+        console.log(`   Jogos: ${counts[7]}`)
+        console.log(`   Estatísticas: ${counts[8]}`)
+        console.log(`   📰 Matérias: PRESERVADAS`)
+
+        res.json({
+            message: 'Banco de dados resetado com sucesso (matérias preservadas)',
+            detalhes: {
+                tabelas_limpas: 9,
+                tabelas_preservadas: ['Materia'],
+                sequences_resetadas: 9,
+                verificacao: {
+                    times: counts[0],
+                    jogadores: counts[1],
+                    jogadorTime: counts[2],
+                    campeonatos: counts[3],
+                    conferencias: counts[4],
+                    regionais: counts[5],
+                    distribuicoes: counts[6],
+                    jogos: counts[7],
+                    estatisticas: counts[8],
+                    materias: 'preservadas'
+                }
+            }
+        })
+
+    } catch (error) {
+        console.error('❌ Erro no reset do banco:', error)
+        res.status(500).json({
+            error: 'Erro ao resetar banco de dados',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
         })
     }

@@ -36,6 +36,8 @@ model Time {
   estatisticasJogo EstatisticaJogo[]
 
   @@unique([sigla, temporada])
+  @@index([sigla, temporada])
+  @@index([nome, temporada])
 }
 
 model Jogador {
@@ -54,6 +56,8 @@ model Jogador {
   timeFormador     String?
   times            JogadorTime[]
   estatisticasJogo EstatisticaJogo[]
+
+  @@index([posicao, setor])
 }
 
 model JogadorTime {
@@ -69,6 +73,8 @@ model JogadorTime {
   time    Time    @relation(fields: [timeId], references: [id])
 
   @@unique([jogadorId, timeId, temporada])
+  @@index([timeId, temporada])
+  @@index([jogadorId, temporada])
 }
 
 model Materia {
@@ -107,6 +113,7 @@ model Campeonato {
   @@unique([temporada, isSuperliga])
   @@index([temporada])
   @@index([status])
+  @@index([temporada, isSuperliga, status])
 }
 
 model Jogo {
@@ -155,6 +162,13 @@ model Jogo {
   @@index([temporada])
   @@index([fase])
   @@index([campeonatoId, fase])
+  @@index([campeonatoId, status])
+  @@index([campeonatoId, fase, rodada])
+  @@index([temporada, status, fase])
+  @@index([timeCasaId, temporada])
+  @@index([timeVisitanteId, temporada])
+  @@index([conferencia, regional, status])
+  @@index([dataJogo, status])
 }
 
 model Conferencia {
@@ -220,6 +234,8 @@ model DistribuicaoTime {
   @@index([regionalId])
   @@index([timeId])
   @@index([temporada])
+  @@index([campeonatoId, temporada, conferenciaId])
+  @@index([regionalId, temporada])
 }
 
 model EstatisticaJogo {
@@ -242,4 +258,9 @@ model EstatisticaJogo {
   @@unique([jogoId, jogadorId])
   @@index([campeonatoId, timeId])
   @@index([campeonatoId, jogadorId])
+  @@index([temporada, jogadorId])
+  @@index([temporada, timeId])
+  @@index([campeonatoId, fase])
+  @@index([jogadorId, timeId, temporada])
+  @@index([temporada, rodada])
 }

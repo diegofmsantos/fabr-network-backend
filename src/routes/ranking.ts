@@ -74,16 +74,9 @@ interface EstatisticaConsolidada {
             jardas_de_punt: number
         }
     }
+    totalJogos?: number
 }
 
-/**
- * 🚀 OTIMIZAÇÃO CRÍTICA - SOLUÇÃO DO PROBLEMA N+1
- * 
- * ANTES: Buscava TODAS as estatísticas (15.000+) e processava em memória
- * AGORA: Usa agregação no banco de dados com filtros específicos por categoria
- */
-
-// Mapeamento de categorias para campos de estatísticas
 const CATEGORIA_FIELD_MAP: Record<string, { path: string, setor?: string, minimo?: number }> = {
     // Passe
     'jardas_de_passe': { path: 'passe.jardas_de_passe', setor: 'Ataque' },
@@ -141,39 +134,40 @@ const CATEGORIA_FIELD_MAP: Record<string, { path: string, setor?: string, minimo
     'jardas_punt_media': { path: 'punter.punts', setor: 'Special', minimo: 3 },
 }
 
-/**
- * Função otimizada para buscar ranking com agregação no banco
- */
 async function buscarRankingOtimizado(
     categoria: string,
     temporada: string,
-    limite: number
+    limite: number,
+    fase?: string
 ): Promise<EstatisticaConsolidada[]> {
 
     const config = CATEGORIA_FIELD_MAP[categoria]
     if (!config) {
-        console.log(`⚠️ Categoria não mapeada: ${categoria}, usando fallback`)
+        console.log(`⚠️ Categoria ${categoria} não mapeada, usando fallback`)
         return buscarRankingFallback(temporada, limite)
     }
 
-    console.log(`🔍 Buscando ranking otimizado para: ${categoria}`)
-    console.time(`ranking-${categoria}`)
-
-    // PASSO 1: Buscar apenas estatísticas relevantes com agregação
     const [mainField, subField] = config.path.split('.')
 
-    // Buscar estatísticas já filtradas e agregadas
-    const estatisticas = await prisma.estatisticaJogo.findMany({
-        where: {
-            temporada: temporada,
-            // ✅ CORREÇÃO: Filtrar usando NOT com isSet
-            NOT: {
-                estatisticas: {
-                    path: [mainField, subField],
-                    equals: Prisma.JsonNull
-                }
+    const whereClause: any = {
+        temporada: temporada,
+        NOT: {
+            estatisticas: {
+                path: [mainField, subField],
+                equals: Prisma.JsonNull
             }
-        },
+        }
+    }
+
+    if (fase) {
+        whereClause.fase = fase
+        console.log(`🎯 [RANKING] Filtrando por fase: ${fase}`)
+    }
+
+    console.log(`🔍 [OTIMIZADO] Buscando: ${categoria} (${config.path})`)
+
+    const estatisticas = await prisma.estatisticaJogo.findMany({
+        where: whereClause,
         select: {
             jogadorId: true,
             timeId: true,
@@ -183,20 +177,15 @@ async function buscarRankingOtimizado(
 
     console.log(`📊 Estatísticas encontradas: ${estatisticas.length}`)
 
-    // PASSO 2: Consolidar estatísticas por jogador
-    const jogadoresMap = new Map<string, {
-        jogadorId: number
-        timeId: number
-        stats: any
-    }>()
+    const jogadoresMap = new Map<number, any>()
 
     estatisticas.forEach(est => {
-        const key = `${est.jogadorId}-${est.timeId}`
+        const jogadorId = est.jogadorId
         const stats = est.estatisticas as any
 
-        if (!jogadoresMap.has(key)) {
-            jogadoresMap.set(key, {
-                jogadorId: est.jogadorId,
+        if (!jogadoresMap.has(jogadorId)) {
+            jogadoresMap.set(jogadorId, {
+                jogadorId: jogadorId,
                 timeId: est.timeId,
                 stats: {
                     passe: {
@@ -246,13 +235,15 @@ async function buscarRankingOtimizado(
                         punts: 0,
                         jardas_de_punt: 0
                     }
-                }
+                },
+                totalJogos: 0
             })
         }
 
-        const jogadorData = jogadoresMap.get(key)!
+        const jogadorData = jogadoresMap.get(jogadorId)!
 
-        // Consolidar estatísticas
+        jogadorData.totalJogos++
+
         if (stats.passe) {
             jogadorData.stats.passe.jardas_de_passe += stats.passe.jardas_de_passe || 0
             jogadorData.stats.passe.passes_completos += stats.passe.passes_completos || 0
@@ -311,13 +302,14 @@ async function buscarRankingOtimizado(
         }
     })
 
-    // PASSO 3: Buscar apenas os IDs únicos de jogadores e times
-    const jogadorIds = Array.from(new Set(Array.from(jogadoresMap.values()).map(j => j.jogadorId)))
-    const timeIds = Array.from(new Set(Array.from(jogadoresMap.values()).map(j => j.timeId)))
+    // Após consolidar as estatísticas no Map
+
+    const jogadorIds = Array.from(jogadoresMap.keys())
+    const timeIds = [...new Set(Array.from(jogadoresMap.values()).map(j => j.timeId))]
 
     console.log(`👥 Buscando dados de ${jogadorIds.length} jogadores e ${timeIds.length} times`)
 
-    // PASSO 4: Buscar jogadores e times em paralelo (apenas os necessários)
+    // 👇 BUSCAR JOGADORES E TIMES DE UMA VEZ
     const [jogadores, times] = await Promise.all([
         prisma.jogador.findMany({
             where: {
@@ -346,10 +338,11 @@ async function buscarRankingOtimizado(
         })
     ])
 
-    // PASSO 5: Montar resultado final
+    // 👇 CRIAR LOOKUP MAPS PARA BUSCA RÁPIDA
     const jogadoresLookup = new Map(jogadores.map(j => [j.id, j]))
     const timesLookup = new Map(times.map(t => [t.id, t]))
 
+    // 👇 MONTAR RESULTADO FINAL COM totalJogos
     const resultado: EstatisticaConsolidada[] = []
 
     for (const jogadorData of jogadoresMap.values()) {
@@ -377,11 +370,12 @@ async function buscarRankingOtimizado(
                 cor: time.cor,
                 logo: time.logo
             },
-            estatisticas: jogadorData.stats
+            estatisticas: jogadorData.stats,
+            totalJogos: jogadorData.totalJogos // 👈 ADICIONAR AQUI
         })
     }
 
-    // PASSO 6: Aplicar ordenação e filtros específicos da categoria
+    // 👇 APLICAR ORDENAÇÃO E RETORNAR
     let rankingFinal = aplicarOrdenacaoCategoria(resultado, categoria)
 
     console.timeEnd(`ranking-${categoria}`)
@@ -390,9 +384,6 @@ async function buscarRankingOtimizado(
     return rankingFinal.slice(0, limite)
 }
 
-/**
- * Aplica ordenação específica por categoria
- */
 function aplicarOrdenacaoCategoria(
     jogadores: EstatisticaConsolidada[],
     categoria: string
@@ -662,9 +653,6 @@ function aplicarOrdenacaoCategoria(
     return ranking
 }
 
-/**
- * Função fallback (usa método antigo se categoria não for mapeada)
- */
 async function buscarRankingFallback(temporada: string, limite: number): Promise<EstatisticaConsolidada[]> {
     console.log('⚠️ Usando método fallback (menos otimizado)')
 
@@ -695,18 +683,14 @@ async function buscarRankingFallback(temporada: string, limite: number): Promise
                 }
             }
         },
-        take: limite * 10 // Buscar mais para compensar filtros
+        take: limite * 10
     })
 
     const jogadoresMap = new Map<string, EstatisticaConsolidada>()
 
-    // Processar e consolidar...
-    // (código de consolidação similar ao original)
-
     return Array.from(jogadoresMap.values()).slice(0, limite)
 }
 
-// ROTA PRINCIPAL OTIMIZADA
 rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
     try {
         const { categoria } = req.params
@@ -729,17 +713,46 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
     }
 })
 
+rankingRouter.get('/temporada-regular/:categoria', async (req: Request, res: Response) => {
+    try {
+        const { categoria } = req.params
+        const { temporada = '2025', limite = '50' } = req.query
+
+        console.log(`🏈 Buscando ranking TEMPORADA REGULAR: ${categoria}`)
+
+        const limiteNum = parseInt(limite as string) || 50
+
+        const resultado = await buscarRankingOtimizado(
+            categoria,
+            temporada as string,
+            limiteNum,
+            'TEMPORADA REGULAR'
+        )
+
+        console.log(`✅ Retornando ${resultado.length} jogadores (apenas temporada regular)`)
+
+        res.json(resultado)
+    } catch (error) {
+        console.error('❌ Erro ao buscar ranking temporada regular:', error)
+        res.status(500).json({
+            error: 'Erro ao buscar ranking temporada regular',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+    }
+})
+
 rankingRouter.get('/times/:categoria', async (req: Request, res: Response) => {
     try {
         const { categoria } = req.params
         const { temporada = '2025' } = req.query
 
-        // TODO: Implementar ranking de times otimizado
         res.json([])
     } catch (error) {
         console.error('Erro ao buscar ranking de times:', error)
         res.status(500).json({ error: 'Erro ao buscar ranking de times' })
     }
 })
+
+
 
 export { rankingRouter }

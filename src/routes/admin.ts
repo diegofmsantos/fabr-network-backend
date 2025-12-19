@@ -2933,4 +2933,140 @@ adminRouter.post('/reset-database', async (req, res) => {
     }
 })
 
+adminRouter.get('/exportar-estatisticas', async (req, res) => {
+    try {
+        const { temporada = '2025' } = req.query
+
+        console.log(`📊 Gerando dados para exportação - Temporada: ${temporada}`)
+
+        // 1️⃣ Buscar todos os jogadores com suas estatísticas consolidadas
+        const jogadoresComEstatisticas = await prisma.jogador.findMany({
+            where: {
+                times: {
+                    some: {
+                        temporada: temporada as string
+                    }
+                }
+            },
+            include: {
+                times: {
+                    where: {
+                        temporada: temporada as string
+                    },
+                    include: {
+                        time: {
+                            select: {
+                                id: true,
+                                nome: true,
+                                sigla: true,
+                                logo: true,
+                                cor: true
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: {
+                nome: 'asc'
+            }
+        })
+
+        console.log(`✅ Encontrados ${jogadoresComEstatisticas.length} jogadores`)
+
+        // 2️⃣ Formatar os dados para exportação
+        const dadosExportacao = jogadoresComEstatisticas.flatMap(jogador => {
+            return jogador.times.map(jogadorTime => {
+                const stats = jogadorTime.estatisticas as any
+
+                return {
+                    // Dados básicos
+                    nome: jogador.nome,
+                    numero: jogadorTime.numero,
+                    time: jogadorTime.time.nome,
+                    sigla: jogadorTime.time.sigla,
+                    posicao: jogador.posicao || 'N/A',
+                    setor: jogador.setor || 'N/A',
+                    
+                    // Estatísticas de Passe
+                    passes_completos: stats?.passe?.passes_completos || 0,
+                    passes_tentados: stats?.passe?.passes_tentados || 0,
+                    jardas_de_passe: stats?.passe?.jardas_de_passe || 0,
+                    td_passados: stats?.passe?.td_passados || 0,
+                    interceptacoes_sofridas: stats?.passe?.interceptacoes_sofridas || 0,
+                    sacks_sofridos: stats?.passe?.sacks_sofridos || 0,
+                    fumble_de_passador: stats?.passe?.fumble_de_passador || 0,
+                    
+                    // Estatísticas de Corrida
+                    corridas: stats?.corrida?.corridas || 0,
+                    jardas_corridas: stats?.corrida?.jardas_corridas || 0,
+                    tds_corridos: stats?.corrida?.tds_corridos || 0,
+                    fumble_de_corredor: stats?.corrida?.fumble_de_corredor || 0,
+                    
+                    // Estatísticas de Recepção
+                    recepcoes: stats?.recepcao?.recepcoes || 0,
+                    alvo: stats?.recepcao?.alvo || 0,
+                    jardas_recebidas: stats?.recepcao?.jardas_recebidas || 0,
+                    tds_recebidos: stats?.recepcao?.tds_recebidos || 0,
+                    
+                    // Estatísticas de Retorno
+                    retornos: stats?.retorno?.retornos || 0,
+                    jardas_retornadas: stats?.retorno?.jardas_retornadas || 0,
+                    td_retornados: stats?.retorno?.td_retornados || 0,
+                    
+                    // Estatísticas de Defesa
+                    tackles_totais: stats?.defesa?.tackles_totais || 0,
+                    tackles_for_loss: stats?.defesa?.tackles_for_loss || 0,
+                    sacks_forcado: stats?.defesa?.sacks_forcado || 0,
+                    fumble_forcado: stats?.defesa?.fumble_forcado || 0,
+                    interceptacao_forcada: stats?.defesa?.interceptacao_forcada || 0,
+                    passe_desviado: stats?.defesa?.passe_desviado || 0,
+                    safety: stats?.defesa?.safety || 0,
+                    td_defensivo: stats?.defesa?.td_defensivo || 0,
+                    
+                    // Estatísticas de Kicker
+                    xp_bons: stats?.kicker?.xp_bons || 0,
+                    tentativas_de_xp: stats?.kicker?.tentativas_de_xp || 0,
+                    fg_bons: stats?.kicker?.fg_bons || 0,
+                    tentativas_de_fg: stats?.kicker?.tentativas_de_fg || 0,
+                    fg_mais_longo: stats?.kicker?.fg_mais_longo || 0,
+                    
+                    // Estatísticas de Punter
+                    punts: stats?.punter?.punts || 0,
+                    jardas_de_punt: stats?.punter?.jardas_de_punt || 0,
+
+                    // Dados adicionais
+                    idade: jogador.idade || 0,
+                    altura: jogador.altura || 0,
+                    peso: jogador.peso || 0,
+                    experiencia: jogador.experiencia || 0,
+                    cidade: jogador.cidade || '',
+                    nacionalidade: jogador.nacionalidade || '',
+                    timeFormador: jogador.timeFormador || '',
+                    temporada: jogadorTime.temporada
+                }
+            })
+        })
+
+        console.log(`✅ Dados formatados: ${dadosExportacao.length} registros`)
+
+        res.json({
+            success: true,
+            data: dadosExportacao,
+            meta: {
+                total: dadosExportacao.length,
+                temporada: temporada,
+                dataGeracao: new Date().toISOString()
+            }
+        })
+
+    } catch (error) {
+        console.error('❌ Erro ao gerar dados para exportação:', error)
+        res.status(500).json({
+            success: false,
+            error: 'Erro ao gerar dados para exportação',
+            details: error instanceof Error ? error.message : 'Erro desconhecido'
+        })
+    }
+})
+
 export default adminRouter

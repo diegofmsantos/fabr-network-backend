@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client'
-import { TIMES_SUPERLIGA } from '../types'
+import { TIMES_SUPERLIGA } from '../config/superligaConfig'
 
 const prisma = new PrismaClient()
 

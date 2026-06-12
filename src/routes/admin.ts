@@ -88,7 +88,7 @@ adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) =
 
         const times = timesRaw.map(time => ({
             ...time,
-            temporada: time.temporada ? String(time.temporada) : '2025'
+            temporada: time.temporada ? String(time.temporada) : String(req.body.temporada || '2026')
         }));
 
         const resultados = {
@@ -156,7 +156,7 @@ adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) =
                             instagram_coach: time.instagram_coach || '',
                             coord_ofen: time.coord_ofen || '',
                             coord_defen: time.coord_defen || '',
-                            titulos: time.titulos || [],
+                            titulos: (time['títulos'] ?? time.titulos) || [],
                             temporada: String(time.temporada)
                         }
                     });
@@ -195,6 +195,8 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
             res.status(400).json({ error: 'Nenhum arquivo foi enviado' })
             return
         }
+
+        const temporada = String(req.body.temporada || '2026').trim()
 
         console.log(`📁 Arquivo recebido: ${req.file.originalname} (${req.file.size} bytes)`)
 
@@ -241,7 +243,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
                 const time = await prisma.time.findFirst({
                     where: {
                         nome: jogador.time_nome,
-                        temporada: '2025'
+                        temporada: temporada
                     }
                 })
 
@@ -262,7 +264,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
                         times: {
                             some: {
                                 timeId: time.id,
-                                temporada: '2025'
+                                temporada: temporada
                             }
                         }
                     }
@@ -350,7 +352,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
                     data: {
                         jogadorId: novoJogador.id,
                         timeId: time.id,
-                        temporada: '2025',
+                        temporada: temporada,
                         numero: Number(jogador.numero || 0),
                         camisa: jogador.camisa || '',
                         estatisticas: estatisticas
@@ -399,10 +401,10 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
         }
 
         const totalJogadoresNoBanco = await prisma.jogadorTime.count({
-            where: { temporada: '2025' }
+            where: { temporada: temporada }
         })
 
-        console.log(`\n🎯 VERIFICAÇÃO: ${totalJogadoresNoBanco} jogadores-time no banco para temporada 2025`)
+        console.log(`\n🎯 VERIFICAÇÃO: ${totalJogadoresNoBanco} jogadores-time no banco para temporada ${temporada}`)
 
         res.status(200).json({
             message: 'Importação de jogadores concluída',
@@ -431,7 +433,6 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
 })
 
 adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req: Request, res: Response) => {
-
     try {
         console.log('📋 Iniciando importação de agenda de jogos...')
 
@@ -440,24 +441,27 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             return
         }
 
-        const superliga = await prisma.campeonato.findFirst({
-            where: {
-                temporada: '2025',
-                isSuperliga: true
-            }
-        })
-
-        if (!superliga) {
-            res.status(400).json({ error: 'Crie a Superliga 2025 antes de importar a agenda' })
+        const temporada = String(req.body.temporada || '').trim()
+        if (!temporada) {
+            res.status(400).json({ error: 'Temporada não informada. Envie o campo "temporada" no formulário.' })
             return
         }
 
-        console.log(`✅ Superliga encontrada: ID ${superliga.id}`)
+        const superliga = await prisma.campeonato.findFirst({
+            where: { temporada, isSuperliga: true }
+        })
+
+        if (!superliga) {
+            res.status(400).json({ error: `Crie a Superliga ${temporada} antes de importar a agenda` })
+            return
+        }
+
+        console.log(`✅ Superliga encontrada: ID ${superliga.id} (temporada ${temporada})`)
 
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' })
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
-        const jogosRaw = xlsx.utils.sheet_to_json(worksheet)
+        const jogosRaw = xlsx.utils.sheet_to_json(worksheet) as any[]
 
         console.log(`📊 Total de jogos na planilha: ${jogosRaw.length}`)
 
@@ -467,94 +471,145 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
         }
 
         const times = await prisma.time.findMany({
-            where: { temporada: '2025' },
+            where: { temporada },
             select: { id: true, nome: true, sigla: true }
         })
 
         console.log(`📋 Times encontrados no banco: ${times.length}`)
 
         const mapaTimes = new Map<string, { id: number; nome: string; sigla: string }>()
-        times.forEach(time => {
-            mapaTimes.set(time.nome.toLowerCase().trim(), time)
-        })
+        times.forEach(time => mapaTimes.set(time.nome.toLowerCase().trim(), time))
+
+        // Helpers ----------------------------------------------------------
+        const normalizarConferencia = (v: any): string | null => {
+            if (v === undefined || v === null || String(v).trim() === '') return null
+            // "Centro-Norte" -> "CENTRO NORTE" | "Nacional" -> "NACIONAL"
+            return String(v).trim().toUpperCase().replace(/-/g, ' ')
+        }
+        const parseDataJogo = (v: any): Date => {
+            if (v instanceof Date) return v
+            if (typeof v === 'number') return new Date((v - 25569) * 86400 * 1000)
+            return new Date(v)
+        }
+        // Ordem das fases de playoff (para derivar rodada quando a planilha não traz)
+        const FASE_RANK: Record<string, number> = {
+            'WILD CARD': 1,
+            'SEMIFINAL DE CONFERÊNCIA': 2,
+            'FINAL DE CONFERÊNCIA': 3,
+            'SEMIFINAL NACIONAL': 4,
+            'FINAL NACIONAL': 5
+        }
+
+        type LinhaJogo = {
+            linha: number
+            data: Date
+            fase: string
+            isPlayoff: boolean
+            mandante: string
+            visitante: string
+            conferencia: string | null
+            regional: string | null
+            observacoes: string | null
+            rodadaPlanilha: number | null
+        }
+
+        const linhas: LinhaJogo[] = []
+        const erros: Array<{ linha: number; erro: string }> = []
+
+        // 1ª passada: parse + validação de data
+        for (let i = 0; i < jogosRaw.length; i++) {
+            const j = jogosRaw[i] as any
+            const linha = i + 1
+
+            // A coluna da planilha chama-se "data_jogo"
+            const data = parseDataJogo(j.data_jogo)
+            if (isNaN(data.getTime())) {
+                erros.push({ linha, erro: `Data inválida: "${j.data_jogo}"` })
+                continue
+            }
+
+            const fase = String(j.fase || 'TEMPORADA REGULAR').trim()
+            const isPlayoff = fase.toUpperCase() !== 'TEMPORADA REGULAR'
+            const rodadaTxt = j.rodada !== undefined && j.rodada !== null ? String(j.rodada).trim() : ''
+
+            linhas.push({
+                linha,
+                data,
+                fase,
+                isPlayoff,
+                mandante: String(j.time_mandante ?? '').trim(),
+                visitante: String(j.time_visitante ?? '').trim(),
+                conferencia: normalizarConferencia(j.conferencia),
+                regional: j.regional ? String(j.regional).trim() : null,
+                observacoes: j.observacoes ? String(j.observacoes).trim() : null,
+                rodadaPlanilha: rodadaTxt !== '' && !isNaN(parseInt(rodadaTxt)) ? parseInt(rodadaTxt) : null
+            })
+        }
+
+        // Deriva rodada da temporada regular pela ordem das datas (a planilha vem sem rodada)
+        const datasRegulares = Array.from(
+            new Set(linhas.filter(l => !l.isPlayoff).map(l => l.data.getTime()))
+        ).sort((a, b) => a - b)
+        const mapaRodadaRegular = new Map<number, number>()
+        datasRegulares.forEach((t, idx) => mapaRodadaRegular.set(t, idx + 1))
 
         const resultados = {
             jogosImportados: 0,
-            jogosPulados: 0,
             jogosPlayoffs: 0,
-            erros: [] as Array<{ linha: number; erro: string }>,
+            erros,
             warnings: [] as Array<{ linha: number; warning: string }>
         }
 
         console.log('🚀 Iniciando processamento dos jogos...')
 
-        for (let i = 0; i < jogosRaw.length; i++) {
-            const jogoData = jogosRaw[i] as any
-            const linha = i + 1
-
+        // 2ª passada: gravação
+        for (const l of linhas) {
             try {
-                const dataJogo = jogoData.data instanceof Date ? jogoData.data :
-                    typeof jogoData.data === 'number' ?
-                        new Date((jogoData.data - 25569) * 86400 * 1000) :
-                        new Date(jogoData.data)
-                if (isNaN(dataJogo.getTime())) {
-                    resultados.erros.push({
-                        linha,
-                        erro: `Data inválida: "${jogoData.data}"`
-                    })
-                    continue
-                }
+                const rodada = l.rodadaPlanilha ?? (
+                    l.isPlayoff
+                        ? (FASE_RANK[l.fase.toUpperCase()] ?? 99)
+                        : (mapaRodadaRegular.get(l.data.getTime()) ?? 1)
+                )
 
-                const nomeTimeCasa = jogoData.time_mandante?.toString()?.trim() || ''
-                const nomeTimeVisitante = jogoData.time_visitante?.toString()?.trim() || ''
-                const isJogoPlayoff = !nomeTimeCasa || !nomeTimeVisitante ||
-                    nomeTimeCasa === '' || nomeTimeVisitante === '' ||
-                    nomeTimeCasa.toLowerCase() === 'tbd' || nomeTimeVisitante.toLowerCase() === 'tbd' ||
-                    nomeTimeCasa.toLowerCase().includes('a definir') || nomeTimeVisitante.toLowerCase().includes('a definir')
-
-                if (isJogoPlayoff) {
+                if (l.isPlayoff) {
+                    // Playoff: os campos de mandante/visitante trazem DESCRITORES de chave
+                    // (ex.: "4º Atlântico", "Vencedor do Jogo 59"), não nomes de times.
+                    // Grava sem timeId; os times reais entram na importação de resultados.
                     await prisma.jogo.create({
                         data: {
                             campeonatoId: superliga.id,
                             timeCasaId: null,
                             timeVisitanteId: null,
-                            dataJogo: dataJogo,
-                            local: jogoData.local || 'A definir',
-                            rodada: parseInt(jogoData.rodada?.toString() || '1'),
-                            fase: jogoData.fase || 'WILD CARD',
+                            dataJogo: l.data,
+                            local: 'A definir',
+                            rodada,
+                            fase: l.fase,
                             status: 'AGENDADO',
-                            observacoes: jogoData.observacoes || 'Aguardando definição dos times',
-                            conferencia: jogoData.conferencia || null,
-                            regional: jogoData.regional || null,
-                            temporada: '2025'
+                            observacoes: l.observacoes
+                                || (l.mandante && l.visitante ? `${l.mandante} x ${l.visitante}` : 'Aguardando definição dos times'),
+                            conferencia: l.conferencia,
+                            regional: l.regional,
+                            temporada
                         }
                     })
 
                     resultados.jogosPlayoffs++
                     resultados.warnings.push({
-                        linha,
-                        warning: `Jogo ${jogoData.id_jogo || linha} criado como playoff - times serão definidos posteriormente`
+                        linha: l.linha,
+                        warning: `Jogo de playoff (${l.fase}) criado sem times definidos — serão preenchidos na importação de resultados`
                     })
-
-                    console.log(`🏆 Jogo playoff criado: ID ${jogoData.id_jogo || linha} - times a definir`)
+                    console.log(`🏆 Playoff (${l.fase}): ${l.mandante || '?'} x ${l.visitante || '?'}`)
 
                 } else {
-                    const timeCasa = mapaTimes.get(nomeTimeCasa.toLowerCase())
-                    const timeVisitante = mapaTimes.get(nomeTimeVisitante.toLowerCase())
+                    const timeCasa = mapaTimes.get(l.mandante.toLowerCase())
+                    const timeVisitante = mapaTimes.get(l.visitante.toLowerCase())
 
                     if (!timeCasa) {
-                        resultados.erros.push({
-                            linha,
-                            erro: `Time mandante não encontrado: "${nomeTimeCasa}"`
-                        })
+                        resultados.erros.push({ linha: l.linha, erro: `Time mandante não encontrado: "${l.mandante}"` })
                         continue
                     }
-
                     if (!timeVisitante) {
-                        resultados.erros.push({
-                            linha,
-                            erro: `Time visitante não encontrado: "${nomeTimeVisitante}"`
-                        })
+                        resultados.erros.push({ linha: l.linha, erro: `Time visitante não encontrado: "${l.visitante}"` })
                         continue
                     }
 
@@ -563,32 +618,27 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                             campeonatoId: superliga.id,
                             timeCasaId: timeCasa.id,
                             timeVisitanteId: timeVisitante.id,
-                            dataJogo: dataJogo,
-                            local: jogoData.local || timeCasa.nome,
-                            rodada: parseInt(jogoData.rodada?.toString() || '1'),
-                            fase: jogoData.fase || 'TEMPORADA REGULAR',
+                            dataJogo: l.data,
+                            local: timeCasa.nome,
+                            rodada,
+                            fase: l.fase,
                             status: 'AGENDADO',
-                            observacoes: jogoData.observacoes || null,
-                            conferencia: jogoData.conferencia || null,
-                            regional: jogoData.regional || null,
-                            temporada: '2025'
+                            observacoes: l.observacoes,
+                            conferencia: l.conferencia,
+                            regional: l.regional,
+                            temporada
                         }
                     })
 
                     resultados.jogosImportados++
-                    console.log(`✅ Jogo temporada regular: ${timeCasa.sigla} vs ${timeVisitante.sigla}`)
+                    console.log(`✅ Temporada regular: ${timeCasa.sigla} vs ${timeVisitante.sigla} (rodada ${rodada})`)
                 }
-
-                if ((resultados.jogosImportados + resultados.jogosPlayoffs) % 10 === 0) {
-                    console.log(`📊 Processados: ${resultados.jogosImportados} temporada regular, ${resultados.jogosPlayoffs} playoffs`)
-                }
-
             } catch (error) {
                 resultados.erros.push({
-                    linha,
+                    linha: l.linha,
                     erro: `Erro interno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`
                 })
-                console.error(`❌ Erro na linha ${linha}:`, error)
+                console.error(`❌ Erro na linha ${l.linha}:`, error)
             }
         }
 
@@ -598,7 +648,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                 jogosTemporadaRegular: resultados.jogosImportados,
                 jogosPlayoffs: resultados.jogosPlayoffs,
                 totalJogos: resultados.jogosImportados + resultados.jogosPlayoffs,
-                jogosPulados: resultados.jogosPulados,
                 jogosComErro: resultados.erros.length,
                 totalProcessado: jogosRaw.length
             },
@@ -607,21 +656,18 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                 erros: resultados.erros.length > 0 ? resultados.erros : undefined,
                 warnings: resultados.warnings.length > 0 ? resultados.warnings : undefined
             },
-            proximaEtapa: 'Importe os resultados da temporada regular. Os playoffs serão atualizados conforme você importar seus resultados.'
+            proximaEtapa: 'Importe os resultados conforme os jogos forem acontecendo. Os jogos de playoff terão os times preenchidos na importação de resultados.'
         }
 
         console.log('✅ Importação da agenda finalizada:')
-        console.log(`   📊 Jogos temporada regular: ${resultados.jogosImportados}`)
-        console.log(`   🏆 Jogos playoffs: ${resultados.jogosPlayoffs}`)
-        console.log(`   ⏭️ Jogos pulados: ${resultados.jogosPulados}`)
+        console.log(`   📊 Temporada regular: ${resultados.jogosImportados}`)
+        console.log(`   🏆 Playoffs: ${resultados.jogosPlayoffs}`)
         console.log(`   ❌ Erros: ${resultados.erros.length}`)
-        console.log(`   ⚠️ Warnings: ${resultados.warnings.length}`)
 
         res.status(200).json(resposta)
 
     } catch (error) {
         console.error('❌ Erro na importação da agenda:', error)
-
         res.status(500).json({
             error: 'Erro interno do servidor',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -736,7 +782,7 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                     continue;
                 }
 
-                const temporada = String(stat.temporada || '2025');
+                const temporada = String(stat.temporada || '2026');
 
                 let jogador;
                 let jogadorTime;
@@ -1102,7 +1148,7 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                             continue;
                         }
 
-                        const temporada = String(stat.temporada || '2025');
+                        const temporada = String(stat.temporada || '2026');
 
                         let jogador;
                         let jogadorTime;
@@ -1590,7 +1636,7 @@ adminRouter.post('/atualizar-videos-lote', upload.single('arquivo'), async (req,
 adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
     try {
         const { temporada } = req.query
-        const temporadaFiltro = temporada ? String(temporada) : '2025'
+        const temporadaFiltro = temporada ? String(temporada) : '2026'
 
         const [
             totalCampeonatos,
@@ -1656,7 +1702,7 @@ adminRouter.get('/campeonatos/estatisticas', async (req, res) => {
 adminRouter.get('/jogos', async (req, res) => {
     try {
         const {
-            temporada = '2025',
+            temporada = '2026',
             status,
             fase,
             rodada,
@@ -1993,8 +2039,9 @@ adminRouter.post('/importar-resultados-jogos', upload.single('arquivo'), async (
         const resultadosSheet = workbook.Sheets[sheetName]
         const resultadosRaw = xlsx.utils.sheet_to_json(resultadosSheet) as any[]
 
+        const temporada = String(req.body.temporada || '2026').trim()
         const times = await prisma.time.findMany({
-            where: { temporada: '2025' },
+            where: { temporada },
             select: { id: true, nome: true, sigla: true }
         })
 
@@ -2180,7 +2227,8 @@ adminRouter.get('/status-superliga/:temporada', async (req: Request, res: Respon
 
         const config = superliga.configSuperliga as any
         const faseAtual = config?.faseAtual || 'CONFIGURACAO'
-        const playoffsFinalizados = playoffStats.find(s => s.status === 'FINALIZADO')?._count.id || 0
+
+        const timesDaTemporada = await prisma.time.count({ where: { temporada } })
 
         const status = {
             superliga: {
@@ -2193,7 +2241,7 @@ adminRouter.get('/status-superliga/:temporada', async (req: Request, res: Respon
             estrutura: {
                 conferencias: superliga.conferencias.length,
                 regionais: superliga.conferencias.reduce((acc, c) => acc + c.regionais.length, 0),
-                times: 32
+                times: timesDaTemporada
             },
             jogos: {
                 temporadaRegular: jogosStats.reduce((acc, stat) => acc + stat._count.id, 0),
@@ -2206,10 +2254,6 @@ adminRouter.get('/status-superliga/:temporada', async (req: Request, res: Respon
             },
             proximosJogos,
             classificacao,
-            acoes: {
-                podeGerarPlayoffs: (jogosStats.find(s => s.status === 'FINALIZADO')?._count.id || 0) === 64,
-                podeGerarFaseNacional: playoffsFinalizados >= 16
-            }
         }
 
         res.json(status)
@@ -2227,6 +2271,8 @@ adminRouter.get('/jogadores/:jogadorId/estatisticas-jogos', async (req: Request,
         const { jogadorId } = req.params
 
         console.log(`📊 Buscando estatísticas de jogos para jogador ${jogadorId}`)
+
+        const temporada = String(req.query.temporada || '2026')
 
         const jogadorIdNum = parseInt(jogadorId)
         if (isNaN(jogadorIdNum)) {
@@ -2247,7 +2293,7 @@ adminRouter.get('/jogadores/:jogadorId/estatisticas-jogos', async (req: Request,
         const estatisticasJogos = await prisma.estatisticaJogo.findMany({
             where: {
                 jogadorId: jogadorIdNum,
-                temporada: '2025'
+                temporada: temporada
             },
             include: {
                 jogo: {
@@ -2493,7 +2539,7 @@ adminRouter.put('/estatistica-jogo/:id', async (req: Request, res: Response) => 
         await recalcularEstatisticasConsolidadas(
             estatisticaAtualizada.jogadorId,
             estatisticaAtualizada.timeId,
-            estatisticaAtualizada.temporada || '2025'
+            estatisticaAtualizada.temporada || '2026'
         )
 
         res.json({
@@ -2935,7 +2981,7 @@ adminRouter.post('/reset-database', async (req, res) => {
 
 adminRouter.get('/exportar-estatisticas', async (req, res) => {
     try {
-        const { temporada = '2025' } = req.query
+        const { temporada = '2026' } = req.query
 
         console.log(`📊 Gerando dados para exportação - Temporada: ${temporada}`)
 
@@ -2986,7 +3032,7 @@ adminRouter.get('/exportar-estatisticas', async (req, res) => {
                     sigla: jogadorTime.time.sigla,
                     posicao: jogador.posicao || 'N/A',
                     setor: jogador.setor || 'N/A',
-                    
+
                     // Estatísticas de Passe
                     passes_completos: stats?.passe?.passes_completos || 0,
                     passes_tentados: stats?.passe?.passes_tentados || 0,
@@ -2995,24 +3041,24 @@ adminRouter.get('/exportar-estatisticas', async (req, res) => {
                     interceptacoes_sofridas: stats?.passe?.interceptacoes_sofridas || 0,
                     sacks_sofridos: stats?.passe?.sacks_sofridos || 0,
                     fumble_de_passador: stats?.passe?.fumble_de_passador || 0,
-                    
+
                     // Estatísticas de Corrida
                     corridas: stats?.corrida?.corridas || 0,
                     jardas_corridas: stats?.corrida?.jardas_corridas || 0,
                     tds_corridos: stats?.corrida?.tds_corridos || 0,
                     fumble_de_corredor: stats?.corrida?.fumble_de_corredor || 0,
-                    
+
                     // Estatísticas de Recepção
                     recepcoes: stats?.recepcao?.recepcoes || 0,
                     alvo: stats?.recepcao?.alvo || 0,
                     jardas_recebidas: stats?.recepcao?.jardas_recebidas || 0,
                     tds_recebidos: stats?.recepcao?.tds_recebidos || 0,
-                    
+
                     // Estatísticas de Retorno
                     retornos: stats?.retorno?.retornos || 0,
                     jardas_retornadas: stats?.retorno?.jardas_retornadas || 0,
                     td_retornados: stats?.retorno?.td_retornados || 0,
-                    
+
                     // Estatísticas de Defesa
                     tackles_totais: stats?.defesa?.tackles_totais || 0,
                     tackles_for_loss: stats?.defesa?.tackles_for_loss || 0,
@@ -3022,14 +3068,14 @@ adminRouter.get('/exportar-estatisticas', async (req, res) => {
                     passe_desviado: stats?.defesa?.passe_desviado || 0,
                     safety: stats?.defesa?.safety || 0,
                     td_defensivo: stats?.defesa?.td_defensivo || 0,
-                    
+
                     // Estatísticas de Kicker
                     xp_bons: stats?.kicker?.xp_bons || 0,
                     tentativas_de_xp: stats?.kicker?.tentativas_de_xp || 0,
                     fg_bons: stats?.kicker?.fg_bons || 0,
                     tentativas_de_fg: stats?.kicker?.tentativas_de_fg || 0,
                     fg_mais_longo: stats?.kicker?.fg_mais_longo || 0,
-                    
+
                     // Estatísticas de Punter
                     punts: stats?.punter?.punts || 0,
                     jardas_de_punt: stats?.punter?.jardas_de_punt || 0,

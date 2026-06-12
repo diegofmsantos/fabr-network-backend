@@ -40,64 +40,6 @@ export interface Time extends BaseEntity {
   }
 }
 
-export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
-  SERRAMAR: [
-    'Vasco Almirantes',
-    'Flamengo Imperadores',
-    'Locomotiva FA',
-    'Tritões FA'
-  ],
-
-  CANASTRA: [
-    'Galo FA',
-    'Moura Lacerda Dragons',
-    'Rio Preto Weilers',
-    'Spartans FA'
-  ],
-
-  CANTAREIRA: [
-    'Corinthians Steamrollers',
-    'Cruzeiro FA',
-    'Guarulhos Rhynos',
-    'Ocelots FA'
-  ],
-
-  ARAUCARIA: [
-    'Timbó Rex',
-    'Coritiba Crocodiles',
-    'Calvary Cavaliers',
-    'Brown Spiders'
-  ],
-
-  PAMPA: [
-    'Santa Maria Soldiers',
-    'Juventude FA',
-    'Bravos FA',
-    'Istepôs FA'
-  ],
-
-  ATLANTICO: [
-    'Fortaleza Tritões',
-    'Ceará Sabres',
-    'João Pessoa Espectros',
-    'Recife Mariners',
-    'Cavalaria 2 de Julho',
-    'Caruaru Wolves'
-  ],
-
-  CERRADO: [
-    'Rondonópolis Hawks',
-    'Cuiabá Arsenal',
-    'Tubarões do Cerrado'
-  ],
-
-  AMAZONIA: [
-    'Porto Velho Miners',
-    'Manaus FA',
-    'São Raimundo Cavaliers'
-  ]
-}
-
 export type TimeOptional = {
   id?: number
   nome?: string
@@ -1142,11 +1084,7 @@ export type {
 
 export type TipoConferencia = 'SUDESTE' | 'SUL' | 'NORDESTE' | 'CENTRO NORTE'
 
-export type TipoRegional =
-  | 'SERRAMAR' | 'CANASTRA' | 'CANTAREIRA'
-  | 'ARAUCARIA' | 'PAMPA'
-  | 'ATLANTICO'
-  | 'CERRADO' | 'AMAZONIA'
+export type TipoRegional = 'SERRAMAR' | 'ARAUCARIA' | 'PAMPA' | 'ATLANTICO' | 'CERRADO' | 'AMAZONIA'
 
 export interface ConferenciaConfig {
   tipo: TipoConferencia
@@ -1170,119 +1108,6 @@ export interface PlayoffConfig {
   wildcardVagas: number
   estrutura: 'CONFERENCIA' | 'REGIONAL' | 'GERAL'
 }
-
-export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
-  {
-    tipo: 'SUDESTE',
-    nome: 'Conferência Sudeste',
-    icone: '🏭',
-    totalTimes: 12,
-    regionais: [
-      {
-        tipo: 'SERRAMAR',
-        nome: 'Regional Serramar',
-        conferencia: 'SUDESTE',
-        timesPorRegional: 4,
-        times: []
-      },
-      {
-        tipo: 'CANASTRA',
-        nome: 'Regional Canastra',
-        conferencia: 'SUDESTE',
-        timesPorRegional: 4,
-        times: []
-      },
-      {
-        tipo: 'CANTAREIRA',
-        nome: 'Regional Cantareira',
-        conferencia: 'SUDESTE',
-        timesPorRegional: 4,
-        times: []
-      }
-    ],
-    playoffConfig: {
-      semifinalDireta: 2,
-      wildcardVagas: 4,
-      estrutura: 'CONFERENCIA'
-    }
-  },
-
-  {
-    tipo: 'SUL',
-    nome: 'Conferência Sul',
-    icone: '🧊',
-    totalTimes: 8,
-    regionais: [
-      {
-        tipo: 'ARAUCARIA',
-        nome: 'Regional Araucária',
-        conferencia: 'SUL',
-        timesPorRegional: 4,
-        times: []
-      },
-      {
-        tipo: 'PAMPA',
-        nome: 'Regional Pampa',
-        conferencia: 'SUL',
-        timesPorRegional: 4,
-        times: []
-      }
-    ],
-    playoffConfig: {
-      semifinalDireta: 2,
-      wildcardVagas: 4,
-      estrutura: 'CONFERENCIA'
-    }
-  },
-  {
-    tipo: 'NORDESTE',
-    nome: 'Conferência Nordeste',
-    icone: '🌵',
-    totalTimes: 6,
-    regionais: [
-      {
-        tipo: 'ATLANTICO',
-        nome: 'Regional Atlântico',
-        conferencia: 'NORDESTE',
-        timesPorRegional: 6,
-        times: []
-      }
-    ],
-    playoffConfig: {
-      semifinalDireta: 2,
-      wildcardVagas: 2,
-      estrutura: 'CONFERENCIA'
-    }
-  },
-
-  {
-    tipo: 'CENTRO NORTE',
-    nome: 'Conferência Centro-Norte',
-    icone: '🌲',
-    totalTimes: 6,
-    regionais: [
-      {
-        tipo: 'CERRADO',
-        nome: 'Regional Cerrado',
-        conferencia: 'CENTRO NORTE',
-        timesPorRegional: 3,
-        times: []
-      },
-      {
-        tipo: 'AMAZONIA',
-        nome: 'Regional Amazônia',
-        conferencia: 'CENTRO NORTE',
-        timesPorRegional: 3,
-        times: []
-      }
-    ],
-    playoffConfig: {
-      semifinalDireta: 2,
-      wildcardVagas: 2,
-      estrutura: 'CONFERENCIA'
-    }
-  }
-]
 
 export interface SuperligaJogo extends Jogo {
   conferencia?: TipoConferencia

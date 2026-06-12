@@ -4,15 +4,12 @@ import { z } from 'zod'
 
 export const TipoConferenciaEnum = z.enum(['SUDESTE', 'SUL', 'NORDESTE', 'CENTRO NORTE'])
 export const TipoRegionalEnum = z.enum([
-  'SERRAMAR', 'CANASTRA', 'CANTAREIRA',
-  'ARAUCARIA', 'PAMPA',
-  'ATLANTICO',
-  'CERRADO', 'AMAZONIA'
+  'SERRAMAR', 'ARAUCARIA', 'PAMPA', 'ATLANTICO', 'CERRADO', 'AMAZONIA'
 ])
 
 export const FaseSuperligaEnum = z.enum([
   'CONFIGURACAO',
-  'TEMPORADA REGULAR', 
+  'TEMPORADA REGULAR',
   'PLAYOFFS CONFERENCIA',
   'FASE NACIONAL',
   'FINALIZADO'
@@ -41,25 +38,7 @@ export const DistribuirTimesSchema = z.object({
   distribuicao: z.record(TipoRegionalEnum, z.array(z.number().positive()))
 })
 
-export const GerarJogosSchema = z.object({
-  campeonatoId: z.number().positive(),
-  rodadas: z.number().min(1).max(10).default(4),
-  algoritmo: z.enum(['ROUND_ROBIN', 'CUSTOM']).default('ROUND_ROBIN')
-})
-
-export const GerarPlayoffsSchema = z.object({
-  campeonatoId: z.number().positive(),
-  conferencia: TipoConferenciaEnum
-})
-
 // ==================== SCHEMAS DE ATUALIZAÇÃO ====================
-
-export const AtualizarJogoPlayoffSchema = z.object({
-  jogoId: z.number().positive(),
-  placarTime1: z.number().min(0),
-  placarTime2: z.number().min(0),
-  observacoes: z.string().optional()
-})
 
 export const AtualizarStatusSuperligaSchema = z.object({
   campeonatoId: z.number().positive(),
@@ -123,8 +102,5 @@ export const SuperligaStatusSchema = z.object({
 
 export type CriarSuperligaInput = z.infer<typeof CriarSuperligaSchema>
 export type DistribuirTimesInput = z.infer<typeof DistribuirTimesSchema>
-export type GerarJogosInput = z.infer<typeof GerarJogosSchema>
-export type GerarPlayoffsInput = z.infer<typeof GerarPlayoffsSchema>
-export type AtualizarJogoPlayoffInput = z.infer<typeof AtualizarJogoPlayoffSchema>
 export type ClassificacaoRegionalResponse = z.infer<typeof ClassificacaoRegionalSchema>
 export type SuperligaStatusResponse = z.infer<typeof SuperligaStatusSchema>

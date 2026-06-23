@@ -9,7 +9,7 @@ export const jogadorRouter = express.Router()
 jogadorRouter.get('/jogadores', async (req, res) => {
     try {
         const {
-            temporada = '2025',
+            temporada = '2026',
             timeId,
             includeAllTemporadas = false
         } = req.query;
@@ -138,7 +138,7 @@ jogadorRouter.get('/jogador/:id/temporada/:ano', async (req: Request, res: Respo
 
 jogadorRouter.post('/jogador', async (req, res) => {
     try {
-        const { temporada = '2025', ...jogadorRawData } = req.body;
+        const { temporada = '2026', ...jogadorRawData } = req.body;
         const jogadorData = JogadorSchema.parse(jogadorRawData);
 
         const estatisticas = jogadorData.estatisticas ?? {};
@@ -302,7 +302,7 @@ jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) 
         const estatisticasJogo = await prisma.estatisticaJogo.findMany({
             where: {
                 jogadorId: jogadorId,
-                temporada: temporada as string || '2025'
+                temporada: temporada as string || '2026'
             },
             include: {
                 jogo: {

@@ -256,10 +256,10 @@ export async function validarDistribuicao(campeonatoId: number) {
   });
 
   const expectedDistribution = {
-    'SUDESTE': 12,
+    'SUDESTE': 7,
     'SUL': 8,
     'NORDESTE': 6,
-    'CENTRO NORTE': 6
+    'CENTRO NORTE': 7
   };
 
   Object.entries(expectedDistribution).forEach(([conf, expectedCount]) => {

@@ -1,8 +1,28 @@
-import type { ConferenciaConfig, TipoConferencia, TipoRegional } from '../types'
+/**
+ * superligaConfig.ts  —  D1 2026
+ * Substitui: src/config/superligaConfig.ts (backend)
+ *
+ * MUDANÇAS vs. versão anterior:
+ *  - Total: 29 → 28 times (Rio Preto Weilers removido)
+ *  - Sudeste: 1 regional (Serramar) com 7 times (era 3 regionais)
+ *  - Nordeste: 1 regional (Atlântico) com 6 times
+ *  - Centro-Norte: Cerrado 4 times (era 5) + Amazônia 3 times = 7 total (era 8)
+ *  - Sul: inalterado (Araucária 4 + Pampa 4 = 8)
+ *  - Fase final renomeada para BRASIL BOWL
+ */
 
-export const TOTAL_TIMES_SUPERLIGA = 29
+export type TipoConferencia = 'SUDESTE' | 'SUL' | 'NORDESTE' | 'CENTRO NORTE'
+
+export type TipoRegional =
+  | 'SERRAMAR'
+  | 'ARAUCARIA' | 'PAMPA'
+  | 'ATLANTICO'
+  | 'CERRADO' | 'AMAZONIA'
+
+export const TOTAL_TIMES_SUPERLIGA = 28
 
 export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
+  // Sudeste — 7 times, 1 regional
   SERRAMAR: [
     'Locomotiva FA',
     'Spartans FA',
@@ -12,6 +32,8 @@ export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
     'Guarulhos Rhynos',
     'Ocelots FA',
   ],
+
+  // Sul — 8 times, 2 regionais
   ARAUCARIA: [
     'Coritiba Crocodiles',
     'Londrina Bristlebacks',
@@ -24,6 +46,8 @@ export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
     'Bravos FA',
     'Timbó Rex',
   ],
+
+  // Nordeste — 6 times, 1 regional
   ATLANTICO: [
     'Recife Mariners',
     'Fortaleza Tritões',
@@ -32,18 +56,42 @@ export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
     'Ceará Sabres',
     'Caruaru Wolves',
   ],
+
+  // Centro-Norte — 7 times, 2 regionais
   CERRADO: [
     'Rondonópolis Hawks',
     'Cuiabá Arsenal',
     'Tubarões do Cerrado',
     'Goiás FA',
-    'Rio Preto Weilers',
   ],
   AMAZONIA: [
     'Porto Velho Miners',
     'Manaus FA',
     'Manaus Cavaliers',
   ],
+}
+
+export interface RegionalConfig {
+  tipo: TipoRegional
+  nome: string
+  conferencia: TipoConferencia
+  timesPorRegional: number
+  times: string[]
+}
+
+export interface PlayoffConfig {
+  semifinalDireta: number
+  wildcardVagas: number
+  estrutura: 'CONFERENCIA' | 'REGIONAL' | 'GERAL'
+}
+
+export interface ConferenciaConfig {
+  tipo: TipoConferencia
+  nome: string
+  icone: string
+  totalTimes: number
+  regionais: RegionalConfig[]
+  playoffConfig: PlayoffConfig
 }
 
 export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
@@ -53,45 +101,100 @@ export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
     icone: '🏭',
     totalTimes: 7,
     regionais: [
-      { tipo: 'SERRAMAR', nome: 'Regional Serramar', conferencia: 'SUDESTE', timesPorRegional: 7, times: [] },
+      {
+        tipo: 'SERRAMAR',
+        nome: 'Regional Serramar',
+        conferencia: 'SUDESTE',
+        timesPorRegional: 7,
+        times: TIMES_SUPERLIGA.SERRAMAR,
+      },
     ],
-    playoffConfig: { semifinalDireta: 2, wildcardVagas: 4, estrutura: 'CONFERENCIA' },
+    playoffConfig: {
+      semifinalDireta: 2,
+      wildcardVagas: 4,
+      estrutura: 'CONFERENCIA',
+    },
   },
+
   {
     tipo: 'SUL',
     nome: 'Conferência Sul',
     icone: '🧊',
     totalTimes: 8,
     regionais: [
-      { tipo: 'ARAUCARIA', nome: 'Regional Araucária', conferencia: 'SUL', timesPorRegional: 4, times: [] },
-      { tipo: 'PAMPA', nome: 'Regional Pampa', conferencia: 'SUL', timesPorRegional: 4, times: [] },
+      {
+        tipo: 'ARAUCARIA',
+        nome: 'Regional Araucária',
+        conferencia: 'SUL',
+        timesPorRegional: 4,
+        times: TIMES_SUPERLIGA.ARAUCARIA,
+      },
+      {
+        tipo: 'PAMPA',
+        nome: 'Regional Pampa',
+        conferencia: 'SUL',
+        timesPorRegional: 4,
+        times: TIMES_SUPERLIGA.PAMPA,
+      },
     ],
-    playoffConfig: { semifinalDireta: 2, wildcardVagas: 2, estrutura: 'CONFERENCIA' },
+    playoffConfig: {
+      semifinalDireta: 2,
+      wildcardVagas: 4,
+      estrutura: 'CONFERENCIA',
+    },
   },
+
   {
     tipo: 'NORDESTE',
     nome: 'Conferência Nordeste',
     icone: '🌵',
     totalTimes: 6,
     regionais: [
-      { tipo: 'ATLANTICO', nome: 'Regional Atlântico', conferencia: 'NORDESTE', timesPorRegional: 6, times: [] },
+      {
+        tipo: 'ATLANTICO',
+        nome: 'Regional Atlântico',
+        conferencia: 'NORDESTE',
+        timesPorRegional: 6,
+        times: TIMES_SUPERLIGA.ATLANTICO,
+      },
     ],
-    playoffConfig: { semifinalDireta: 2, wildcardVagas: 2, estrutura: 'CONFERENCIA' },
+    playoffConfig: {
+      semifinalDireta: 2,
+      wildcardVagas: 2,
+      estrutura: 'CONFERENCIA',
+    },
   },
+
   {
     tipo: 'CENTRO NORTE',
     nome: 'Conferência Centro-Norte',
     icone: '🌲',
-    totalTimes: 8,
+    totalTimes: 7,
     regionais: [
-      { tipo: 'CERRADO', nome: 'Regional Cerrado', conferencia: 'CENTRO NORTE', timesPorRegional: 5, times: [] },
-      { tipo: 'AMAZONIA', nome: 'Regional Amazônia', conferencia: 'CENTRO NORTE', timesPorRegional: 3, times: [] },
+      {
+        tipo: 'CERRADO',
+        nome: 'Regional Cerrado',
+        conferencia: 'CENTRO NORTE',
+        timesPorRegional: 4,
+        times: TIMES_SUPERLIGA.CERRADO,
+      },
+      {
+        tipo: 'AMAZONIA',
+        nome: 'Regional Amazônia',
+        conferencia: 'CENTRO NORTE',
+        timesPorRegional: 3,
+        times: TIMES_SUPERLIGA.AMAZONIA,
+      },
     ],
-    playoffConfig: { semifinalDireta: 0, wildcardVagas: 4, estrutura: 'CONFERENCIA' },
+    playoffConfig: {
+      semifinalDireta: 0,
+      wildcardVagas: 2,
+      estrutura: 'CONFERENCIA',
+    },
   },
 ]
 
-// ==================== HELPERS ====================
+// ── Utilitários ──────────────────────────────────────────
 
 export function getConferenciaConfig(tipo: TipoConferencia): ConferenciaConfig {
   const conf = SUPERLIGA_CONFIG.find(c => c.tipo === tipo)
@@ -99,7 +202,7 @@ export function getConferenciaConfig(tipo: TipoConferencia): ConferenciaConfig {
   return conf
 }
 
-export function getRegionalConfig(tipo: TipoRegional) {
+export function getRegionalConfig(tipo: TipoRegional): RegionalConfig {
   for (const conf of SUPERLIGA_CONFIG) {
     const regional = conf.regionais.find(r => r.tipo === tipo)
     if (regional) return regional
@@ -108,31 +211,9 @@ export function getRegionalConfig(tipo: TipoRegional) {
 }
 
 export function getTimesByRegional(regional: TipoRegional): string[] {
-  return TIMES_SUPERLIGA[regional] || []
+  return TIMES_SUPERLIGA[regional] ?? []
 }
 
-export function getRegionalDoTime(nomeTime: string): TipoRegional | null {
-  const alvo = nomeTime.trim().toLowerCase()
-  for (const [regional, times] of Object.entries(TIMES_SUPERLIGA) as [TipoRegional, string[]][]) {
-    if (times.some(t => t.toLowerCase() === alvo)) return regional
-  }
-  return null
-}
-
-export function normalizarConferencia(valor: string): TipoConferencia {
-  const norm = (valor || '').trim().toUpperCase().replace(/-/g, ' ')
-  return norm as TipoConferencia
-}
-
-export function getDistribuicaoConfig(): {
-  [conf: string]: { regionais: { [reg: string]: string[] } }
-} {
-  const out: { [conf: string]: { regionais: { [reg: string]: string[] } } } = {}
-  for (const conf of SUPERLIGA_CONFIG) {
-    out[conf.tipo] = { regionais: {} }
-    for (const regional of conf.regionais) {
-      out[conf.tipo].regionais[regional.tipo] = TIMES_SUPERLIGA[regional.tipo] || []
-    }
-  }
-  return out
+export function getTotalTimes(): number {
+  return SUPERLIGA_CONFIG.reduce((acc, c) => acc + c.totalTimes, 0)
 }

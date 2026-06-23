@@ -27,6 +27,7 @@ model Time {
   coord_defen     String
   titulos         Json
   temporada       String
+  divisao         String        @default("D1")
   jogadores       JogadorTime[]
 
   distribuicaoRegional DistribuicaoTime[]
@@ -35,7 +36,7 @@ model Time {
   jogosVisitante   Jogo[]            @relation("JogosVisitante")
   estatisticasJogo EstatisticaJogo[]
 
-  @@unique([sigla, temporada])
+  @@unique([sigla, temporada, divisao])
   @@index([sigla, temporada])
   @@index([nome, temporada])
 }
@@ -98,6 +99,7 @@ model Campeonato {
   dataInicio DateTime
   dataFim    DateTime?
   descricao  String?
+  divisao    String    @default("D1")
 
   isSuperliga     Boolean @default(false)
   configSuperliga Json?
@@ -110,7 +112,7 @@ model Campeonato {
   distribuicaoTime DistribuicaoTime[]
   estatisticasJogo EstatisticaJogo[]
 
-  @@unique([temporada, isSuperliga])
+  @@unique([temporada, divisao])
   @@index([temporada])
   @@index([status])
   @@index([temporada, isSuperliga, status])

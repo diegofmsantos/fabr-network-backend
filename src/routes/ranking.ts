@@ -694,7 +694,7 @@ async function buscarRankingFallback(temporada: string, limite: number): Promise
 rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
     try {
         const { categoria } = req.params
-        const { temporada = '2025', limite = '50' } = req.query
+        const { temporada = '2026', limite = '50' } = req.query
 
         console.log(`🎯 [OTIMIZADO] Buscando ranking para: ${categoria}, temporada: ${temporada}`)
 
@@ -716,7 +716,7 @@ rankingRouter.get('/:categoria', async (req: Request, res: Response) => {
 rankingRouter.get('/temporada-regular/:categoria', async (req: Request, res: Response) => {
     try {
         const { categoria } = req.params
-        const { temporada = '2025', limite = '50' } = req.query
+        const { temporada = '2026', limite = '50' } = req.query
 
         console.log(`🏈 Buscando ranking TEMPORADA REGULAR: ${categoria}`)
 
@@ -744,7 +744,7 @@ rankingRouter.get('/temporada-regular/:categoria', async (req: Request, res: Res
 rankingRouter.get('/times/:categoria', async (req: Request, res: Response) => {
     try {
         const { categoria } = req.params
-        const { temporada = '2025' } = req.query
+        const { temporada = '2026' } = req.query
 
         res.json([])
     } catch (error) {

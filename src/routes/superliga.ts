@@ -1,28 +1,19 @@
 import express, { Request, Response } from 'express'
 import { prisma } from '../libs/prisma'
-import { distribuirTimesAutomaticamente } from '../utils/superligaUtils'
-import { SUPERLIGA_CONFIG, TIMES_SUPERLIGA, getRegionalDoTime } from '../config/superligaConfig'
+import { SUPERLIGA_CONFIG, TIMES_SUPERLIGA } from '../config/superligaConfig'
+import { distribuirTimesAutomatico } from '../utils/superligaUtils'
+import { SUPERLIGA_CONFIG_D2 } from '../config/superligaConfigD2'
+import { distribuirTimesD2 } from '../utils/superligaUtilsD2'
 
 const superligaRouter = express.Router()
 
-async function buscarSuperligaPorTemporada(temporada: string) {
-  return await prisma.campeonato.findFirst({
-    where: {
-      temporada,
-      isSuperliga: true
-    },
+async function buscarSuperligaPorTemporadaEDivisao(temporada: string, divisao: string = 'D1') {
+  return prisma.campeonato.findFirst({
+    where: { temporada, isSuperliga: true, divisao },
     include: {
       conferencias: {
-        include: {
-          regionais: true
-        },
+        include: { regionais: { orderBy: { ordem: 'asc' } } },
         orderBy: { ordem: 'asc' }
-      },
-      _count: {
-        select: {
-          jogos: true,
-          conferencias: true
-        }
       }
     }
   })
@@ -31,16 +22,24 @@ async function buscarSuperligaPorTemporada(temporada: string) {
 superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
   try {
     const { temporada, conferencia } = req.query
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
 
     if (!temporada) {
       res.status(400).json({ error: 'Temporada é obrigatória' })
       return
     }
 
-    console.log(`🎯 Buscando rodadas para temporada: ${temporada}, conferencia: ${conferencia || 'todas'}`)
+    console.log(`🎯 Buscando rodadas para temporada: ${temporada}, divisao: ${divisao}, conferencia: ${conferencia || 'todas'}`)
+
+    // Busca o campeonato correto pela divisão
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada as string, divisao)
+    if (!superliga) {
+      res.status(404).json({ error: `Superliga ${divisao} ${temporada} não encontrada` })
+      return
+    }
 
     const whereClause: any = {
-      temporada: temporada as string,
+      campeonatoId: superliga.id,
       fase: 'TEMPORADA REGULAR'
     }
 
@@ -125,39 +124,43 @@ superligaRouter.get('/atual', async (req: Request, res: Response) => {
 
 superligaRouter.post('/criar', async (req: Request, res: Response) => {
   try {
-    const { temporada } = req.body
+    const { temporada, divisao = 'D1' } = req.body
 
     if (!temporada) {
       res.status(400).json({ error: 'Temporada é obrigatória' })
-    } else {
-      const existente = await prisma.campeonato.findFirst({
-        where: { temporada, isSuperliga: true }
-      })
-
-      if (existente) {
-        res.status(400).json({
-          error: `Superliga ${temporada} já existe`,
-          superliga: existente
-        })
-      } else {
-        const superliga = await prisma.campeonato.create({
-          data: {
-            nome: `Superliga de Futebol Americano ${temporada}`,
-            temporada,
-            status: 'NAO_INICIADO',
-            dataInicio: new Date(),
-            descricao: `Campeonato nacional de futebol americano - temporada ${temporada}`,
-            isSuperliga: true
-          }
-        })
-
-        res.status(201).json({
-          message: 'Superliga criada com sucesso!',
-          superliga,
-          proximoPasso: 'Configure as conferências'
-        })
-      }
+      return
     }
+
+    const existente = await prisma.campeonato.findFirst({
+      where: { temporada, isSuperliga: true, divisao }
+    })
+
+    if (existente) {
+      res.status(400).json({
+        error: `Superliga ${divisao} ${temporada} já existe`,
+        superliga: existente
+      })
+      return
+    }
+
+    const superliga = await prisma.campeonato.create({
+      data: {
+        nome: `Superliga ${divisao} de Futebol Americano ${temporada}`,
+        temporada,
+        divisao,
+        status: 'NAO_INICIADO',
+        dataInicio: new Date(),
+        descricao: `Campeonato nacional de futebol americano ${divisao} - temporada ${temporada}`,
+        isSuperliga: true
+      }
+    })
+
+    res.status(201).json({
+      message: `Superliga ${divisao} criada com sucesso!`,
+      superliga,
+      proximoPasso: 'Configure as conferências'
+    })
+
   } catch (error) {
     console.error('Erro ao criar Superliga:', error)
     res.status(500).json({
@@ -170,105 +173,100 @@ superligaRouter.post('/criar', async (req: Request, res: Response) => {
 superligaRouter.post('/:temporada/configurar-conferencias', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
+    const { divisao = 'D1' } = req.body
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
-    } else {
-      const conferenciaExistente = await prisma.conferencia.findFirst({
-        where: { campeonatoId: superliga.id }
+      res.status(404).json({ error: `Superliga ${divisao} ${temporada} não encontrada` })
+      return
+    }
+
+    const conferenciaExistente = await prisma.conferencia.findFirst({
+      where: { campeonatoId: superliga.id }
+    })
+
+    if (conferenciaExistente) {
+      res.status(400).json({ error: 'Conferências já foram configuradas' })
+      return
+    }
+
+    // Escolhe a config correta baseada na divisão
+    const config = divisao === 'D2' ? SUPERLIGA_CONFIG_D2 : SUPERLIGA_CONFIG
+
+    const conferencias = []
+    let ordemConferencia = 1
+
+    for (const confConfig of config) {
+      const conferencia = await prisma.conferencia.create({
+        data: {
+          nome: confConfig.nome,
+          tipo: confConfig.tipo,
+          icone: confConfig.icone,
+          campeonatoId: superliga.id,
+          ordem: ordemConferencia,
+          totalTimes: confConfig.totalTimes
+        }
       })
 
-      if (conferenciaExistente) {
-        res.status(400).json({ error: 'Conferências já foram configuradas' })
-      } else {
-        const conferencias = []
-        let ordemConferencia = 1
-
-        for (const confConfig of SUPERLIGA_CONFIG) {
-          const conferencia = await prisma.conferencia.create({
-            data: {
-              nome: confConfig.nome,
-              tipo: confConfig.tipo,
-              icone: confConfig.icone,
-              campeonatoId: superliga.id,
-              ordem: ordemConferencia,
-              totalTimes: confConfig.totalTimes
-            }
-          })
-
-          let ordemRegional = 1
-          for (const regConfig of confConfig.regionais) {
-            await prisma.regional.create({
-              data: {
-                nome: regConfig.nome,
-                tipo: regConfig.tipo,
-                conferenciaId: conferencia.id,
-                ordem: ordemRegional,
-                timesPorRegional: regConfig.timesPorRegional
-              }
-            })
-            ordemRegional++
+      let ordemRegional = 1
+      for (const regConfig of confConfig.regionais) {
+        await prisma.regional.create({
+          data: {
+            nome: regConfig.nome,
+            tipo: regConfig.tipo,
+            conferenciaId: conferencia.id,
+            ordem: ordemRegional,
+            timesPorRegional: regConfig.timesPorRegional
           }
-
-          conferencias.push(conferencia)
-          ordemConferencia++
-        }
-
-        res.status(201).json({
-          message: 'Conferências configuradas com sucesso!',
-          conferencias: conferencias.length,
-          regionais: SUPERLIGA_CONFIG.reduce((acc, conf) => acc + conf.regionais.length, 0),
-          proximoPasso: 'Distribua os times nas conferências'
         })
+        ordemRegional++
       }
+
+      conferencias.push(conferencia)
+      ordemConferencia++
     }
+
+    res.status(201).json({
+      message: `Conferências ${divisao} configuradas com sucesso!`,
+      conferencias: conferencias.length,
+      regionais: config.reduce((acc, conf) => acc + conf.regionais.length, 0),
+      proximoPasso: 'Distribua os times nas conferências'
+    })
+
   } catch (error) {
     console.error('Erro ao configurar conferências:', error)
     res.status(500).json({ error: 'Erro ao configurar conferências' })
   }
 })
 
-superligaRouter.post('/:temporada/distribuir-times-automatico', async (req: Request, res: Response) => {
+superligaRouter.post('/:temporada/distribuir-times', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
+    const { divisao = 'D1' } = req.body
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
-    } else {
-      const conferencias = await prisma.conferencia.count({
-        where: { campeonatoId: superliga.id }
-      })
-
-      if (conferencias === 0) {
-        res.status(400).json({
-          error: 'Configure as conferências antes de distribuir times'
-        })
-      } else {
-        const timesDistribuidos = await prisma.time.count({
-          where: {
-            temporada: superliga.temporada,
-          }
-        })
-
-        if (timesDistribuidos === 0) {
-          res.status(400).json({ error: 'Nenhum time foi importado para esta temporada' })
-        } else {
-          const resultado = await distribuirTimesAutomaticamente(superliga.id, temporada)
-
-          res.status(201).json({
-            message: 'Times distribuídos automaticamente com sucesso!',
-            ...resultado,
-            proximoPasso: 'Importe a agenda de jogos'
-          })
-        }
-      }
+      res.status(404).json({ error: `Superliga ${divisao} ${temporada} não encontrada` })
+      return
     }
+
+    let resultado
+    if (divisao === 'D2') {
+      resultado = await distribuirTimesD2(superliga.id, temporada)
+    } else {
+      resultado = await distribuirTimesAutomatico(superliga.id, temporada)
+    }
+
+    res.status(200).json({
+      message: `Times ${divisao} distribuídos com sucesso!`,
+      ...resultado
+    })
+
   } catch (error) {
     console.error('Erro ao distribuir times:', error)
     res.status(500).json({
-      error: error instanceof Error ? error.message : 'Erro ao distribuir times'
+      error: 'Erro ao distribuir times',
+      details: error instanceof Error ? error.message : 'Erro desconhecido'
     })
   }
 })
@@ -277,7 +275,7 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
   try {
     const { temporada } = req.params
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
       return
@@ -390,7 +388,7 @@ superligaRouter.get('/:temporada/conferencias', async (req: Request, res: Respon
   try {
     const { temporada } = req.params
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -416,7 +414,7 @@ superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, re
   try {
     const { temporada } = req.params
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -463,34 +461,22 @@ superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, re
 superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-    const {
-      conferencia,
-      fase,
-      rodada,
-      status,
-      limite
-    } = req.query
+    const { conferencia, fase, rodada, status, limite } = req.query
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
+      res.status(404).json({ error: `Superliga ${divisao} ${temporada} não encontrada` })
       return
     }
 
-    const where: any = {
-      campeonatoId: superliga.id
-    }
+    const where: any = { campeonatoId: superliga.id }
 
     if (conferencia && typeof conferencia === 'string') {
       const conf = await prisma.conferencia.findFirst({
-        where: {
-          campeonatoId: superliga.id,
-          tipo: conferencia.toUpperCase()
-        }
+        where: { campeonatoId: superliga.id, tipo: conferencia.toUpperCase() }
       })
-      if (conf) {
-        where.conferenciaId = conf.id
-      }
+      if (conf) where.conferenciaId = conf.id
     }
 
     if (fase && typeof fase === 'string') {
@@ -498,39 +484,22 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
       where.fase = fases.length === 1 ? fases[0] : { in: fases }
     }
 
-    if (rodada) {
-      where.rodada = parseInt(rodada as string)
-    }
-
-    if (status && typeof status === 'string') {
-      where.status = status
-    }
+    if (rodada) where.rodada = parseInt(rodada as string)
+    if (status && typeof status === 'string') where.status = status
 
     const jogos = await prisma.jogo.findMany({
       where,
       include: {
-        timeCasa: {
-          select: { id: true, nome: true, sigla: true, cor: true, cidade: true, logo: true }
-        },
-        timeVisitante: {
-          select: { id: true, nome: true, sigla: true, cor: true, cidade: true, logo: true }
-        },
-        conferenciaRelacao: {
-          select: { id: true, nome: true, tipo: true }
-        },
-        regionalRelacao: {
-          select: { id: true, nome: true, tipo: true }
-        }
+        timeCasa: { select: { id: true, nome: true, sigla: true, cor: true, cidade: true, logo: true } },
+        timeVisitante: { select: { id: true, nome: true, sigla: true, cor: true, cidade: true, logo: true } },
+        conferenciaRelacao: { select: { id: true, nome: true, tipo: true } },
+        regionalRelacao: { select: { id: true, nome: true, tipo: true } }
       },
-      orderBy: [
-        { fase: 'asc' },
-        { rodada: 'asc' },
-        { dataJogo: 'asc' }
-      ],
+      orderBy: [{ fase: 'asc' }, { rodada: 'asc' }, { dataJogo: 'asc' }],
       take: limite ? parseInt(limite as string) : undefined
     })
 
-    console.log(`🎯 Encontrados ${jogos.length} jogos para temporada ${temporada}`)
+    console.log(`🎯 Encontrados ${jogos.length} jogos para temporada ${temporada} (${divisao})`)
 
     const jogosFormatados = jogos.map(jogo => ({
       id: jogo.id,
@@ -557,21 +526,14 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
         jogos: jogosFormatados,
         total: jogosFormatados.length,
         temporada,
-        filtros: {
-          conferencia,
-          fase,
-          rodada,
-          status
-        }
+        divisao,
+        filtros: { conferencia, fase, rodada, status }
       })
     }
 
   } catch (error) {
     console.error('❌ Erro ao buscar jogos:', error)
-    res.status(500).json({
-      error: 'Erro ao buscar jogos',
-      details: error instanceof Error ? error.message : 'Erro desconhecido'
-    })
+    res.status(500).json({ error: 'Erro ao buscar jogos', details: error instanceof Error ? error.message : 'Erro desconhecido' })
   }
 })
 
@@ -580,7 +542,7 @@ superligaRouter.get('/:temporada/proximos-jogos', async (req: Request, res: Resp
     const { temporada } = req.params
     const { limite = 5 } = req.query
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -613,7 +575,7 @@ superligaRouter.get('/:temporada/ultimos-resultados', async (req: Request, res: 
     const { temporada } = req.params
     const { limite = 5 } = req.query
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -642,7 +604,7 @@ superligaRouter.get('/:temporada/jogos/rodada/:rodada', async (req: Request, res
   try {
     const { temporada, rodada } = req.params
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -699,7 +661,7 @@ superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
 
     if (!superliga) {
       res.status(404).json({
@@ -723,7 +685,8 @@ superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) =
   try {
     const { temporada } = req.params
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
       return
@@ -792,7 +755,7 @@ superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Respo
   try {
     const { temporada } = req.params
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -820,7 +783,7 @@ superligaRouter.delete('/:temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -842,20 +805,17 @@ superligaRouter.delete('/:temporada', async (req: Request, res: Response) => {
 superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
 
-    const superliga = await buscarSuperligaPorTemporada(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
+      res.status(404).json({ error: `Superliga ${divisao} ${temporada} não encontrada` })
       return
     }
 
     const conferencias = await prisma.conferencia.findMany({
       where: { campeonatoId: superliga.id },
-      include: {
-        regionais: {
-          orderBy: { ordem: 'asc' }
-        }
-      },
+      include: { regionais: { orderBy: { ordem: 'asc' } } },
       orderBy: { ordem: 'asc' }
     })
 
@@ -865,18 +825,15 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
         fase: 'TEMPORADA REGULAR',
         status: 'FINALIZADO'
       },
-      include: {
-        timeCasa: true,
-        timeVisitante: true
-      }
+      include: { timeCasa: true, timeVisitante: true }
     })
 
+    // Filtra times pela divisão correta
     const times = await prisma.time.findMany({
-      where: { temporada }
+      where: { temporada, divisao }
     })
 
     const estatisticasTimes = new Map()
-
     times.forEach(time => {
       estatisticasTimes.set(time.id, {
         timeId: time.id,
@@ -894,17 +851,13 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
     jogos.forEach(jogo => {
       const statsCasa = estatisticasTimes.get(jogo.timeCasaId)
       const statsVisitante = estatisticasTimes.get(jogo.timeVisitanteId)
-
       if (statsCasa && statsVisitante) {
         statsCasa.jogos++
         statsVisitante.jogos++
-
         statsCasa.pontosPro += jogo.placarCasa || 0
         statsCasa.pontosContra += jogo.placarVisitante || 0
-
         statsVisitante.pontosPro += jogo.placarVisitante || 0
         statsVisitante.pontosContra += jogo.placarCasa || 0
-
         if ((jogo.placarCasa || 0) > (jogo.placarVisitante || 0)) {
           statsCasa.vitorias++
           statsVisitante.derrotas++
@@ -920,14 +873,19 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
       stats.aproveitamento = stats.jogos > 0 ? (stats.vitorias / stats.jogos) * 100 : 0
     })
 
+    const distribuicoes = await prisma.distribuicaoTime.findMany({
+      where: { campeonatoId: superliga.id, temporada },
+      select: { timeId: true, regionalType: true }
+    })
+    const mapaTimeRegional = new Map<number, string>()
+    distribuicoes.forEach(d => mapaTimeRegional.set(d.timeId, d.regionalType))
+
     const classificacaoPorConferencia: any = {}
 
     for (const conferencia of conferencias) {
       const regionaisClassificacao = []
-
       for (const regional of conferencia.regionais) {
-        const timesRegional = times.filter(time => getRegionalDoTime(time.nome) === regional.tipo)
-
+        const timesRegional = times.filter(time => mapaTimeRegional.get(time.id) === regional.tipo)
         const timesComStats = timesRegional
           .map(time => estatisticasTimes.get(time.id))
           .filter(Boolean)
@@ -936,10 +894,7 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
             if (b.saldo !== a.saldo) return b.saldo - a.saldo
             return b.pontosPro - a.pontosPro
           })
-          .map((stats, index) => ({
-            posicao: index + 1,
-            ...stats
-          }))
+          .map((stats, index) => ({ posicao: index + 1, ...stats }))
 
         regionaisClassificacao.push({
           regionalId: regional.id,

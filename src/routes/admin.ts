@@ -447,16 +447,19 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             return
         }
 
+        // Recebe a divisão — padrão D1 para manter compatibilidade retroativa
+        const divisao = String(req.body.divisao || 'D1').trim().toUpperCase()
+
         const superliga = await prisma.campeonato.findFirst({
-            where: { temporada, isSuperliga: true }
+            where: { temporada, isSuperliga: true, divisao }
         })
 
         if (!superliga) {
-            res.status(400).json({ error: `Crie a Superliga ${temporada} antes de importar a agenda` })
+            res.status(400).json({ error: `Crie a Superliga ${divisao} ${temporada} antes de importar a agenda` })
             return
         }
 
-        console.log(`✅ Superliga encontrada: ID ${superliga.id} (temporada ${temporada})`)
+        console.log(`✅ Superliga encontrada: ID ${superliga.id} (temporada ${temporada}, divisão ${divisao})`)
 
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' })
         const sheetName = workbook.SheetNames[0]
@@ -470,12 +473,13 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             return
         }
 
+        // Filtra apenas os times da divisão correta
         const times = await prisma.time.findMany({
-            where: { temporada },
+            where: { temporada, divisao },
             select: { id: true, nome: true, sigla: true }
         })
 
-        console.log(`📋 Times encontrados no banco: ${times.length}`)
+        console.log(`📋 Times ${divisao} encontrados no banco: ${times.length}`)
 
         const mapaTimes = new Map<string, { id: number; nome: string; sigla: string }>()
         times.forEach(time => mapaTimes.set(time.nome.toLowerCase().trim(), time))
@@ -483,7 +487,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
         // Helpers ----------------------------------------------------------
         const normalizarConferencia = (v: any): string | null => {
             if (v === undefined || v === null || String(v).trim() === '') return null
-            // "Centro-Norte" -> "CENTRO NORTE" | "Nacional" -> "NACIONAL"
             return String(v).trim().toUpperCase().replace(/-/g, ' ')
         }
         const parseDataJogo = (v: any): Date => {
@@ -491,7 +494,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             if (typeof v === 'number') return new Date((v - 25569) * 86400 * 1000)
             return new Date(v)
         }
-        // Ordem das fases de playoff (para derivar rodada quando a planilha não traz)
         const FASE_RANK: Record<string, number> = {
             'WILD CARD': 1,
             'SEMIFINAL DE CONFERÊNCIA': 2,
@@ -521,7 +523,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             const j = jogosRaw[i] as any
             const linha = i + 1
 
-            // A coluna da planilha chama-se "data_jogo"
             const data = parseDataJogo(j.data_jogo)
             if (isNaN(data.getTime())) {
                 erros.push({ linha, erro: `Data inválida: "${j.data_jogo}"` })
@@ -546,7 +547,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
             })
         }
 
-        // Deriva rodada da temporada regular pela ordem das datas (a planilha vem sem rodada)
         const datasRegulares = Array.from(
             new Set(linhas.filter(l => !l.isPlayoff).map(l => l.data.getTime()))
         ).sort((a, b) => a - b)
@@ -572,9 +572,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                 )
 
                 if (l.isPlayoff) {
-                    // Playoff: os campos de mandante/visitante trazem DESCRITORES de chave
-                    // (ex.: "4º Atlântico", "Vencedor do Jogo 59"), não nomes de times.
-                    // Grava sem timeId; os times reais entram na importação de resultados.
                     await prisma.jogo.create({
                         data: {
                             campeonatoId: superliga.id,
@@ -596,7 +593,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                     resultados.jogosPlayoffs++
                     resultados.warnings.push({
                         linha: l.linha,
-                        warning: `Jogo de playoff (${l.fase}) criado sem times definidos — serão preenchidos na importação de resultados`
+                        warning: `Jogo de playoff (${l.fase}) criado sem times definidos`
                     })
                     console.log(`🏆 Playoff (${l.fase}): ${l.mandante || '?'} x ${l.visitante || '?'}`)
 
@@ -643,7 +640,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
         }
 
         const resposta = {
-            message: `Agenda importada com sucesso!`,
+            message: `Agenda ${divisao} importada com sucesso!`,
             resumo: {
                 jogosTemporadaRegular: resultados.jogosImportados,
                 jogosPlayoffs: resultados.jogosPlayoffs,
@@ -656,7 +653,7 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
                 erros: resultados.erros.length > 0 ? resultados.erros : undefined,
                 warnings: resultados.warnings.length > 0 ? resultados.warnings : undefined
             },
-            proximaEtapa: 'Importe os resultados conforme os jogos forem acontecendo. Os jogos de playoff terão os times preenchidos na importação de resultados.'
+            proximaEtapa: 'Importe os resultados conforme os jogos forem acontecendo.'
         }
 
         console.log('✅ Importação da agenda finalizada:')

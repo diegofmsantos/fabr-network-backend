@@ -12,9 +12,13 @@ timeRouter.get('/', async (req, res) => {
     try {
         const { temporada } = req.query
         const temporadaFiltro = temporada ? String(temporada) : '2026'
+        const divisaoFiltro = req.query.divisao ? String(req.query.divisao).toUpperCase() : undefined
 
         const times = await prisma.time.findMany({
-            where: { temporada: temporadaFiltro },
+            where: {
+                temporada: temporadaFiltro,
+                ...(divisaoFiltro ? { divisao: divisaoFiltro } : {})
+            },
             include: {
                 jogadores: {
                     where: { temporada: temporadaFiltro },

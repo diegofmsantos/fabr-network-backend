@@ -539,10 +539,13 @@ superligaRouter.get('/:temporada/jogos', async (req: Request, res: Response) => 
 
 superligaRouter.get('/:temporada/proximos-jogos', async (req: Request, res: Response) => {
   try {
-    const { temporada } = req.params
+
     const { limite = 5 } = req.query
 
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
+    const { temporada } = req.params
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
+
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -572,10 +575,11 @@ superligaRouter.get('/:temporada/proximos-jogos', async (req: Request, res: Resp
 
 superligaRouter.get('/:temporada/ultimos-resultados', async (req: Request, res: Response) => {
   try {
-    const { temporada } = req.params
     const { limite = 5 } = req.query
+    const { temporada } = req.params
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
 
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -603,8 +607,9 @@ superligaRouter.get('/:temporada/ultimos-resultados', async (req: Request, res: 
 superligaRouter.get('/:temporada/jogos/rodada/:rodada', async (req: Request, res: Response) => {
   try {
     const { temporada, rodada } = req.params
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
 
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -660,8 +665,8 @@ superligaRouter.get('/temporadas', async (req: Request, res: Response) => {
 superligaRouter.get('/:temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
-
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
 
     if (!superliga) {
       res.status(404).json({
@@ -754,8 +759,9 @@ superligaRouter.get('/:temporada/bracket', async (req: Request, res: Response) =
 superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
 
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {

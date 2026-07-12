@@ -1,6 +1,6 @@
 /**
  * superligaUtilsD2.ts
- * Distribuição automática dos 28 times D2
+ * Distribuição automática dos 26 times D2
  * Salvar em: src/utils/superligaUtilsD2.ts (backend)
  */
 
@@ -12,7 +12,7 @@ const DISTRIBUICAO_D2: Record<string, { regionais: Record<string, string[]> }> =
     'NORTE': {
         regionais: {
             'SAO_PAULO': ['Caniballs FA', 'Corinthians Steamrollers', 'Spartans FA B', 'Tatuapé Monsters', 'Vikings FA'],
-            'VALES': ['Leme Lizards', 'Moura Lacerda Dragons', 'Ponte Preta Gorilas', 'São José Jets', 'Taubaté FA'],
+            'VALES': ['Moura Lacerda Dragons', 'Ponte Preta Gorilas', 'Taubaté FA'],  // saíram Leme Lizards e São José Jets
             'SERRAMAR_D2': ['Macaé Oilers', 'Tritões FA'],
             'MOGIANA': ['Brasília Leões', 'Cruzeiro FA'],
         },
@@ -22,7 +22,7 @@ const DISTRIBUICAO_D2: Record<string, { regionais: Record<string, string[]> }> =
             'OESTE': ['Cascavel Olympians', 'Chape FA', 'Francisco Beltrão Red Feet'],
             'ARAUCARIA_D2': ['Coritiba Crocodiles B', 'Curitiba Brown Spiders B', 'Curitiba Lions', 'Joinville Gladiators'],
             'PARANAPANEMA': ['Arapongas Golden Phoenix', 'Calvary Cavaliers', 'Maringá Pyros', 'Ponta Grossa Phantoms'],
-            'PAMPA_D2': ['Bears FA', 'Erechim Coroados', 'Porto Alegre Gorillas'],
+            'PAMPA_D2': ['Bears FA', 'Erechim Coroados', 'Underdogs FA'],  // Porto Alegre Gorillas → Underdogs FA
         },
     },
 }

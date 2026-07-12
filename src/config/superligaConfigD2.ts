@@ -4,8 +4,9 @@
  * Salvar em: src/config/superligaConfigD2.ts (backend)
  *
  * Estrutura:
- *   Conferência Norte (14 times, 4 regionais)
+ *   Conferência Norte (12 times, 4 regionais)
  *   Conferência Sul   (14 times, 4 regionais)
+ *   Total: 26 times
  */
 
 export type TipoConferenciaD2 = 'NORTE' | 'SUL'
@@ -14,7 +15,7 @@ export type TipoRegionalD2 =
     | 'SAO_PAULO' | 'VALES' | 'SERRAMAR_D2' | 'MOGIANA'
     | 'OESTE' | 'ARAUCARIA_D2' | 'PARANAPANEMA' | 'PAMPA_D2'
 
-export const TOTAL_TIMES_D2 = 28
+export const TOTAL_TIMES_D2 = 26
 
 export const TIMES_D2: Record<TipoRegionalD2, string[]> = {
     // Norte — Regional São Paulo (5 times)
@@ -25,12 +26,10 @@ export const TIMES_D2: Record<TipoRegionalD2, string[]> = {
         'Tatuapé Monsters',
         'Vikings FA',
     ],
-    // Norte — Regional Vales (5 times)
+    // Norte — Regional Vales (3 times) — saíram Leme Lizards e São José Jets
     VALES: [
-        'Leme Lizards',
         'Moura Lacerda Dragons',
         'Ponte Preta Gorilas',
-        'São José Jets',
         'Taubaté FA',
     ],
     // Norte — Regional Serramar D2 (2 times)
@@ -64,11 +63,11 @@ export const TIMES_D2: Record<TipoRegionalD2, string[]> = {
         'Maringá Pyros',
         'Ponta Grossa Phantoms',
     ],
-    // Sul — Regional Pampa D2 (3 times)
+    // Sul — Regional Pampa D2 (3 times) — Porto Alegre Gorillas → Underdogs FA
     PAMPA_D2: [
         'Bears FA',
         'Erechim Coroados',
-        'Porto Alegre Gorillas',
+        'Underdogs FA',
     ],
 }
 
@@ -93,10 +92,10 @@ export const SUPERLIGA_CONFIG_D2: ConferenciaConfigD2[] = [
         tipo: 'NORTE',
         nome: 'Conferência Norte',
         icone: '🔥',
-        totalTimes: 14,
+        totalTimes: 12,
         regionais: [
             { tipo: 'SAO_PAULO', nome: 'Regional São Paulo', conferencia: 'NORTE', timesPorRegional: 5, times: TIMES_D2.SAO_PAULO },
-            { tipo: 'VALES', nome: 'Regional Vales', conferencia: 'NORTE', timesPorRegional: 5, times: TIMES_D2.VALES },
+            { tipo: 'VALES', nome: 'Regional Vales', conferencia: 'NORTE', timesPorRegional: 3, times: TIMES_D2.VALES },
             { tipo: 'SERRAMAR_D2', nome: 'Regional Serramar', conferencia: 'NORTE', timesPorRegional: 2, times: TIMES_D2.SERRAMAR_D2 },
             { tipo: 'MOGIANA', nome: 'Regional Mogiana', conferencia: 'NORTE', timesPorRegional: 2, times: TIMES_D2.MOGIANA },
         ],

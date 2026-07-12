@@ -3,9 +3,9 @@
  * Substitui: src/utils/superligaUtils.ts (backend)
  *
  * MUDANÇAS:
- *  - distribuirTimesAutomatico: nomes dos 28 times atualizados
- *  - Cerrado: 4 times (era 5, sem Rio Preto Weilers)
- *  - Sudeste: 1 regional Serramar com 7 times (era 3 regionais com 4 cada)
+ *  - Total: 28 → 26 times
+ *  - Araucária: saiu Londrina Bristlebacks (4 → 3 times)
+ *  - Amazônia: saiu Manaus Cavaliers (3 → 2 times)
  */
 
 import { PrismaClient } from '@prisma/client'
@@ -30,9 +30,9 @@ const DISTRIBUICAO_CONFIG: Record<string, { regionais: Record<string, string[]> 
     regionais: {
       'ARAUCARIA': [
         'Coritiba Crocodiles',
-        'Londrina Bristlebacks',
         'Curitiba Brown Spiders',
         'Istepôs FA',
+        // saiu Londrina Bristlebacks
       ],
       'PAMPA': [
         'Santa Maria Soldiers',
@@ -65,7 +65,7 @@ const DISTRIBUICAO_CONFIG: Record<string, { regionais: Record<string, string[]> 
       'AMAZONIA': [
         'Porto Velho Miners',
         'Manaus FA',
-        'Manaus Cavaliers',
+        // saiu Manaus Cavaliers
       ],
     },
   },
@@ -86,7 +86,7 @@ export async function distribuirTimesAutomatico(campeonatoId: number, temporada:
   if (!superliga) throw new Error('Campeonato não encontrado')
 
   const todosTimes = await prisma.time.findMany({
-    where: { temporada },
+    where: { temporada, divisao: 'D1' },
     select: { id: true, nome: true },
   })
 

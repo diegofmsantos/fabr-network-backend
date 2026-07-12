@@ -3,12 +3,11 @@
  * Substitui: src/config/superligaConfig.ts (backend)
  *
  * MUDANÇAS vs. versão anterior:
- *  - Total: 29 → 28 times (Rio Preto Weilers removido)
- *  - Sudeste: 1 regional (Serramar) com 7 times (era 3 regionais)
- *  - Nordeste: 1 regional (Atlântico) com 6 times
- *  - Centro-Norte: Cerrado 4 times (era 5) + Amazônia 3 times = 7 total (era 8)
- *  - Sul: inalterado (Araucária 4 + Pampa 4 = 8)
- *  - Fase final renomeada para BRASIL BOWL
+ *  - Total: 28 → 26 times
+ *  - Araucária: 4 → 3 times (saiu Londrina Bristlebacks)
+ *  - Amazônia: 3 → 2 times (saiu Manaus Cavaliers)
+ *  - Sul: 8 → 7 times total
+ *  - Centro-Norte: 7 → 6 times total
  */
 
 export type TipoConferencia = 'SUDESTE' | 'SUL' | 'NORDESTE' | 'CENTRO NORTE'
@@ -19,7 +18,7 @@ export type TipoRegional =
   | 'ATLANTICO'
   | 'CERRADO' | 'AMAZONIA'
 
-export const TOTAL_TIMES_SUPERLIGA = 28
+export const TOTAL_TIMES_SUPERLIGA = 26
 
 export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
   // Sudeste — 7 times, 1 regional
@@ -33,12 +32,12 @@ export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
     'Ocelots FA',
   ],
 
-  // Sul — 8 times, 2 regionais
+  // Sul — 7 times, 2 regionais
   ARAUCARIA: [
     'Coritiba Crocodiles',
-    'Londrina Bristlebacks',
     'Curitiba Brown Spiders',
     'Istepôs FA',
+    // saiu Londrina Bristlebacks
   ],
   PAMPA: [
     'Santa Maria Soldiers',
@@ -57,7 +56,7 @@ export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
     'Caruaru Wolves',
   ],
 
-  // Centro-Norte — 7 times, 2 regionais
+  // Centro-Norte — 6 times, 2 regionais
   CERRADO: [
     'Rondonópolis Hawks',
     'Cuiabá Arsenal',
@@ -67,7 +66,7 @@ export const TIMES_SUPERLIGA: Record<TipoRegional, string[]> = {
   AMAZONIA: [
     'Porto Velho Miners',
     'Manaus FA',
-    'Manaus Cavaliers',
+    // saiu Manaus Cavaliers
   ],
 }
 
@@ -120,13 +119,13 @@ export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
     tipo: 'SUL',
     nome: 'Conferência Sul',
     icone: '🧊',
-    totalTimes: 8,
+    totalTimes: 7,
     regionais: [
       {
         tipo: 'ARAUCARIA',
         nome: 'Regional Araucária',
         conferencia: 'SUL',
-        timesPorRegional: 4,
+        timesPorRegional: 3,
         times: TIMES_SUPERLIGA.ARAUCARIA,
       },
       {
@@ -169,7 +168,7 @@ export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
     tipo: 'CENTRO NORTE',
     nome: 'Conferência Centro-Norte',
     icone: '🌲',
-    totalTimes: 7,
+    totalTimes: 6,
     regionais: [
       {
         tipo: 'CERRADO',
@@ -182,7 +181,7 @@ export const SUPERLIGA_CONFIG: ConferenciaConfig[] = [
         tipo: 'AMAZONIA',
         nome: 'Regional Amazônia',
         conferencia: 'CENTRO NORTE',
-        timesPorRegional: 3,
+        timesPorRegional: 2,
         times: TIMES_SUPERLIGA.AMAZONIA,
       },
     ],

@@ -84,102 +84,112 @@ adminRouter.post('/importar-times', upload.single('arquivo'), async (req, res) =
         const sheetName = workbook.SheetNames[0];
         const timeSheet = workbook.Sheets[sheetName];
 
-        let timesRaw = xlsx.utils.sheet_to_json(timeSheet) as any[];
+        const timesRaw = xlsx.utils.sheet_to_json(timeSheet) as any[];
 
         const times = timesRaw.map(time => ({
             ...time,
-            temporada: time.temporada ? String(time.temporada) : String(req.body.temporada || '2026')
-        }));
+            temporada: time.temporada ? String(Math.round(Number(time.temporada))) : String(req.body.temporada || '2026'),
+            divisao: time.divisao ? String(time.divisao).toUpperCase().trim() : 'D1'
+        }))
+            // Filtra apenas D1 e D2 — ignora FEM e outras divisões não suportadas
+            .filter(time => time.divisao === 'D1' || time.divisao === 'D2')
+
+        console.log(`📋 Total de times a processar (D1+D2): ${times.length}`)
 
         const resultados = {
             sucesso: 0,
+            atualizados: 0,
             erros: [] as any[]
         };
 
         for (const time of times) {
             try {
-                console.log(`Processando time: ${time.nome}, temporada: ${time.temporada}`);
+                console.log(`Processando time: ${time.nome}, temporada: ${time.temporada}, divisao: ${time.divisao}`);
 
                 if (!time.nome || !time.sigla || !time.cor) {
                     resultados.erros.push({
                         time: time.nome || 'Desconhecido',
-                        erro: 'Dados obrigatórios ausentes'
+                        erro: 'Dados obrigatórios ausentes (nome, sigla ou cor)'
                     });
                     continue;
+                }
+
+                const titulosRaw = time['títulos'] ?? time.titulos
+                let titulosParsed: any = []
+                if (titulosRaw) {
+                    if (typeof titulosRaw === 'string') {
+                        try { titulosParsed = JSON.parse(titulosRaw) } catch { titulosParsed = [] }
+                    } else {
+                        titulosParsed = titulosRaw
+                    }
+                }
+
+                const dadosTime = {
+                    sigla: String(time.sigla).trim(),
+                    cor: time.cor,
+                    cidade: time.cidade || '',
+                    bandeira_estado: time.bandeira_estado || '',
+                    fundacao: time.fundacao ? String(time.fundacao) : '',
+                    logo: time.logo || '',
+                    capacete: time.capacete || '',
+                    instagram: time.instagram || '',
+                    instagram2: time.instagram2 || '',
+                    estadio: time.estadio || '',
+                    presidente: time.presidente || '',
+                    head_coach: time.head_coach || '',
+                    instagram_coach: time.instagram_coach || '',
+                    coord_ofen: time.coord_ofen || '',
+                    coord_defen: time.coord_defen || '',
+                    titulos: titulosParsed,
                 }
 
                 const timeExistente = await prisma.time.findFirst({
                     where: {
                         nome: time.nome,
-                        temporada: String(time.temporada)
+                        temporada: String(time.temporada),
+                        divisao: time.divisao
                     }
                 });
 
                 if (timeExistente) {
                     await prisma.time.update({
                         where: { id: timeExistente.id },
-                        data: {
-                            sigla: time.sigla,
-                            cor: time.cor,
-                            cidade: time.cidade || '',
-                            bandeira_estado: time.bandeira_estado || '',
-                            fundacao: time.fundacao || '',
-                            logo: time.logo || '',
-                            capacete: time.capacete || '',
-                            instagram: time.instagram || '',
-                            instagram2: time.instagram2 || '',
-                            estadio: time.estadio || '',
-                            presidente: time.presidente || '',
-                            head_coach: time.head_coach || '',
-                            instagram_coach: time.instagram_coach || '',
-                            coord_ofen: time.coord_ofen || '',
-                            coord_defen: time.coord_defen || '',
-                            titulos: time.titulos || []
-                        }
+                        data: dadosTime
                     });
+                    resultados.atualizados++;
+                    console.log(`✏️  Atualizado: ${time.nome} (${time.divisao})`)
                 } else {
                     await prisma.time.create({
                         data: {
+                            ...dadosTime,
                             nome: time.nome,
-                            sigla: time.sigla,
-                            cor: time.cor,
-                            cidade: time.cidade || '',
-                            bandeira_estado: time.bandeira_estado || '',
-                            fundacao: time.fundacao || '',
-                            logo: time.logo || '',
-                            capacete: time.capacete || '',
-                            instagram: time.instagram || '',
-                            instagram2: time.instagram2 || '',
-                            estadio: time.estadio || '',
-                            presidente: time.presidente || '',
-                            head_coach: time.head_coach || '',
-                            instagram_coach: time.instagram_coach || '',
-                            coord_ofen: time.coord_ofen || '',
-                            coord_defen: time.coord_defen || '',
-                            titulos: (time['títulos'] ?? time.titulos) || [],
-                            temporada: String(time.temporada)
+                            temporada: String(time.temporada),
+                            divisao: time.divisao
                         }
                     });
+                    resultados.sucesso++;
+                    console.log(`✅ Criado: ${time.nome} (${time.divisao})`)
                 }
-
-                resultados.sucesso++;
             } catch (error) {
                 console.error(`Erro ao processar time ${time.nome}:`, error);
                 resultados.erros.push({
                     time: time.nome || 'Desconhecido',
+                    divisao: time.divisao,
                     erro: error instanceof Error ? error.message : 'Erro desconhecido'
                 });
             }
         }
 
+        console.log(`\n📊 Importação concluída: ${resultados.sucesso} criados, ${resultados.atualizados} atualizados, ${resultados.erros.length} erros`)
+
         res.status(200).json({
-            mensagem: `Processamento concluído: ${resultados.sucesso} times importados com sucesso`,
+            mensagem: `Processamento concluído: ${resultados.sucesso} times criados, ${resultados.atualizados} atualizados`,
+            sucesso: resultados.sucesso,
+            atualizados: resultados.atualizados,
             erros: resultados.erros.length > 0 ? resultados.erros : null
         });
     } catch (error) {
         console.error('Erro ao processar planilha de times:', error);
-
-
         res.status(500).json({
             error: 'Erro ao processar a planilha de times',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -682,8 +692,8 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
             return;
         }
 
-        if (!id_jogo || !data_jogo) {
-            res.status(400).json({ error: 'ID do jogo e data são obrigatórios' });
+        if (!id_jogo) {
+            res.status(400).json({ error: 'ID do jogo é obrigatório' });
             return;
         }
 
@@ -769,90 +779,57 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
             playByPlay: playByPlay ? `${playByPlay.substring(0, 50)}...` : null
         };
 
+        // Temporada vem do jogo — não depende da planilha nem de IDs
+        const temporada = jogo.campeonato.temporada
+
         for (const stat of estatisticasJogo) {
             try {
-                if (!stat.jogador_id && !stat.jogador_nome) {
+                // jogador_id é IGNORADO — busca sempre por nome para evitar
+                // problemas com IDs que mudam a cada reset do banco
+                if (!stat.jogador_nome) {
                     resultados.erros.push({
                         linha: JSON.stringify(stat),
-                        erro: 'ID ou nome do jogador é obrigatório'
+                        erro: 'Nome do jogador é obrigatório'
                     });
                     continue;
                 }
 
-                const temporada = String(stat.temporada || '2026');
+                const nomeJogador = String(stat.jogador_nome).trim()
+                const timeNomeNormalizado = stat.time_nome?.toLowerCase().trim()
 
                 let jogador;
                 let jogadorTime;
 
-                if (stat.jogador_id) {
-                    const jogadorId = Number(stat.jogador_id);
+                // Busca por nome exato (case insensitive)
+                jogador = await prisma.jogador.findFirst({
+                    where: { nome: { equals: nomeJogador, mode: 'insensitive' } }
+                })
 
-                    jogador = await prisma.jogador.findUnique({
-                        where: { id: jogadorId }
-                    });
-
-                    if (!jogador) {
-                        throw new Error(`Jogador ID ${jogadorId} não encontrado`);
-                    }
-
-                    const jogadorTimes = await prisma.jogadorTime.findMany({
-                        where: {
-                            jogadorId: jogadorId,
-                            temporada: temporada
-                        },
-                        include: {
-                            time: {
-                                select: { id: true, nome: true }
-                            }
-                        }
-                    });
-
-                    if (jogadorTimes.length === 0) {
-                        throw new Error(`Jogador ${jogador.nome} não está vinculado a nenhum time na temporada ${temporada}`);
-                    }
-
-                    const timeNomeNormalizado = stat.time_nome?.toLowerCase().trim();
-                    jogadorTime = jogadorTimes.find(jt =>
-                        jt.time?.nome.toLowerCase().trim() === timeNomeNormalizado
-                    );
-
-                    if (!jogadorTime) {
-                        jogadorTime = jogadorTimes[0];
-                    }
-                } else {
+                // Fallback: busca por nome parcial
+                if (!jogador) {
                     jogador = await prisma.jogador.findFirst({
-                        where: { nome: { contains: stat.jogador_nome, mode: 'insensitive' } }
-                    });
-
-                    if (!jogador) {
-                        throw new Error(`Jogador ${stat.jogador_nome} não encontrado`);
-                    }
-
-                    const jogadorTimes = await prisma.jogadorTime.findMany({
-                        where: {
-                            jogadorId: jogador.id,
-                            temporada: temporada
-                        },
-                        include: {
-                            time: {
-                                select: { id: true, nome: true }
-                            }
-                        }
-                    });
-
-                    if (jogadorTimes.length === 0) {
-                        throw new Error(`Jogador ${jogador.nome} não vinculado a time na temporada ${temporada}`);
-                    }
-
-                    const timeNomeNormalizado = stat.time_nome?.toLowerCase().trim();
-                    jogadorTime = jogadorTimes.find(jt =>
-                        jt.time?.nome.toLowerCase().trim() === timeNomeNormalizado
-                    );
-
-                    if (!jogadorTime) {
-                        jogadorTime = jogadorTimes[0];
-                    }
+                        where: { nome: { contains: nomeJogador, mode: 'insensitive' } }
+                    })
                 }
+
+                if (!jogador) {
+                    throw new Error(`Jogador "${nomeJogador}" não encontrado no banco`)
+                }
+
+                // Busca o vínculo do jogador com o time na temporada do jogo
+                const jogadorTimes = await prisma.jogadorTime.findMany({
+                    where: { jogadorId: jogador.id, temporada },
+                    include: { time: { select: { id: true, nome: true } } }
+                })
+
+                if (jogadorTimes.length === 0) {
+                    throw new Error(`Jogador ${jogador.nome} não vinculado a nenhum time na temporada ${temporada}`)
+                }
+
+                // Prefere o time que bate com time_nome da planilha, senão pega o primeiro
+                jogadorTime = jogadorTimes.find(jt =>
+                    jt.time?.nome.toLowerCase().trim() === timeNomeNormalizado
+                ) || jogadorTimes[0]
 
                 const estatisticas = {
                     passe: {

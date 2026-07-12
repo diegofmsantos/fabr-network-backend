@@ -927,4 +927,44 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
   }
 })
 
+superligaRouter.get('/jogo/:id', async (req: Request, res: Response) => {
+  try {
+    const jogoId = parseInt(req.params.id)
+
+    if (isNaN(jogoId)) {
+      res.status(400).json({ error: 'ID inválido' })
+      return
+    }
+
+    const jogo = await prisma.jogo.findUnique({
+      where: { id: jogoId },
+      include: {
+        timeCasa: {
+          select: { id: true, nome: true, sigla: true, cor: true, logo: true }
+        },
+        timeVisitante: {
+          select: { id: true, nome: true, sigla: true, cor: true, logo: true }
+        },
+        estatisticas: {
+          include: {
+            jogador: {
+              select: { id: true, nome: true, posicao: true, setor: true }
+            }
+          }
+        }
+      }
+    })
+
+    if (!jogo) {
+      res.status(404).json({ error: 'Jogo não encontrado' })
+      return
+    }
+
+    res.json(jogo)
+  } catch (error) {
+    console.error('Erro ao buscar jogo:', error)
+    res.status(500).json({ error: 'Erro ao buscar jogo' })
+  }
+})
+
 export default superligaRouter

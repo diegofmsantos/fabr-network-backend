@@ -1,9 +1,12 @@
 import { PrismaClient } from '@prisma/client'
 import express from 'express'
+import { protectWrites } from '../middleware/auth'
 
 const prisma = new PrismaClient()
 
 export const materiaRouter = express.Router()
+
+materiaRouter.use(protectWrites)
 
 materiaRouter.get('/', async (req, res) => {
     try {

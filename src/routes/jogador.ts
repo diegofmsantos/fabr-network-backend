@@ -1,10 +1,13 @@
 import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { JogadorSchema } from '../schemas/Jogador'
+import { protectWrites } from '../middleware/auth'
 
 const prisma = new PrismaClient()
 
 export const jogadorRouter = express.Router()
+
+jogadorRouter.use(protectWrites)
 
 jogadorRouter.get('/jogadores', async (req, res) => {
     try {

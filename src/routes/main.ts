@@ -5,9 +5,11 @@ import { materiaRouter } from './materia'
 import { adminRouter } from './admin'
 import superligaRouter from './superliga'
 import { rankingRouter } from './ranking'
+import { authRouter } from './auth'
 
 export const mainRouter = express.Router()
 
+mainRouter.use('/auth', authRouter)
 mainRouter.use('/times', timeRouter)
 mainRouter.use('/jogadores', jogadorRouter)
 mainRouter.use('/materias', materiaRouter)

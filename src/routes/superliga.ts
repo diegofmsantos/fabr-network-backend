@@ -4,8 +4,11 @@ import { SUPERLIGA_CONFIG, TIMES_SUPERLIGA } from '../config/superligaConfig'
 import { distribuirTimesAutomatico } from '../utils/superligaUtils'
 import { SUPERLIGA_CONFIG_D2 } from '../config/superligaConfigD2'
 import { distribuirTimesD2 } from '../utils/superligaUtilsD2'
+import { protectWrites } from '../middleware/auth'
 
 const superligaRouter = express.Router()
+
+superligaRouter.use(protectWrites)
 
 async function buscarSuperligaPorTemporadaEDivisao(temporada: string, divisao: string = 'D1') {
   return prisma.campeonato.findFirst({

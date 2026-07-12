@@ -5,10 +5,13 @@ import path from 'path';
 import xlsx from 'xlsx'
 import multer from 'multer'
 import { calcularClassificacaoPorConferencia } from '../utils/distribuicaoUtils';
+import { requireAuth } from '../middleware/auth'
 
 const prisma = new PrismaClient()
 
 export const adminRouter = express.Router()
+
+adminRouter.use(requireAuth)
 
 const storage = multer.memoryStorage()
 

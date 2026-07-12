@@ -26,39 +26,13 @@ server.use(cors({
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true)
         } else {
-            if (process.env.NODE_ENV === 'production') {
-                callback(null, true)
-            } else {
-                callback(new Error(`Origin ${origin} not allowed by CORS`))
-            }
+            callback(new Error(`Origin ${origin} not allowed by CORS`))
         }
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 }))
-
-server.use((req, res, next) => {
-    const origin = req.headers.origin
-    
-    if (origin && allowedOrigins.includes(origin)) {
-        res.header('Access-Control-Allow-Origin', origin)
-    } else {
-        if (process.env.NODE_ENV === 'production') {
-            res.header('Access-Control-Allow-Origin', '*')
-        }
-    }
-    
-    res.header('Access-Control-Allow-Credentials', 'true')
-    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With')
-    
-    if (req.method === 'OPTIONS') {
-        res.sendStatus(200)
-    } else {
-        next()
-    }
-})
 
 server.use(express.json({ limit: '50mb' }))
 server.use(express.urlencoded({ extended: true, limit: '50mb' }))

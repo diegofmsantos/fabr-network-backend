@@ -2,10 +2,13 @@ import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { TimeSchema } from '../schemas/Time'
 import { calcularEstatisticasTimeFA, identificarJogadoresDestaqueFA } from '../utils/estatisticas'
+import { protectWrites } from '../middleware/auth'
 
 const prisma = new PrismaClient()
 
 export const timeRouter = express.Router()
+
+timeRouter.use(protectWrites)
 
 timeRouter.get('/', async (req, res) => {
     console.log('Rota /api/times chamada')

@@ -284,13 +284,41 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
                 })
 
                 if (jogadorExistente) {
-                    resultados.jogadoresDuplicados++
-                    resultados.detalhesErros.push({
-                        linha: linhaAtual,
-                        nome: jogador.nome,
-                        time: jogador.time_nome,
-                        erro: 'Jogador já existe neste time'
+                    // Atualiza os dados do jogador em vez de ignorar
+                    await prisma.jogador.update({
+                        where: { id: jogadorExistente.id },
+                        data: {
+                            posicao: jogador.posicao || '',
+                            setor: jogador.setor || 'Ataque',
+                            experiencia: Number(jogador.experiencia || 0),
+                            idade: Number(jogador.idade || 0),
+                            altura: parseFloat(jogador.altura || '0'),
+                            peso: Number(jogador.peso || 0),
+                            instagram: jogador.instagram || '',
+                            instagram2: jogador.instagram2 || '',
+                            cidade: jogador.cidade || '',
+                            nacionalidade: jogador.nacionalidade || '',
+                            timeFormador: jogador.time_formador || ''
+                        }
                     })
+
+                    // Atualiza também o vínculo (número, camisa) mas NÃO as estatísticas
+                    // (estatísticas são gerenciadas pelo handler de estatísticas)
+                    const vinculo = await prisma.jogadorTime.findFirst({
+                        where: { jogadorId: jogadorExistente.id, timeId: time.id, temporada }
+                    })
+                    if (vinculo) {
+                        await prisma.jogadorTime.update({
+                            where: { id: vinculo.id },
+                            data: {
+                                numero: Number(jogador.numero || 0),
+                                camisa: jogador.camisa || '',
+                            }
+                        })
+                    }
+
+                    resultados.jogadoresDuplicados++
+                    console.log(`✏️  Atualizado: ${jogador.nome} (${jogador.time_nome})`)
                     continue
                 }
 

@@ -87,8 +87,11 @@ model Materia {
   texto      String   @db.Text
   autor      String
   autorImage String
+  tipo       String   @default("NORMAL")
   createdAt  DateTime
   updatedAt  DateTime
+
+  @@index([tipo, createdAt])
 }
 
 model Campeonato {

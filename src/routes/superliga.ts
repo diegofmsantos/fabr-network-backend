@@ -22,6 +22,40 @@ async function buscarSuperligaPorTemporadaEDivisao(temporada: string, divisao: s
   })
 }
 
+superligaRouter.get('/jogos-periodo', async (req: Request, res: Response) => {
+  try {
+    const { inicio, fim } = req.query
+
+    if (!inicio || !fim || typeof inicio !== 'string' || typeof fim !== 'string') {
+      res.status(400).json({ error: 'Parâmetros "inicio" e "fim" (ISO 8601) são obrigatórios' })
+      return
+    }
+
+    const jogos = await prisma.jogo.findMany({
+      where: {
+        dataJogo: {
+          gte: new Date(inicio),
+          lte: new Date(fim)
+        }
+      },
+      select: {
+        id: true,
+        dataJogo: true,
+        status: true,
+        temporada: true,
+        timeCasa: { select: { nome: true, sigla: true } },
+        timeVisitante: { select: { nome: true, sigla: true } }
+      },
+      orderBy: { dataJogo: 'asc' }
+    })
+
+    res.json({ jogos, total: jogos.length })
+  } catch (error) {
+    console.error('❌ Erro ao buscar jogos por período:', error)
+    res.status(500).json({ error: 'Erro ao buscar jogos por período', details: error instanceof Error ? error.message : 'Erro desconhecido' })
+  }
+})
+
 superligaRouter.get('/rodadas', async (req: Request, res: Response) => {
   try {
     const { temporada, conferencia } = req.query

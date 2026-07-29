@@ -6,6 +6,7 @@ import xlsx from 'xlsx'
 import multer from 'multer'
 import { calcularClassificacaoPorConferencia } from '../utils/distribuicaoUtils';
 import { requireAuth } from '../middleware/auth'
+import { gerarSlug, obterOuCriarJogadorTime } from '../utils/jogadorUtils'
 
 const prisma = new PrismaClient()
 
@@ -222,7 +223,7 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
         const resultados = {
             totalLinhas: dadosJogadores.length,
             jogadoresImportados: 0,
-            jogadoresDuplicados: 0,
+            jogadoresAtualizados: 0,
             errosValidacao: 0,
             errosTime: 0,
             errosGerais: 0,
@@ -266,11 +267,33 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
                         linha: linhaAtual,
                         nome: jogador.nome,
                         time: jogador.time_nome,
-                        erro: `Time "${jogador.time_nome}" não encontrado`
+                        erro: `Time "${jogador.time_nome}" não encontrado na temporada ${temporada}`
                     })
                     continue
                 }
 
+                // Gera o nome do arquivo da camisa automaticamente a partir do
+                // slug do time e do número do jogador
+                // Ex: time="Tubarões do Cerrado", numero=7 → "camisa-tubaroes-do-cerrado-7.png"
+                const numero = Number(jogador.numero || 0)
+                const slugTime = gerarSlug(time.nome)
+                const camisa = numero > 0 ? `camisa-${slugTime}-${numero}.png` : ''
+
+                const dadosPessoais = {
+                    posicao: jogador.posicao || '',
+                    setor: jogador.setor || 'Ataque',
+                    experiencia: Number(jogador.experiencia || 0),
+                    idade: Number(jogador.idade || 0),
+                    altura: parseFloat(String(jogador.altura || '0').replace(',', '.')),
+                    peso: Number(jogador.peso || 0),
+                    instagram: jogador.instagram || '',
+                    instagram2: jogador.instagram2 || '',
+                    cidade: jogador.cidade || '',
+                    nacionalidade: jogador.nacionalidade || '',
+                    timeFormador: jogador.time_formador || ''
+                }
+
+                // Verifica se jogador já existe neste time/temporada
                 const jogadorExistente = await prisma.jogador.findFirst({
                     where: {
                         nome: jogador.nome,
@@ -284,108 +307,70 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
                 })
 
                 if (jogadorExistente) {
-                    // Atualiza os dados do jogador em vez de ignorar
+                    // UPSERT — atualiza dados pessoais e vínculo, preserva estatísticas
                     await prisma.jogador.update({
                         where: { id: jogadorExistente.id },
-                        data: {
-                            posicao: jogador.posicao || '',
-                            setor: jogador.setor || 'Ataque',
-                            experiencia: Number(jogador.experiencia || 0),
-                            idade: Number(jogador.idade || 0),
-                            altura: parseFloat(jogador.altura || '0'),
-                            peso: Number(jogador.peso || 0),
-                            instagram: jogador.instagram || '',
-                            instagram2: jogador.instagram2 || '',
-                            cidade: jogador.cidade || '',
-                            nacionalidade: jogador.nacionalidade || '',
-                            timeFormador: jogador.time_formador || ''
+                        data: dadosPessoais
+                    })
+
+                    const vinculo = await prisma.jogadorTime.findFirst({
+                        where: {
+                            jogadorId: jogadorExistente.id,
+                            timeId: time.id,
+                            temporada
                         }
                     })
 
-                    // Atualiza também o vínculo (número, camisa) mas NÃO as estatísticas
-                    // (estatísticas são gerenciadas pelo handler de estatísticas)
-                    const vinculo = await prisma.jogadorTime.findFirst({
-                        where: { jogadorId: jogadorExistente.id, timeId: time.id, temporada }
-                    })
                     if (vinculo) {
                         await prisma.jogadorTime.update({
                             where: { id: vinculo.id },
                             data: {
-                                numero: Number(jogador.numero || 0),
-                                camisa: jogador.camisa || '',
+                                numero,
+                                camisa,
+                                // estatisticas NÃO são tocadas — gerenciadas pelo handler de estatísticas
                             }
                         })
                     }
 
-                    resultados.jogadoresDuplicados++
-                    console.log(`✏️  Atualizado: ${jogador.nome} (${jogador.time_nome})`)
+                    resultados.jogadoresAtualizados++
+                    console.log(`✏️  Atualizado: ${jogador.nome} — camisa: ${camisa || 'sem número'}`)
                     continue
                 }
 
-                const estatisticas = {
+                // NOVO JOGADOR — cria com estatísticas zeradas
+                const estatisticasZeradas = {
                     passe: {
-                        passes_completos: Number(jogador.passes_completos || 0),
-                        passes_tentados: Number(jogador.passes_tentados || 0),
-                        jardas_de_passe: Number(jogador.jardas_de_passe || 0),
-                        td_passados: Number(jogador.td_passados || 0),
-                        interceptacoes_sofridas: Number(jogador.interceptacoes_sofridas || 0),
-                        sacks_sofridos: Number(jogador.sacks_sofridos || 0),
-                        fumble_de_passador: Number(jogador.fumble_de_passador || 0)
+                        passes_completos: 0, passes_tentados: 0, jardas_de_passe: 0,
+                        td_passados: 0, interceptacoes_sofridas: 0, sacks_sofridos: 0,
+                        fumble_de_passador: 0
                     },
                     corrida: {
-                        corridas: Number(jogador.corridas || 0),
-                        jardas_corridas: Number(jogador.jardas_corridas || 0),
-                        tds_corridos: Number(jogador.tds_corridos || 0),
-                        fumble_de_corredor: Number(jogador.fumble_de_corredor || 0)
+                        corridas: 0, jardas_corridas: 0, tds_corridos: 0, fumble_de_corredor: 0
                     },
                     recepcao: {
-                        recepcoes: Number(jogador.recepcoes || 0),
-                        alvo: Number(jogador.alvo || 0),
-                        jardas_recebidas: Number(jogador.jardas_recebidas || 0),
-                        tds_recebidos: Number(jogador.tds_recebidos || 0)
+                        recepcoes: 0, alvo: 0, jardas_recebidas: 0, tds_recebidos: 0
                     },
                     retorno: {
-                        retornos: Number(jogador.retornos || 0),
-                        jardas_retornadas: Number(jogador.jardas_retornadas || 0),
-                        td_retornados: Number(jogador.td_retornados || 0)
+                        retornos: 0, jardas_retornadas: 0, td_retornados: 0
                     },
                     defesa: {
-                        tackles_totais: Number(jogador.tackles_totais || 0),
-                        tackles_for_loss: Number(jogador.tackles_for_loss || 0),
-                        sacks_forcado: Number(jogador.sacks_forcado || 0),
-                        fumble_forcado: Number(jogador.fumble_forcado || 0),
-                        interceptacao_forcada: Number(jogador.interceptacao_forcada || 0),
-                        passe_desviado: Number(jogador.passe_desviado || 0),
-                        safety: Number(jogador.safety || 0),
-                        td_defensivo: Number(jogador.td_defensivo || 0)
+                        tackles_totais: 0, tackles_for_loss: 0, sacks_forcado: 0,
+                        fumble_forcado: 0, interceptacao_forcada: 0, passe_desviado: 0,
+                        safety: 0, td_defensivo: 0
                     },
                     kicker: {
-                        xp_bons: Number(jogador.xp_bons || 0),
-                        tentativas_de_xp: Number(jogador.tentativas_de_xp || 0),
-                        fg_bons: Number(jogador.fg_bons || 0),
-                        tentativas_de_fg: Number(jogador.tentativas_de_fg || 0),
-                        fg_mais_longo: Number(jogador.fg_mais_longo || 0)
+                        xp_bons: 0, tentativas_de_xp: 0, fg_bons: 0,
+                        tentativas_de_fg: 0, fg_mais_longo: 0
                     },
                     punter: {
-                        punts: Number(jogador.punts || 0),
-                        jardas_de_punt: Number(jogador.jardas_de_punt || 0)
+                        punts: 0, jardas_de_punt: 0
                     }
                 }
 
                 const novoJogador = await prisma.jogador.create({
                     data: {
                         nome: jogador.nome,
-                        posicao: jogador.posicao || '',
-                        setor: jogador.setor || 'Ataque',
-                        experiencia: Number(jogador.experiencia || 0),
-                        idade: Number(jogador.idade || 0),
-                        altura: parseFloat(jogador.altura || '0'),
-                        peso: Number(jogador.peso || 0),
-                        instagram: jogador.instagram || '',
-                        instagram2: jogador.instagram2 || '',
-                        cidade: jogador.cidade || '',
-                        nacionalidade: jogador.nacionalidade || '',
-                        timeFormador: jogador.time_formador || ''
+                        ...dadosPessoais
                     }
                 })
 
@@ -393,17 +378,18 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
                     data: {
                         jogadorId: novoJogador.id,
                         timeId: time.id,
-                        temporada: temporada,
-                        numero: Number(jogador.numero || 0),
-                        camisa: jogador.camisa || '',
-                        estatisticas: estatisticas
+                        temporada,
+                        numero,
+                        camisa,
+                        estatisticas: estatisticasZeradas
                     }
                 })
 
                 resultados.jogadoresImportados++
+                console.log(`✅ Criado: ${jogador.nome} — camisa: ${camisa || 'sem número'}`)
 
-                if (resultados.jogadoresImportados % 50 === 0) {
-                    console.log(`📈 Progresso: ${resultados.jogadoresImportados} jogadores importados...`)
+                if ((resultados.jogadoresImportados + resultados.jogadoresAtualizados) % 50 === 0) {
+                    console.log(`📈 Progresso: ${resultados.jogadoresImportados} criados, ${resultados.jogadoresAtualizados} atualizados...`)
                 }
 
             } catch (error) {
@@ -418,46 +404,49 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
             }
         }
 
+        const totalProcessados = resultados.jogadoresImportados + resultados.jogadoresAtualizados
+        const taxaSucesso = resultados.totalLinhas > 0
+            ? ((totalProcessados / resultados.totalLinhas) * 100).toFixed(1)
+            : '0.0'
+
         console.log('\n' + '='.repeat(60))
         console.log('📊 RELATÓRIO FINAL DA IMPORTAÇÃO DE JOGADORES')
         console.log('='.repeat(60))
-        console.log(`📋 Total de linhas processadas: ${resultados.totalLinhas}`)
-        console.log(`✅ Jogadores importados com sucesso: ${resultados.jogadoresImportados}`)
-        console.log(`⚠️  Jogadores duplicados (ignorados): ${resultados.jogadoresDuplicados}`)
-        console.log(`❌ Erros de validação: ${resultados.errosValidacao}`)
-        console.log(`❌ Erros de time não encontrado: ${resultados.errosTime}`)
-        console.log(`❌ Erros gerais: ${resultados.errosGerais}`)
-        console.log(`📈 Taxa de sucesso: ${((resultados.jogadoresImportados / resultados.totalLinhas) * 100).toFixed(1)}%`)
+        console.log(`📋 Total de linhas processadas : ${resultados.totalLinhas}`)
+        console.log(`✅ Jogadores criados            : ${resultados.jogadoresImportados}`)
+        console.log(`✏️  Jogadores atualizados        : ${resultados.jogadoresAtualizados}`)
+        console.log(`❌ Erros de validação           : ${resultados.errosValidacao}`)
+        console.log(`❌ Erros de time não encontrado : ${resultados.errosTime}`)
+        console.log(`❌ Erros gerais                 : ${resultados.errosGerais}`)
+        console.log(`📈 Taxa de sucesso              : ${taxaSucesso}%`)
         console.log('='.repeat(60))
 
         if (resultados.detalhesErros.length > 0) {
             console.log('\n🔍 PRIMEIROS 10 ERROS DETALHADOS:')
             resultados.detalhesErros.slice(0, 10).forEach((erro, index) => {
-                console.log(`${index + 1}. Linha ${erro.linha}: ${erro.nome || 'Nome não informado'} (${erro.time || 'Time não informado'}) - ${erro.erro}`)
+                console.log(`${index + 1}. Linha ${erro.linha}: ${erro.nome || 'N/A'} (${erro.time || 'N/A'}) — ${erro.erro}`)
             })
-
             if (resultados.detalhesErros.length > 10) {
                 console.log(`... e mais ${resultados.detalhesErros.length - 10} erros`)
             }
         }
 
         const totalJogadoresNoBanco = await prisma.jogadorTime.count({
-            where: { temporada: temporada }
+            where: { temporada }
         })
-
-        console.log(`\n🎯 VERIFICAÇÃO: ${totalJogadoresNoBanco} jogadores-time no banco para temporada ${temporada}`)
+        console.log(`\n🎯 VERIFICAÇÃO: ${totalJogadoresNoBanco} jogadores no banco para temporada ${temporada}`)
 
         res.status(200).json({
             message: 'Importação de jogadores concluída',
             arquivo: req.file.originalname,
             resultados: {
                 totalLinhas: resultados.totalLinhas,
-                jogadoresImportados: resultados.jogadoresImportados,
-                jogadoresDuplicados: resultados.jogadoresDuplicados,
+                jogadoresCriados: resultados.jogadoresImportados,
+                jogadoresAtualizados: resultados.jogadoresAtualizados,
                 errosValidacao: resultados.errosValidacao,
                 errosTime: resultados.errosTime,
                 errosGerais: resultados.errosGerais,
-                taxaSucesso: `${((resultados.jogadoresImportados / resultados.totalLinhas) * 100).toFixed(1)}%`,
+                taxaSucesso: `${taxaSucesso}%`,
                 totalJogadoresNoBanco
             },
             erros: resultados.detalhesErros.length > 0 ? resultados.detalhesErros.slice(0, 20) : null
@@ -465,7 +454,6 @@ adminRouter.post('/importar-jogadores', upload.single('arquivo'), async (req: Re
 
     } catch (error) {
         console.error('❌ Erro crítico na importação de jogadores:', error)
-
         res.status(500).json({
             error: 'Erro crítico ao processar a planilha de jogadores',
             details: error instanceof Error ? error.message : 'Erro desconhecido'
@@ -826,41 +814,22 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                 }
 
                 const nomeJogador = String(stat.jogador_nome).trim()
-                const timeNomeNormalizado = stat.time_nome?.toLowerCase().trim()
 
-                let jogador;
-                let jogadorTime;
+                if (!stat.time_nome) {
+                    throw new Error(`Time do jogador "${nomeJogador}" não informado na planilha`)
+                }
 
-                // Busca por nome exato (case insensitive)
-                jogador = await prisma.jogador.findFirst({
-                    where: { nome: { equals: nomeJogador, mode: 'insensitive' } }
+                // Busca o jogador+vínculo por nome+time; cria automaticamente se não existir
+                // (fluxo 2026 — jogadores se inscrevem ao longo da temporada, sem cadastro prévio)
+                const { jogador, jogadorTime } = await obterOuCriarJogadorTime({
+                    prisma,
+                    nomeJogador,
+                    nomeTime: String(stat.time_nome).trim(),
+                    temporada,
+                    numero: stat.numero ? Number(stat.numero) : undefined,
+                    posicao: stat.posicao ? String(stat.posicao).trim() : undefined,
+                    setor: stat.setor ? String(stat.setor).trim() : undefined
                 })
-
-                // Fallback: busca por nome parcial
-                if (!jogador) {
-                    jogador = await prisma.jogador.findFirst({
-                        where: { nome: { contains: nomeJogador, mode: 'insensitive' } }
-                    })
-                }
-
-                if (!jogador) {
-                    throw new Error(`Jogador "${nomeJogador}" não encontrado no banco`)
-                }
-
-                // Busca o vínculo do jogador com o time na temporada do jogo
-                const jogadorTimes = await prisma.jogadorTime.findMany({
-                    where: { jogadorId: jogador.id, temporada },
-                    include: { time: { select: { id: true, nome: true } } }
-                })
-
-                if (jogadorTimes.length === 0) {
-                    throw new Error(`Jogador ${jogador.nome} não vinculado a nenhum time na temporada ${temporada}`)
-                }
-
-                // Prefere o time que bate com time_nome da planilha, senão pega o primeiro
-                jogadorTime = jogadorTimes.find(jt =>
-                    jt.time?.nome.toLowerCase().trim() === timeNomeNormalizado
-                ) || jogadorTimes[0]
 
                 const estatisticas = {
                     passe: {
@@ -1189,27 +1158,24 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                             ) || jogadorTimes[0];
 
                         } else {
-                            jogador = await prisma.jogador.findFirst({
-                                where: { nome: { contains: stat.jogador_nome, mode: 'insensitive' } }
-                            });
-
-                            if (!jogador) {
-                                throw new Error(`Jogador "${stat.jogador_nome}" não encontrado`);
+                            if (!stat.time_nome) {
+                                throw new Error(`Time do jogador "${stat.jogador_nome}" não informado na planilha`);
                             }
 
-                            jogadorTime = await prisma.jogadorTime.findFirst({
-                                where: {
-                                    jogadorId: jogador.id,
-                                    temporada: temporada
-                                },
-                                include: {
-                                    time: { select: { id: true, nome: true } }
-                                }
+                            // Busca o jogador+vínculo por nome+time; cria automaticamente se não existir
+                            // (fluxo 2026 — jogadores se inscrevem ao longo da temporada, sem cadastro prévio)
+                            const resultado = await obterOuCriarJogadorTime({
+                                prisma,
+                                nomeJogador: String(stat.jogador_nome).trim(),
+                                nomeTime: String(stat.time_nome).trim(),
+                                temporada,
+                                numero: stat.numero ? Number(stat.numero) : undefined,
+                                posicao: stat.posicao ? String(stat.posicao).trim() : undefined,
+                                setor: stat.setor ? String(stat.setor).trim() : undefined
                             });
 
-                            if (!jogadorTime) {
-                                throw new Error(`Jogador ${jogador.nome} sem vínculo na temporada ${temporada}`);
-                            }
+                            jogador = resultado.jogador;
+                            jogadorTime = resultado.jogadorTime;
                         }
 
                         const estatisticas = {

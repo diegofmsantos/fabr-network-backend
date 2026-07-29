@@ -10,10 +10,14 @@ materiaRouter.use(protectWrites)
 
 materiaRouter.get('/', async (req, res) => {
     try {
+        const { tipo, limite } = req.query
+
         const materias = await prisma.materia.findMany({
+            where: tipo && typeof tipo === 'string' ? { tipo } : undefined,
             orderBy: {
                 createdAt: 'desc'
-            }
+            },
+            take: limite ? parseInt(limite as string) : undefined
         });
         res.status(200).json(materias)
     } catch (error) {
@@ -35,6 +39,7 @@ materiaRouter.post('/', async (req, res) => {
                 texto: materiaData.texto,
                 autor: materiaData.autor,
                 autorImage: materiaData.autorImage,
+                tipo: materiaData.tipo || 'NORMAL',
                 createdAt: new Date(materiaData.createdAt),
                 updatedAt: new Date(materiaData.updatedAt)
             }

@@ -5,10 +5,14 @@ import { distribuirTimesAutomatico } from '../utils/superligaUtils'
 import { SUPERLIGA_CONFIG_D2 } from '../config/superligaConfigD2'
 import { distribuirTimesD2 } from '../utils/superligaUtilsD2'
 import { protectWrites } from '../middleware/auth'
+import { cacheControlLeitura } from '../middleware/cache'
 
 const superligaRouter = express.Router()
 
 superligaRouter.use(protectWrites)
+// Placares/status de jogo mudam rápido em dia de rodada — cache mais curto
+// que as outras rotas, pra não deixar resultado desatualizado por muito tempo.
+superligaRouter.use(cacheControlLeitura(20, 120))
 
 async function buscarSuperligaPorTemporadaEDivisao(temporada: string, divisao: string = 'D1') {
   return prisma.campeonato.findFirst({

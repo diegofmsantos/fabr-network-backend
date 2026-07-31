@@ -2,12 +2,15 @@ import { PrismaClient } from '@prisma/client'
 import express, { Request, Response } from 'express'
 import { JogadorSchema } from '../schemas/Jogador'
 import { protectWrites } from '../middleware/auth'
+import { cacheControlLeitura } from '../middleware/cache'
 
 const prisma = new PrismaClient()
 
 export const jogadorRouter = express.Router()
 
 jogadorRouter.use(protectWrites)
+// Dados de jogador só mudam em importação de estatísticas — 60s de cache é seguro.
+jogadorRouter.use(cacheControlLeitura(60))
 
 jogadorRouter.get('/jogadores', async (req, res) => {
     try {

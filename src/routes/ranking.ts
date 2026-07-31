@@ -1,10 +1,14 @@
 import { Router, Request, Response } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client';
+import { cacheControlLeitura } from '../middleware/cache'
 
 
 const prisma = new PrismaClient()
 const rankingRouter = Router()
+
+// Ranking é recalculado por importação de estatísticas — 60s de cache é seguro.
+rankingRouter.use(cacheControlLeitura(60))
 
 interface EstatisticaConsolidada {
     jogadorId: number

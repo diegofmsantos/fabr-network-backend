@@ -3,12 +3,15 @@ import express, { Request, Response } from 'express'
 import { TimeSchema } from '../schemas/Time'
 import { calcularEstatisticasTimeFA, identificarJogadoresDestaqueFA } from '../utils/estatisticas'
 import { protectWrites } from '../middleware/auth'
+import { cacheControlLeitura } from '../middleware/cache'
 
 const prisma = new PrismaClient()
 
 export const timeRouter = express.Router()
 
 timeRouter.use(protectWrites)
+// Roster/dados de time só mudam em importação — 60s de cache é seguro.
+timeRouter.use(cacheControlLeitura(60))
 
 timeRouter.get('/', async (req, res) => {
     console.log('Rota /api/times chamada')

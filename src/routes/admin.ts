@@ -704,7 +704,6 @@ adminRouter.post('/importar-agenda-jogos', upload.single('arquivo'), async (req:
 adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req, res) => {
     try {
         const id_jogo = req.body.id_jogo;
-        const data_jogo = req.body.data_jogo;
 
         if (!req.file) {
             res.status(400).json({ error: 'Nenhum arquivo enviado' });
@@ -717,30 +716,21 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
         }
 
         console.log('📊 INICIANDO IMPORTAÇÃO DE ESTATÍSTICAS...');
-        console.log(`🎯 Jogo: ${id_jogo}, Data: ${data_jogo}`);
+        console.log(`🎯 Jogo: ${id_jogo}`);
 
         const jogo = await prisma.jogo.findUnique({
             where: { id: Number(id_jogo) },
             include: {
-                timeCasa: {
-                    select: { id: true, nome: true, sigla: true }
-                },
-                timeVisitante: {
-                    select: { id: true, nome: true, sigla: true }
-                },
-                campeonato: {
-                    select: { id: true, nome: true, temporada: true }
-                }
+                timeCasa: { select: { id: true, nome: true, sigla: true } },
+                timeVisitante: { select: { id: true, nome: true, sigla: true } },
+                campeonato: { select: { id: true, nome: true, temporada: true } }
             }
         });
 
         if (!jogo) {
             res.status(404).json({
                 error: 'Jogo não encontrado',
-                details: {
-                    id_jogo,
-                    mensagem: 'Verifique se o ID do jogo está correto'
-                }
+                details: { id_jogo, mensagem: 'Verifique se o ID do jogo está correto' }
             });
             return;
         }
@@ -758,53 +748,57 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
             return;
         }
 
-        console.log(`✅ Jogo ${id_jogo} validado para inserção de estatísticas`);
-        console.log(`   Status: ${jogo.status}`);
+        console.log(`✅ Jogo ${id_jogo} validado`);
         console.log(`   Confronto: ${jogo.timeCasa?.sigla} vs ${jogo.timeVisitante?.sigla}`);
-
-        console.log('📊 INICIANDO DUPLA INSERÇÃO DE ESTATÍSTICAS...');
-        console.log(`🎯 Jogo: ${id_jogo}, Data: ${data_jogo}`);
 
         const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const statsSheet = workbook.Sheets[sheetName];
-
         const estatisticasJogo = xlsx.utils.sheet_to_json(statsSheet) as any[];
 
         console.log(`📋 Total de linhas na planilha: ${estatisticasJogo.length}`);
+
+        // Temporada vem do jogo — não depende da planilha
+        const temporada = jogo.campeonato.temporada;
 
         let videoUrl: string | null = null;
         let playByPlay: string | null = null;
 
         if (estatisticasJogo.length > 0) {
             const primeiraLinha = estatisticasJogo[0];
-
             if (primeiraLinha.video_url && typeof primeiraLinha.video_url === 'string') {
                 videoUrl = primeiraLinha.video_url.trim();
                 console.log(`🎥 Video URL encontrado: ${videoUrl}`);
             }
-
             if (primeiraLinha.play_by_play && typeof primeiraLinha.play_by_play === 'string') {
                 playByPlay = primeiraLinha.play_by_play.trim();
             }
         }
 
+        // Gera slug do time para montar o nome do arquivo da camisa
+        // Ex: "Guarulhos Rhynos" → "guarulhos-rhynos" → "camisa-guarulhos-rhynos-7.png"
+        const gerarSlug = (nome: string): string =>
+            nome
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9\s-]/g, '')
+                .trim()
+                .replace(/\s+/g, '-')
+
         const resultados = {
             sucesso: 0,
             sucessoConsolidado: 0,
             sucessoJogoAJogo: 0,
+            jogadoresCriados: 0,
             erros: [] as any[],
-            videoUrl: videoUrl,
+            videoUrl,
             playByPlay: playByPlay ? `${playByPlay.substring(0, 50)}...` : null
         };
 
-        // Temporada vem do jogo — não depende da planilha nem de IDs
-        const temporada = jogo.campeonato.temporada
-
         for (const stat of estatisticasJogo) {
             try {
-                // jogador_id é IGNORADO — busca sempre por nome para evitar
-                // problemas com IDs que mudam a cada reset do banco
+                // jogador_id é IGNORADO — busca sempre por nome
                 if (!stat.jogador_nome) {
                     resultados.erros.push({
                         linha: JSON.stringify(stat),
@@ -813,23 +807,98 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                     continue;
                 }
 
-                const nomeJogador = String(stat.jogador_nome).trim()
+                const nomeJogador = String(stat.jogador_nome).trim();
+                const timeNomeNormalizado = stat.time_nome?.toLowerCase().trim();
 
-                if (!stat.time_nome) {
-                    throw new Error(`Time do jogador "${nomeJogador}" não informado na planilha`)
+                let jogador;
+                let jogadorTime;
+
+                // 1. Busca por nome exato (case insensitive)
+                jogador = await prisma.jogador.findFirst({
+                    where: { nome: { equals: nomeJogador, mode: 'insensitive' } }
+                });
+
+                // 2. Fallback: busca por nome parcial
+                if (!jogador) {
+                    jogador = await prisma.jogador.findFirst({
+                        where: { nome: { contains: nomeJogador, mode: 'insensitive' } }
+                    });
                 }
 
-                // Busca o jogador+vínculo por nome+time; cria automaticamente se não existir
-                // (fluxo 2026 — jogadores se inscrevem ao longo da temporada, sem cadastro prévio)
-                const { jogador, jogadorTime } = await obterOuCriarJogadorTime({
-                    prisma,
-                    nomeJogador,
-                    nomeTime: String(stat.time_nome).trim(),
-                    temporada,
-                    numero: stat.numero ? Number(stat.numero) : undefined,
-                    posicao: stat.posicao ? String(stat.posicao).trim() : undefined,
-                    setor: stat.setor ? String(stat.setor).trim() : undefined
-                })
+                // 3. Jogador não existe — cria automaticamente com dados da planilha
+                if (!jogador) {
+                    console.log(`➕ Criando jogador: "${nomeJogador}" (${stat.time_nome})`);
+                    jogador = await prisma.jogador.create({
+                        data: {
+                            nome: nomeJogador,
+                            posicao: stat.posicao || '',
+                            setor: stat.setor || 'Ataque',
+                            experiencia: 0,
+                            idade: 0,
+                            altura: 0,
+                            peso: 0,
+                            instagram: '',
+                            instagram2: '',
+                            cidade: '',
+                            nacionalidade: '',
+                            timeFormador: ''
+                        }
+                    });
+                    resultados.jogadoresCriados++;
+                }
+
+                // 4. Busca vínculo do jogador com o time na temporada
+                const jogadorTimes = await prisma.jogadorTime.findMany({
+                    where: { jogadorId: jogador.id, temporada },
+                    include: { time: { select: { id: true, nome: true } } }
+                });
+
+                if (jogadorTimes.length === 0) {
+                    // Busca o time para criar o vínculo
+                    const timeObj = await prisma.time.findFirst({
+                        where: {
+                            nome: { equals: stat.time_nome?.trim(), mode: 'insensitive' },
+                            temporada
+                        }
+                    });
+
+                    if (!timeObj) {
+                        throw new Error(`Time "${stat.time_nome}" não encontrado na temporada ${temporada}`);
+                    }
+
+                    // Cria vínculo com camisa gerada automaticamente
+                    const numero = Number(stat.numero || 0);
+                    const slugTime = gerarSlug(timeObj.nome);
+                    const camisa = numero > 0 ? `camisa-${slugTime}-${numero}.png` : '';
+
+                    const novoVinculo = await prisma.jogadorTime.create({
+                        data: {
+                            jogadorId: jogador.id,
+                            timeId: timeObj.id,
+                            temporada,
+                            numero,
+                            camisa,
+                            estatisticas: {
+                                passe: { passes_completos: 0, passes_tentados: 0, jardas_de_passe: 0, td_passados: 0, interceptacoes_sofridas: 0, sacks_sofridos: 0, fumble_de_passador: 0 },
+                                corrida: { corridas: 0, jardas_corridas: 0, tds_corridos: 0, fumble_de_corredor: 0 },
+                                recepcao: { recepcoes: 0, alvo: 0, jardas_recebidas: 0, tds_recebidos: 0 },
+                                retorno: { retornos: 0, jardas_retornadas: 0, td_retornados: 0 },
+                                defesa: { tackles_totais: 0, tackles_for_loss: 0, sacks_forcado: 0, fumble_forcado: 0, interceptacao_forcada: 0, passe_desviado: 0, safety: 0, td_defensivo: 0 },
+                                kicker: { xp_bons: 0, tentativas_de_xp: 0, fg_bons: 0, tentativas_de_fg: 0, fg_mais_longo: 0 },
+                                punter: { punts: 0, jardas_de_punt: 0 }
+                            }
+                        },
+                        include: { time: { select: { id: true, nome: true } } }
+                    });
+
+                    jogadorTime = novoVinculo;
+                    console.log(`🔗 Vínculo criado: ${nomeJogador} → ${timeObj.nome} (camisa: ${camisa || 'sem número'})`);
+                } else {
+                    // Prefere o time que bate com time_nome da planilha
+                    jogadorTime = jogadorTimes.find(jt =>
+                        jt.time?.nome.toLowerCase().trim() === timeNomeNormalizado
+                    ) || jogadorTimes[0];
+                }
 
                 const estatisticas = {
                     passe: {
@@ -881,140 +950,109 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                     }
                 };
 
-                await prisma.estatisticaJogo.upsert({
+                // Upsert na EstatisticaJogo
+                const estatisticaExistente = await prisma.estatisticaJogo.findFirst({
                     where: {
-                        jogoId_jogadorId: {
-                            jogoId: Number(id_jogo),
-                            jogadorId: jogador.id
-                        }
-                    },
-                    update: {
-                        estatisticas: estatisticas,
-                        timeId: jogadorTime.timeId,
-                        temporada: temporada,
-                        rodada: jogo.rodada,
-                        fase: jogo.fase
-                    },
-                    create: {
-                        jogoId: Number(id_jogo),
-                        jogadorId: jogador.id,
-                        timeId: jogadorTime.timeId,
-                        campeonatoId: jogo.campeonatoId,
-                        estatisticas: estatisticas,
-                        temporada: temporada,
-                        rodada: jogo.rodada,
-                        fase: jogo.fase
+                        jogoId: jogo.id,
+                        jogadorId: jogador.id
                     }
                 });
 
-                const estatisticasAtuais = jogadorTime.estatisticas as any || {
-                    passe: {}, corrida: {}, recepcao: {}, retorno: {}, defesa: {}, kicker: {}, punter: {}
-                };
+                if (estatisticaExistente) {
+                    await prisma.estatisticaJogo.update({
+                        where: { id: estatisticaExistente.id },
+                        data: {
+                            estatisticas,
+                            timeId: jogadorTime.timeId,
+                            temporada
+                        }
+                    });
+                } else {
+                    await prisma.estatisticaJogo.create({
+                        data: {
+                            jogoId: jogo.id,
+                            jogadorId: jogador.id,
+                            timeId: jogadorTime.timeId,
+                            temporada,
+                            campeonatoId: jogo.campeonato.id,
+                            estatisticas
+                        }
+                    });
+                }
 
-                const estatisticasConsolidadas = {
-                    passe: {
-                        passes_completos: (estatisticasAtuais.passe?.passes_completos || 0) + estatisticas.passe.passes_completos,
-                        passes_tentados: (estatisticasAtuais.passe?.passes_tentados || 0) + estatisticas.passe.passes_tentados,
-                        jardas_de_passe: (estatisticasAtuais.passe?.jardas_de_passe || 0) + estatisticas.passe.jardas_de_passe,
-                        td_passados: (estatisticasAtuais.passe?.td_passados || 0) + estatisticas.passe.td_passados,
-                        interceptacoes_sofridas: (estatisticasAtuais.passe?.interceptacoes_sofridas || 0) + estatisticas.passe.interceptacoes_sofridas,
-                        sacks_sofridos: (estatisticasAtuais.passe?.sacks_sofridos || 0) + estatisticas.passe.sacks_sofridos,
-                        fumble_de_passador: (estatisticasAtuais.passe?.fumble_de_passador || 0) + estatisticas.passe.fumble_de_passador
-                    },
-                    corrida: {
-                        corridas: (estatisticasAtuais.corrida?.corridas || 0) + estatisticas.corrida.corridas,
-                        jardas_corridas: (estatisticasAtuais.corrida?.jardas_corridas || 0) + estatisticas.corrida.jardas_corridas,
-                        tds_corridos: (estatisticasAtuais.corrida?.tds_corridos || 0) + estatisticas.corrida.tds_corridos,
-                        fumble_de_corredor: (estatisticasAtuais.corrida?.fumble_de_corredor || 0) + estatisticas.corrida.fumble_de_corredor
-                    },
-                    recepcao: {
-                        recepcoes: (estatisticasAtuais.recepcao?.recepcoes || 0) + estatisticas.recepcao.recepcoes,
-                        alvo: (estatisticasAtuais.recepcao?.alvo || 0) + estatisticas.recepcao.alvo,
-                        jardas_recebidas: (estatisticasAtuais.recepcao?.jardas_recebidas || 0) + estatisticas.recepcao.jardas_recebidas,
-                        tds_recebidos: (estatisticasAtuais.recepcao?.tds_recebidos || 0) + estatisticas.recepcao.tds_recebidos
-                    },
-                    retorno: {
-                        retornos: (estatisticasAtuais.retorno?.retornos || 0) + estatisticas.retorno.retornos,
-                        jardas_retornadas: (estatisticasAtuais.retorno?.jardas_retornadas || 0) + estatisticas.retorno.jardas_retornadas,
-                        td_retornados: (estatisticasAtuais.retorno?.td_retornados || 0) + estatisticas.retorno.td_retornados
-                    },
-                    defesa: {
-                        tackles_totais: (estatisticasAtuais.defesa?.tackles_totais || 0) + estatisticas.defesa.tackles_totais,
-                        tackles_for_loss: (estatisticasAtuais.defesa?.tackles_for_loss || 0) + estatisticas.defesa.tackles_for_loss,
-                        sacks_forcado: (estatisticasAtuais.defesa?.sacks_forcado || 0) + estatisticas.defesa.sacks_forcado,
-                        fumble_forcado: (estatisticasAtuais.defesa?.fumble_forcado || 0) + estatisticas.defesa.fumble_forcado,
-                        interceptacao_forcada: (estatisticasAtuais.defesa?.interceptacao_forcada || 0) + estatisticas.defesa.interceptacao_forcada,
-                        passe_desviado: (estatisticasAtuais.defesa?.passe_desviado || 0) + estatisticas.defesa.passe_desviado,
-                        safety: (estatisticasAtuais.defesa?.safety || 0) + estatisticas.defesa.safety,
-                        td_defensivo: (estatisticasAtuais.defesa?.td_defensivo || 0) + estatisticas.defesa.td_defensivo
-                    },
-                    kicker: {
-                        xp_bons: (estatisticasAtuais.kicker?.xp_bons || 0) + estatisticas.kicker.xp_bons,
-                        tentativas_de_xp: (estatisticasAtuais.kicker?.tentativas_de_xp || 0) + estatisticas.kicker.tentativas_de_xp,
-                        fg_bons: (estatisticasAtuais.kicker?.fg_bons || 0) + estatisticas.kicker.fg_bons,
-                        tentativas_de_fg: (estatisticasAtuais.kicker?.tentativas_de_fg || 0) + estatisticas.kicker.tentativas_de_fg,
-                        fg_mais_longo: Math.max(estatisticasAtuais.kicker?.fg_mais_longo || 0, estatisticas.kicker.fg_mais_longo)
-                    },
-                    punter: {
-                        punts: (estatisticasAtuais.punter?.punts || 0) + estatisticas.punter.punts,
-                        jardas_de_punt: (estatisticasAtuais.punter?.jardas_de_punt || 0) + estatisticas.punter.jardas_de_punt
-                    }
-                };
+                resultados.sucessoJogoAJogo++;
+
+                // Atualiza estatísticas consolidadas na temporada
+                const todasEstatisticasJogador = await prisma.estatisticaJogo.findMany({
+                    where: { jogadorId: jogador.id, temporada }
+                });
+
+                const consolidado = {
+                    passe: { passes_completos: 0, passes_tentados: 0, jardas_de_passe: 0, td_passados: 0, interceptacoes_sofridas: 0, sacks_sofridos: 0, fumble_de_passador: 0 },
+                    corrida: { corridas: 0, jardas_corridas: 0, tds_corridos: 0, fumble_de_corredor: 0 },
+                    recepcao: { recepcoes: 0, alvo: 0, jardas_recebidas: 0, tds_recebidos: 0 },
+                    retorno: { retornos: 0, jardas_retornadas: 0, td_retornados: 0 },
+                    defesa: { tackles_totais: 0, tackles_for_loss: 0, sacks_forcado: 0, fumble_forcado: 0, interceptacao_forcada: 0, passe_desviado: 0, safety: 0, td_defensivo: 0 },
+                    kicker: { xp_bons: 0, tentativas_de_xp: 0, fg_bons: 0, tentativas_de_fg: 0, fg_mais_longo: 0 },
+                    punter: { punts: 0, jardas_de_punt: 0 }
+                } as any;
+
+                todasEstatisticasJogador.forEach((est: any) => {
+                    const e = est.estatisticas as any;
+                    Object.keys(consolidado).forEach(cat => {
+                        Object.keys(consolidado[cat]).forEach(stat => {
+                            consolidado[cat][stat] += Number(e?.[cat]?.[stat] || 0);
+                        });
+                    });
+                });
 
                 await prisma.jogadorTime.update({
                     where: { id: jogadorTime.id },
-                    data: { estatisticas: estatisticasConsolidadas }
+                    data: { estatisticas: consolidado }
                 });
 
-                resultados.sucesso++;
                 resultados.sucessoConsolidado++;
-                resultados.sucessoJogoAJogo++;
+                resultados.sucesso++;
 
-            } catch (error: any) {
+                console.log(`✅ ${nomeJogador} (${jogadorTime.time?.nome || stat.time_nome}) — estatísticas salvas`);
+
+            } catch (error) {
                 resultados.erros.push({
-                    jogador: stat.jogador_nome || `ID ${stat.jogador_id}`,
-                    erro: error.message
+                    jogador: stat.jogador_nome || 'N/A',
+                    erro: error instanceof Error ? error.message : 'Erro desconhecido'
                 });
+                console.error(`❌ Erro ao processar ${stat.jogador_nome}:`, error);
             }
         }
 
+        // Atualiza video e play-by-play no jogo
         if (videoUrl || playByPlay) {
-            console.log('🎥 Atualizando jogo com videoUrl e playByPlay...');
-
             await prisma.jogo.update({
-                where: { id: Number(id_jogo) },
+                where: { id: jogo.id },
                 data: {
-                    videoUrl: videoUrl,
-                    playByPlay: playByPlay,
+                    ...(videoUrl && { videoUrl }),
+                    ...(playByPlay && { playByPlay }),
                     estatisticasProcessadas: true
                 }
             });
-
-            console.log('✅ Jogo atualizado com sucesso!');
-        } else {
-            await prisma.jogo.update({
-                where: { id: Number(id_jogo) },
-                data: { estatisticasProcessadas: true }
-            });
+            console.log(`🎥 Jogo ${id_jogo} atualizado com vídeo e play-by-play`);
         }
 
-        console.log(`✅ Estatísticas inseridas: ${resultados.sucesso} jogadores`);
-        console.log(`✅ Estatísticas consolidadas atualizadas: ${resultados.sucessoConsolidado} jogadores`);
-        console.log(`✅ Estatísticas jogo-a-jogo criadas: ${resultados.sucessoJogoAJogo} registros`);
+        console.log('\n' + '='.repeat(60));
+        console.log('📊 RELATÓRIO FINAL');
+        console.log('='.repeat(60));
+        console.log(`✅ Estatísticas salvas   : ${resultados.sucesso}`);
+        console.log(`➕ Jogadores criados     : ${resultados.jogadoresCriados}`);
+        console.log(`❌ Erros                 : ${resultados.erros.length}`);
+        console.log('='.repeat(60));
 
-        if (resultados.erros.length > 0) {
-            console.log(`⚠️  Erros encontrados: ${resultados.erros.length}`);
-        }
-
-        res.json({
-            mensagem: `${resultados.sucesso} estatísticas processadas com sucesso!`,
-            detalhes: {
+        res.status(200).json({
+            message: 'Estatísticas importadas com sucesso!',
+            resumo: {
+                totalLinhas: estatisticasJogo.length,
                 sucesso: resultados.sucesso,
-                estatisticasConsolidadas: resultados.sucessoConsolidado,
-                estatisticasJogoAJogo: resultados.sucessoJogoAJogo,
-                erros: resultados.erros.length,
-                videoUrl: resultados.videoUrl,
-                playByPlayPreview: resultados.playByPlay
+                jogadoresCriados: resultados.jogadoresCriados,
+                erros: resultados.erros.length
             },
             erros: resultados.erros.length > 0 ? resultados.erros : null,
             jogoId: id_jogo

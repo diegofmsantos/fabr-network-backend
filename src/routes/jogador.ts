@@ -295,10 +295,8 @@ jogadorRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Resp
 jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const { temporada } = req.query
+        const { temporada, timeId } = req.query
         const jogadorId = parseInt(id, 10)
-
-        console.log(`🔍 [ROTA] Buscando estatísticas para jogador ${jogadorId}, temporada: ${temporada}`)
 
         if (isNaN(jogadorId)) {
             res.status(400).json({ error: 'ID do jogador inválido' })
@@ -308,7 +306,8 @@ jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) 
         const estatisticasJogo = await prisma.estatisticaJogo.findMany({
             where: {
                 jogadorId: jogadorId,
-                temporada: temporada as string || '2026'
+                temporada: temporada as string || '2026',
+                ...(timeId ? { timeId: parseInt(timeId as string, 10) } : {})
             },
             include: {
                 jogo: {

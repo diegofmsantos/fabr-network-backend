@@ -1001,7 +1001,14 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                     const e = est.estatisticas as any;
                     Object.keys(consolidado).forEach(cat => {
                         Object.keys(consolidado[cat]).forEach(stat => {
-                            consolidado[cat][stat] += Number(e?.[cat]?.[stat] || 0);
+                            const valor = Number(e?.[cat]?.[stat] || 0);
+                            // fg_mais_longo é o recorde do chute mais longo na temporada,
+                            // não deve ser somado entre jogos como as demais estatísticas.
+                            if (stat === 'fg_mais_longo') {
+                                consolidado[cat][stat] = Math.max(consolidado[cat][stat], valor);
+                            } else {
+                                consolidado[cat][stat] += valor;
+                            }
                         });
                     });
                 });

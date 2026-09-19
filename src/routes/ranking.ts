@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import { cacheControlLeitura } from '../middleware/cache'
 
 
-const prisma = new PrismaClient()
+import { prisma } from '../libs/prisma'
 const rankingRouter = Router()
 
 // Ranking é recalculado por importação de estatísticas — 60s de cache é seguro.

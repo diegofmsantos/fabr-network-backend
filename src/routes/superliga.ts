@@ -315,10 +315,11 @@ superligaRouter.post('/:temporada/distribuir-times', async (req: Request, res: R
 superligaRouter.get('/:temporada/status', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
 
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
+      res.status(404).json({ error: `Superliga ${divisao} ${temporada} não encontrada` })
       return
     }
 
@@ -428,8 +429,9 @@ superligaRouter.get('/:temporada/status', async (req: Request, res: Response) =>
 superligaRouter.get('/:temporada/conferencias', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
 
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -454,8 +456,9 @@ superligaRouter.get('/:temporada/conferencias', async (req: Request, res: Respon
 superligaRouter.get('/:temporada/times-por-conferencia', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
+    const divisao = String(req.query.divisao || 'D1').toUpperCase()
 
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
       res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
     } else {
@@ -829,17 +832,26 @@ superligaRouter.get('/:temporada/fase-nacional', async (req: Request, res: Respo
 superligaRouter.delete('/:temporada', async (req: Request, res: Response) => {
   try {
     const { temporada } = req.params
+    const divisaoInformada = req.query.divisao || req.body?.divisao
 
-    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada)
+    // Ação destrutiva: a divisão precisa ser informada explicitamente, senão
+    // um pedido para apagar a D2 apagaria a D1 (default silencioso)
+    if (!divisaoInformada) {
+      res.status(400).json({ error: 'Informe a divisão (D1 ou D2) que deseja deletar' })
+      return
+    }
+    const divisao = String(divisaoInformada).toUpperCase()
+
+    const superliga = await buscarSuperligaPorTemporadaEDivisao(temporada, divisao)
     if (!superliga) {
-      res.status(404).json({ error: `Superliga ${temporada} não encontrada` })
+      res.status(404).json({ error: `Superliga ${divisao} ${temporada} não encontrada` })
     } else {
       await prisma.campeonato.delete({
         where: { id: superliga.id }
       })
 
       res.json({
-        message: `Superliga ${temporada} deletada com sucesso`,
+        message: `Superliga ${superliga.divisao} ${temporada} deletada com sucesso`,
         warning: 'Todos os dados relacionados foram removidos'
       })
     }
@@ -905,10 +917,13 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
         statsCasa.pontosContra += jogo.placarVisitante || 0
         statsVisitante.pontosPro += jogo.placarVisitante || 0
         statsVisitante.pontosContra += jogo.placarCasa || 0
-        if ((jogo.placarCasa || 0) > (jogo.placarVisitante || 0)) {
+        const placarCasa = jogo.placarCasa || 0
+        const placarVisitante = jogo.placarVisitante || 0
+        // empate não conta como vitória nem derrota para nenhum dos lados
+        if (placarCasa > placarVisitante) {
           statsCasa.vitorias++
           statsVisitante.derrotas++
-        } else {
+        } else if (placarVisitante > placarCasa) {
           statsVisitante.vitorias++
           statsCasa.derrotas++
         }

@@ -5,7 +5,7 @@ import { calcularEstatisticasTimeFA, identificarJogadoresDestaqueFA } from '../u
 import { protectWrites } from '../middleware/auth'
 import { cacheControlLeitura } from '../middleware/cache'
 
-const prisma = new PrismaClient()
+import { prisma } from '../libs/prisma'
 
 export const timeRouter = express.Router()
 
@@ -182,13 +182,25 @@ timeRouter.delete('/time/:id', async (req: Request<{ id: string }>, res: Respons
             return
         }
 
-        await prisma.jogadorTime.deleteMany({
-            where: { timeId: id },
-        })
+        // Jogos e estatísticas de jogo referenciam o time e não têm cascade:
+        // apagar o time quebraria a agenda/histórico (e o banco recusa com erro de FK).
+        const [totalJogos, totalEstatisticas] = await Promise.all([
+            prisma.jogo.count({ where: { OR: [{ timeCasaId: id }, { timeVisitanteId: id }] } }),
+            prisma.estatisticaJogo.count({ where: { timeId: id } })
+        ])
 
-        await prisma.time.delete({
-            where: { id },
-        })
+        if (totalJogos > 0 || totalEstatisticas > 0) {
+            res.status(409).json({
+                error: `Não é possível excluir "${existingTime.nome}": o time tem ${totalJogos} jogo(s) e ${totalEstatisticas} registro(s) de estatística vinculados.`
+            })
+            return
+        }
+
+        await prisma.$transaction([
+            prisma.distribuicaoTime.deleteMany({ where: { timeId: id } }),
+            prisma.jogadorTime.deleteMany({ where: { timeId: id } }),
+            prisma.time.delete({ where: { id } })
+        ])
 
         res.status(200).json({ message: "Time excluído com sucesso!" })
     } catch (error) {

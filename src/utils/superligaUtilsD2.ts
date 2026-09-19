@@ -6,7 +6,7 @@
 
 import { PrismaClient } from '@prisma/client'
 
-const prisma = new PrismaClient()
+import { prisma } from '../libs/prisma'
 
 const DISTRIBUICAO_D2: Record<string, { regionais: Record<string, string[]> }> = {
     'NORTE': {

@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
+import { prisma } from '../libs/prisma'
 
 export async function buscarTimesPorRegional(campeonatoId: number, regionalType: string) {
   const distribuicao = await prisma.distribuicaoTime.findMany({
@@ -34,15 +34,18 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
   const jogos = await prisma.jogo.findMany({
     where: {
       campeonatoId,
+      fase: 'TEMPORADA REGULAR',
       status: 'FINALIZADO',
       OR: [
         { timeCasaId: { in: timeIds } },
         { timeVisitanteId: { in: timeIds } }
       ]
     },
-    include: {
-      timeCasa: true,
-      timeVisitante: true
+    select: {
+      timeCasaId: true,
+      timeVisitanteId: true,
+      placarCasa: true,
+      placarVisitante: true
     }
   });
 
@@ -74,9 +77,10 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
       stats.pontosPro += placarCasa;
       stats.pontosContra += placarVisitante;
 
+      // empate não conta como vitória nem derrota para nenhum dos lados
       if (placarCasa > placarVisitante) {
         stats.vitorias++;
-      } else {
+      } else if (placarCasa < placarVisitante) {
         stats.derrotas++;
       }
     }
@@ -89,7 +93,7 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
 
       if (placarVisitante > placarCasa) {
         stats.vitorias++;
-      } else {
+      } else if (placarVisitante < placarCasa) {
         stats.derrotas++;
       }
     }

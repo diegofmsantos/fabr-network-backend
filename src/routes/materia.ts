@@ -6,7 +6,7 @@ import { protectWrites } from '../middleware/auth'
 import { cacheControlLeitura } from '../middleware/cache'
 import { gerarSlug } from '../utils/jogadorUtils'
 
-const prisma = new PrismaClient()
+import { prisma } from '../libs/prisma'
 
 export const materiaRouter = express.Router()
 

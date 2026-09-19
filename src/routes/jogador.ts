@@ -4,7 +4,7 @@ import { JogadorSchema } from '../schemas/Jogador'
 import { protectWrites } from '../middleware/auth'
 import { cacheControlLeitura } from '../middleware/cache'
 
-const prisma = new PrismaClient()
+import { prisma } from '../libs/prisma'
 
 export const jogadorRouter = express.Router()
 
@@ -17,6 +17,7 @@ jogadorRouter.get('/jogadores', async (req, res) => {
         const {
             temporada = '2026',
             timeId,
+            divisao,
             includeAllTemporadas = false
         } = req.query;
 
@@ -32,6 +33,10 @@ jogadorRouter.get('/jogadores', async (req, res) => {
 
         if (timeId) {
             whereCondition.timeId = parseInt(String(timeId));
+        }
+
+        if (divisao) {
+            whereCondition.time = { divisao: String(divisao).toUpperCase() };
         }
 
         const jogadoresTimesQuery = await prisma.jogadorTime.findMany({
@@ -291,6 +296,36 @@ jogadorRouter.put('/jogador/:id', async (req: Request<{ id: string }>, res: Resp
         res.status(500).json({ error: "Erro ao atualizar o jogador" });
     }
 });
+
+jogadorRouter.delete('/jogador/:id', async (req: Request<{ id: string }>, res: Response) => {
+    try {
+        const id = parseInt(req.params.id, 10)
+        if (isNaN(id)) {
+            res.status(400).json({ error: 'ID inválido' })
+            return
+        }
+
+        const jogador = await prisma.jogador.findUnique({ where: { id } })
+        if (!jogador) {
+            res.status(404).json({ error: 'Jogador não encontrado' })
+            return
+        }
+
+        // Remove vínculos com times e estatísticas de jogo do jogador antes do
+        // próprio cadastro (ação explícita do admin, precedida de confirmação na tela)
+        await prisma.$transaction([
+            prisma.estatisticaJogo.deleteMany({ where: { jogadorId: id } }),
+            prisma.jogadorTime.deleteMany({ where: { jogadorId: id } }),
+            prisma.jogador.delete({ where: { id } })
+        ])
+
+        console.log(`🗑️ Jogador excluído: ${jogador.nome} (id ${id})`)
+        res.status(200).json({ message: 'Jogador excluído com sucesso!' })
+    } catch (error) {
+        console.error('Erro ao excluir jogador:', error)
+        res.status(500).json({ error: 'Erro ao excluir jogador' })
+    }
+})
 
 jogadorRouter.get('/:id/estatisticas-jogo', async (req: Request, res: Response) => {
     try {

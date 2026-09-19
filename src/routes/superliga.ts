@@ -5,6 +5,7 @@ import { distribuirTimesAutomatico } from '../utils/superligaUtils'
 import { SUPERLIGA_CONFIG_D2 } from '../config/superligaConfigD2'
 import { distribuirTimesD2 } from '../utils/superligaUtilsD2'
 import { protectWrites } from '../middleware/auth'
+import { ordenarClassificacao } from '../utils/classificacaoUtils'
 import { cacheControlLeitura } from '../middleware/cache'
 
 const superligaRouter = express.Router()
@@ -948,14 +949,10 @@ superligaRouter.get('/:temporada/classificacao', async (req: Request, res: Respo
       const regionaisClassificacao = []
       for (const regional of conferencia.regionais) {
         const timesRegional = times.filter(time => mapaTimeRegional.get(time.id) === regional.tipo)
-        const timesComStats = timesRegional
+        const timesRegionalStats = timesRegional
           .map(time => estatisticasTimes.get(time.id))
           .filter(Boolean)
-          .sort((a, b) => {
-            if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias
-            if (b.saldo !== a.saldo) return b.saldo - a.saldo
-            return b.pontosPro - a.pontosPro
-          })
+        const timesComStats = ordenarClassificacao(timesRegionalStats, jogos)
           .map((stats, index) => ({ posicao: index + 1, ...stats }))
 
         regionaisClassificacao.push({

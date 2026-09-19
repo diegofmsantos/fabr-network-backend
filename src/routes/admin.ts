@@ -2826,47 +2826,57 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
         const dadosAtualizacao: any = {}
 
         // Define/corrige o confronto de um jogo (ex: preencher os times de um
-        // jogo de playoff que ainda está "a definir"). Os dois lados precisam
-        // ser enviados juntos, e ambos precisam existir e ser da mesma
-        // temporada do jogo.
+        // jogo de playoff que ainda está "a definir"). Cada lado é independente:
+        // número = define o time, null/'' = volta para "a definir", ausente =
+        // mantém o que já está. Os times precisam ser da mesma temporada e
+        // divisão do jogo.
         if (timeCasaId !== undefined || timeVisitanteId !== undefined) {
-            if (!timeCasaId || !timeVisitanteId) {
-                res.status(400).json({ error: 'Informe os dois times (mandante e visitante) para definir o confronto' })
+            const parseTimeId = (valor: unknown): number | null | undefined => {
+                if (valor === undefined) return undefined
+                if (valor === null || valor === '') return null
+                return Number(valor)
+            }
+
+            const casaId = parseTimeId(timeCasaId)
+            const visitanteId = parseTimeId(timeVisitanteId)
+
+            if ((casaId !== undefined && casaId !== null && !Number.isInteger(casaId)) ||
+                (visitanteId !== undefined && visitanteId !== null && !Number.isInteger(visitanteId))) {
+                res.status(400).json({ error: 'ID de time inválido' })
                 return
             }
 
-            if (parseInt(timeCasaId) === parseInt(timeVisitanteId)) {
+            const casaFinal = casaId === undefined ? jogoExistente.timeCasaId : casaId
+            const visitanteFinal = visitanteId === undefined ? jogoExistente.timeVisitanteId : visitanteId
+
+            if (casaFinal !== null && casaFinal === visitanteFinal) {
                 res.status(400).json({ error: 'Os times mandante e visitante não podem ser o mesmo' })
                 return
             }
 
-            const [timeCasa, timeVisitante] = await Promise.all([
-                prisma.time.findUnique({ where: { id: parseInt(timeCasaId) } }),
-                prisma.time.findUnique({ where: { id: parseInt(timeVisitanteId) } })
-            ])
+            for (const [lado, id] of [['mandante', casaId], ['visitante', visitanteId]] as const) {
+                if (id === undefined || id === null) continue
 
-            if (!timeCasa || !timeVisitante) {
-                res.status(404).json({ error: 'Um dos times informados não foi encontrado' })
-                return
-            }
+                const time = await prisma.time.findUnique({ where: { id } })
+                if (!time) {
+                    res.status(404).json({ error: `Time ${lado} não encontrado` })
+                    return
+                }
 
-            if (jogoExistente.temporada) {
-                if (timeCasa.temporada !== jogoExistente.temporada || timeVisitante.temporada !== jogoExistente.temporada) {
-                    res.status(400).json({ error: `Os times precisam ser da temporada ${jogoExistente.temporada}` })
+                if (jogoExistente.temporada && time.temporada !== jogoExistente.temporada) {
+                    res.status(400).json({ error: `O time ${lado} precisa ser da temporada ${jogoExistente.temporada}` })
+                    return
+                }
+
+                const divisaoJogo = jogoExistente.campeonato?.divisao
+                if (divisaoJogo && time.divisao !== divisaoJogo) {
+                    res.status(400).json({ error: `O time ${lado} precisa ser da divisão ${divisaoJogo}` })
                     return
                 }
             }
 
-            const divisaoJogo = jogoExistente.campeonato?.divisao
-            if (divisaoJogo) {
-                if (timeCasa.divisao !== divisaoJogo || timeVisitante.divisao !== divisaoJogo) {
-                    res.status(400).json({ error: `Os times precisam ser da divisão ${divisaoJogo}` })
-                    return
-                }
-            }
-
-            dadosAtualizacao.timeCasaId = timeCasa.id
-            dadosAtualizacao.timeVisitanteId = timeVisitante.id
+            if (casaId !== undefined) dadosAtualizacao.timeCasaId = casaId
+            if (visitanteId !== undefined) dadosAtualizacao.timeVisitanteId = visitanteId
         }
 
         if (placarCasa !== undefined) {
@@ -2925,8 +2935,8 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
         if (statusFinal === 'FINALIZADO' && jogoExistente.fase !== 'TEMPORADA REGULAR') {
             const placarCasaFinal = dadosAtualizacao.placarCasa ?? jogoExistente.placarCasa
             const placarVisitanteFinal = dadosAtualizacao.placarVisitante ?? jogoExistente.placarVisitante
-            const timeCasaFinal = dadosAtualizacao.timeCasaId ?? jogoExistente.timeCasaId
-            const timeVisitanteFinal = dadosAtualizacao.timeVisitanteId ?? jogoExistente.timeVisitanteId
+            const timeCasaFinal = dadosAtualizacao.timeCasaId !== undefined ? dadosAtualizacao.timeCasaId : jogoExistente.timeCasaId
+            const timeVisitanteFinal = dadosAtualizacao.timeVisitanteId !== undefined ? dadosAtualizacao.timeVisitanteId : jogoExistente.timeVisitanteId
 
             if (
                 placarCasaFinal !== null && placarCasaFinal !== undefined &&

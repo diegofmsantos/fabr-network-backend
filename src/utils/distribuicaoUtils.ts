@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 
 import { prisma } from '../libs/prisma'
+import { ordenarClassificacao } from './classificacaoUtils'
 
 export async function buscarTimesPorRegional(campeonatoId: number, regionalType: string) {
   const distribuicao = await prisma.distribuicaoTime.findMany({
@@ -35,11 +36,7 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
     where: {
       campeonatoId,
       fase: 'TEMPORADA REGULAR',
-      status: 'FINALIZADO',
-      OR: [
-        { timeCasaId: { in: timeIds } },
-        { timeVisitanteId: { in: timeIds } }
-      ]
+      status: 'FINALIZADO'
     },
     select: {
       timeCasaId: true,
@@ -125,17 +122,13 @@ export async function calcularClassificacaoRegional(campeonatoId: number, region
     };
   });
 
-  classificacao.sort((a, b) => {
-    if (b.vitorias !== a.vitorias) return b.vitorias - a.vitorias;
-    if (b.saldo !== a.saldo) return b.saldo - a.saldo;
-    return b.pontosPro - a.pontosPro;
-  });
+  const classificacaoOrdenada = ordenarClassificacao(classificacao, jogos);
 
-  classificacao.forEach((time, index) => {
+  classificacaoOrdenada.forEach((time, index) => {
     time.posicaoRegional = index + 1;
   });
 
-  return classificacao;
+  return classificacaoOrdenada;
 }
 
 export async function calcularClassificacaoPorConferencia(campeonatoId: number) {

@@ -31,6 +31,23 @@ const upload = multer({
     limits: { fileSize: 100 * 1024 * 1024 }
 });
 
+// Barreira contra lixo vindo da planilha: célula formatada como data no Excel
+// chega como número serial (ex: "2,5" vira 05/02 = 46058) e "2,5" como texto
+// vira NaN. Nenhuma estatística de um jogo chega perto desse limite.
+const LIMITE_ESTATISTICA_POR_JOGO = 20000
+function validarEstatisticasJogo(estatisticas: Record<string, Record<string, number>>, nomeJogador: string) {
+    for (const [categoria, campos] of Object.entries(estatisticas)) {
+        for (const [campo, valor] of Object.entries(campos)) {
+            if (!Number.isFinite(valor) || valor < 0 || valor >= LIMITE_ESTATISTICA_POR_JOGO) {
+                throw new Error(
+                    `Valor inválido em "${categoria}.${campo}" para ${nomeJogador}: ${valor}. ` +
+                    `Provável célula formatada como data no Excel — corrija para o número (ex: 2.5) e reimporte.`
+                )
+            }
+        }
+    }
+}
+
 // Recalcula o total da temporada a partir dos registros jogo a jogo. É
 // idempotente (reimportar o mesmo jogo não duplica) e trata fg_mais_longo como
 // recorde (máximo), não soma.
@@ -984,6 +1001,8 @@ adminRouter.post('/atualizar-estatisticas', upload.single('arquivo'), async (req
                     }
                 };
 
+                validarEstatisticasJogo(estatisticas, nomeJogador);
+
                 // Upsert na EstatisticaJogo
                 const estatisticaExistente = await prisma.estatisticaJogo.findFirst({
                     where: {
@@ -1289,6 +1308,8 @@ adminRouter.post('/atualizar-estatisticas-lote', upload.array('arquivos', 20), a
                                 jardas_de_punt: Number(stat.jardas_de_punt || 0)
                             }
                         };
+
+                        validarEstatisticasJogo(estatisticas, jogador.nome);
 
                         await prisma.estatisticaJogo.upsert({
                             where: {

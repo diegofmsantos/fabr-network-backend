@@ -2759,7 +2759,9 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
             dataJogo,
             local,
             observacoes,
-            status
+            status,
+            timeCasaId,
+            timeVisitanteId
         } = req.body
 
         console.log(`Atualizando jogo ${id} com dados:`, req.body)
@@ -2778,6 +2780,42 @@ adminRouter.put('/jogos/:id/gerenciar', async (req, res) => {
         }
 
         const dadosAtualizacao: any = {}
+
+        // Define/corrige o confronto de um jogo (ex: preencher os times de um
+        // jogo de playoff que ainda está "a definir"). Os dois lados precisam
+        // ser enviados juntos, e ambos precisam existir e ser da mesma
+        // temporada do jogo.
+        if (timeCasaId !== undefined || timeVisitanteId !== undefined) {
+            if (!timeCasaId || !timeVisitanteId) {
+                res.status(400).json({ error: 'Informe os dois times (mandante e visitante) para definir o confronto' })
+                return
+            }
+
+            if (parseInt(timeCasaId) === parseInt(timeVisitanteId)) {
+                res.status(400).json({ error: 'Os times mandante e visitante não podem ser o mesmo' })
+                return
+            }
+
+            const [timeCasa, timeVisitante] = await Promise.all([
+                prisma.time.findUnique({ where: { id: parseInt(timeCasaId) } }),
+                prisma.time.findUnique({ where: { id: parseInt(timeVisitanteId) } })
+            ])
+
+            if (!timeCasa || !timeVisitante) {
+                res.status(404).json({ error: 'Um dos times informados não foi encontrado' })
+                return
+            }
+
+            if (jogoExistente.temporada) {
+                if (timeCasa.temporada !== jogoExistente.temporada || timeVisitante.temporada !== jogoExistente.temporada) {
+                    res.status(400).json({ error: `Os times precisam ser da temporada ${jogoExistente.temporada}` })
+                    return
+                }
+            }
+
+            dadosAtualizacao.timeCasaId = timeCasa.id
+            dadosAtualizacao.timeVisitanteId = timeVisitante.id
+        }
 
         if (placarCasa !== undefined) {
             if (placarCasa < 0) {
